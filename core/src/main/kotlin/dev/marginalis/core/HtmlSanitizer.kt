@@ -7,10 +7,16 @@ object HtmlSanitizer {
 
     private val GENERATED = setOf(
         "p", "br", "hr", "em", "strong", "code", "pre", "blockquote", "ul", "ol", "li",
-        "h1", "h2", "h3", "h4", "h5", "h6", "a",
+        "h1", "h2", "h3", "h4", "h5", "h6", "a", "del",
+        "table", "thead", "tbody", "tr", "th", "td",
     )
-    private val KEPT_ATTRIBUTES = mapOf("a" to listOf("href", "title"), "ol" to listOf("start"))
-    private val LINE_ENDING = setOf("summary", "details", "div", "tr", "table")
+    private val KEPT_ATTRIBUTES = mapOf(
+        "a" to listOf("href", "title"),
+        "ol" to listOf("start"),
+        "th" to listOf("align"),
+        "td" to listOf("align"),
+    )
+    private val LINE_ENDING = setOf("summary", "details", "div")
 
     fun sanitize(html: String): String = MARKUP.replace(html) { match ->
         val (closing, rawName, rawAttributes) = match.destructured

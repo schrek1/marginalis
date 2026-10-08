@@ -14,6 +14,7 @@ import com.intellij.openapi.util.text.StringUtil
 import com.intellij.ui.EditorTextField
 import com.intellij.ui.JBColor
 import com.intellij.ui.awt.RelativePoint
+import com.intellij.ui.components.JBScrollPane
 import com.intellij.util.ui.HTMLEditorKitBuilder
 import com.intellij.util.ui.JBUI
 import dev.marginalis.core.CodeFence
@@ -24,23 +25,28 @@ import dev.marginalis.core.Parsed
 import dev.marginalis.core.Reference
 import dev.marginalis.core.Resolution
 import dev.marginalis.plugin.store.MarginalisStore
-import org.intellij.markdown.flavours.commonmark.CommonMarkFlavourDescriptor
+import org.intellij.markdown.flavours.gfm.GFMElementTypes
+import org.intellij.markdown.flavours.gfm.GFMFlavourDescriptor
 import org.intellij.markdown.html.HtmlGenerator
 import org.intellij.markdown.parser.MarkdownParser
 import java.awt.Component
+import java.awt.Dimension
 import java.awt.event.MouseEvent
 import javax.swing.Box
 import javax.swing.JComponent
 import javax.swing.JEditorPane
 import javax.swing.JMenuItem
 import javax.swing.JPopupMenu
+import javax.swing.ScrollPaneConstants
 import javax.swing.event.HyperlinkEvent
 import javax.swing.event.PopupMenuEvent
 import javax.swing.event.PopupMenuListener
+import javax.swing.text.html.HTMLEditorKit
 
 /**
- * Deliberately CommonMark only (no tables/images/raw HTML): each extra
- * construct carries its own Swing sizing tax.
+ * GitHub-flavoured, minus images and raw HTML: each extra construct carries
+ * its own Swing sizing tax. A top-level table pays it in its own pane at
+ * natural width, scrolling sideways, so the prose around it keeps wrapping.
  */
 object MarkdownRenderer {
 
@@ -53,16 +59,36 @@ object MarkdownRenderer {
         // An unclosed fence is still prose to CommonMark.
         for (fence in closedFences(body)) {
             val textBefore = body.substring(consumedUpTo, fence.start)
-            if (textBefore.isNotBlank()) box.add(htmlPane(project, textBefore, wrapWidth))
+            if (textBefore.isNotBlank()) addProse(box, project, textBefore, wrapWidth)
             box.add(Box.createVerticalStrut(JBUI.scale(4)))
             box.add(codeBlock(project, fence.language, body.substring(fence.codeStart, fence.codeEnd).trimEnd('\n')))
             box.add(Box.createVerticalStrut(JBUI.scale(4)))
             consumedUpTo = fence.end
         }
         val remainder = body.substring(consumedUpTo)
-        if (remainder.isNotBlank()) box.add(htmlPane(project, remainder, wrapWidth))
+        if (remainder.isNotBlank()) addProse(box, project, remainder, wrapWidth)
         return box
     }
+
+    private fun addProse(box: JComponent, project: Project, markdown: String, wrapWidth: Int) {
+        var consumedUpTo = 0
+        for (table in topLevelTables(markdown)) {
+            val textBefore = markdown.substring(consumedUpTo, table.first)
+            if (textBefore.isNotBlank()) box.add(htmlPane(project, textBefore, wrapWidth))
+            box.add(Box.createVerticalStrut(JBUI.scale(4)))
+            box.add(tablePane(project, markdown.substring(table), wrapWidth))
+            box.add(Box.createVerticalStrut(JBUI.scale(4)))
+            consumedUpTo = table.last + 1
+        }
+        val remainder = markdown.substring(consumedUpTo)
+        if (remainder.isNotBlank()) box.add(htmlPane(project, remainder, wrapWidth))
+    }
+
+    // A table nested in a list or quote stays inline and wraps with its prose.
+    private fun topLevelTables(markdown: String): List<IntRange> =
+        MarkdownParser(GFMFlavourDescriptor()).buildMarkdownTreeFromString(markdown).children
+            .filter { it.type == GFMElementTypes.TABLE }
+            .map { it.startOffset until it.endOffset }
 
     fun previewText(body: String): String {
         val flattened = StringBuilder()
@@ -81,16 +107,44 @@ object MarkdownRenderer {
 
     private fun closedFences(body: String): List<CodeFence> = CodeFences.find(body).filter { it.closed }
 
-    private fun htmlPane(project: Project, markdown: String, wrapWidth: Int): JComponent {
-        val flavour = CommonMarkFlavourDescriptor()
+    private fun toHtml(markdown: String): String {
+        val flavour = GFMFlavourDescriptor()
         val tree = MarkdownParser(flavour).buildMarkdownTreeFromString(markdown)
-        val html = HtmlGenerator(markdown, tree, flavour).generateHtml()
+        return HtmlGenerator(markdown, tree, flavour).generateHtml()
             .removePrefix("<body>").removeSuffix("</body>")
             .let(HtmlSanitizer::sanitize)
             .let(Reference::linkify)
+    }
 
+    private fun htmlPane(project: Project, markdown: String, wrapWidth: Int): JComponent {
+        val pane = editorPane(project, toHtml(markdown), HTMLEditorKitBuilder().withWordWrapViewFactory().build())
+        // Sized to the target width first so preferred height reflects wrapping.
+        pane.setSize(wrapWidth, Int.MAX_VALUE)
+        pane.alignmentX = Component.LEFT_ALIGNMENT
+        return pane
+    }
+
+    private fun tablePane(project: Project, markdown: String, wrapWidth: Int): JComponent {
+        // Attributes are added after sanitizing, so the body still cannot set any.
+        val html = toHtml(markdown).replace("<table>", "<table border=\"1\" cellspacing=\"0\" cellpadding=\"4\">")
+        val kit = HTMLEditorKitBuilder().build()
+        kit.styleSheet.addRule("th { text-align: left; }")
+        val pane = editorPane(project, html, kit)
+        val natural = pane.preferredSize
+        val scroll = JBScrollPane(pane, ScrollPaneConstants.VERTICAL_SCROLLBAR_NEVER, ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED)
+        scroll.border = JBUI.Borders.empty()
+        scroll.isOpaque = false
+        scroll.viewport.isOpaque = false
+        val scrollbar = if (natural.width > wrapWidth) scroll.horizontalScrollBar.preferredSize.height else 0
+        val size = Dimension(minOf(natural.width, wrapWidth), natural.height + scrollbar)
+        scroll.preferredSize = size
+        scroll.maximumSize = size
+        scroll.alignmentX = Component.LEFT_ALIGNMENT
+        return scroll
+    }
+
+    private fun editorPane(project: Project, html: String, kit: HTMLEditorKit): JEditorPane {
         val pane = JEditorPane()
-        val kit = HTMLEditorKitBuilder().withWordWrapViewFactory().build()
         // Default HTML heading sizes are document scale; a 2x h1 in a margin
         // panel towers over the code it annotates.
         val base = JBUI.Fonts.label().size
@@ -120,9 +174,6 @@ object MarkdownRenderer {
                 override fun popupMenuCanceled(e: PopupMenuEvent) {}
             })
         }
-        // Sized to the target width first so preferred height reflects wrapping.
-        pane.setSize(wrapWidth, Int.MAX_VALUE)
-        pane.alignmentX = Component.LEFT_ALIGNMENT
         return pane
     }
 

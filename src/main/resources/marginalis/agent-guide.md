@@ -359,16 +359,17 @@ cheapest way to learn what its authors already decided.
 
 ## Message bodies
 
-Bodies render as CommonMark — use it wherever structure helps:
-emphasis, inline code, links (web links open in the user's browser,
-code links in the editor — see Code links),
-lists, and headings (rescaled to margin proportions). Fenced code
+Bodies render as GitHub-flavoured Markdown — use it wherever structure
+helps: emphasis, ~~strikethrough~~, inline code, links (web links open in
+the user's browser, code links in the editor — see Code links), lists,
+headings (rescaled to margin proportions) and tables. A top-level table
+keeps its natural width and scrolls sideways when it is wider than the
+panel; a table inside a list or quote wraps with its text. Fenced code
 blocks display as read-only editor fragments with native syntax
 highlighting — tag your fences with a language and prefer them to
-prose-wrapped code. Deliberately outside the scope: tables degrade to
-plain text, images show as `[image]`, and raw HTML is reduced to the
-constructs above — any other tag is dropped, keeping its text — so stay
-within them. Only http and https links open in the browser.
+prose-wrapped code. Deliberately outside the scope: images show as
+`[image]`, and raw HTML is reduced to the constructs above — any other
+tag is dropped, keeping its text — so stay within them. Only http and https links open in the browser.
 
 ## References
 
