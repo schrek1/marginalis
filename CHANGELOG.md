@@ -5,6 +5,13 @@ All notable changes to Marginalis. The format follows
 current version's section into the plugin's Marketplace change notes.
 History before 0.1.19 lives in git tags.
 
+## [Unreleased]
+
+### Fixed
+
+- Zooming the editor (Ctrl+mouse wheel) with a thread open no longer scrolls the code to the end of
+  that thread; the zoom stays where the mouse points.
+
 ## [0.2.2] - 2026-10-04
 
 ### Changed
