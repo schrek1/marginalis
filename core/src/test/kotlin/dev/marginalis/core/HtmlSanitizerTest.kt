@@ -18,10 +18,10 @@ class HtmlSanitizerTest {
     @Test
     fun `a GFM table and strikethrough pass, and cells keep only their alignment`() {
         assertEquals(
-            "<table><thead><tr><th align=\"left\">a</th></tr></thead><tbody><tr><td align=\"right\"><del>b</del></td></tr></tbody></table>",
+            "<table><thead><tr><th align=\"left\">a</th></tr></thead><tbody><tr><td align=\"right\"><s>b</s></td></tr></tbody></table>",
             clean(
                 "<table style=\"background:url(http://t)\"><thead><tr><th align=\"left\" style=\"x\">a</th></tr></thead>" +
-                    "<tbody><tr><td align=\"right\" background=\"http://t\"><del>b</del></td></tr></tbody></table>",
+                    "<tbody><tr><td align=\"right\" background=\"http://t\"><s>b</s></td></tr></tbody></table>",
             ),
         )
     }

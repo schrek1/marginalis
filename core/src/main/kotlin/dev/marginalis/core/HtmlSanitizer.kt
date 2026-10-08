@@ -7,7 +7,7 @@ object HtmlSanitizer {
 
     private val GENERATED = setOf(
         "p", "br", "hr", "em", "strong", "code", "pre", "blockquote", "ul", "ol", "li",
-        "h1", "h2", "h3", "h4", "h5", "h6", "a", "del",
+        "h1", "h2", "h3", "h4", "h5", "h6", "a", "s",
         "table", "thead", "tbody", "tr", "th", "td",
     )
     private val KEPT_ATTRIBUTES = mapOf(
