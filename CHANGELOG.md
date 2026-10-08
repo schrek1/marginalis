@@ -12,6 +12,12 @@ History before 0.1.19 lives in git tags.
 - Walking through steps in the same file keeps you in the editor you are reading, a pull request's
   review diff included. Resolve, Previous and Next scroll to the step there instead of opening the
   file's regular editor tab.
+### Added
+
+- Message bodies render GitHub-flavoured Markdown: tables and
+  ~~strikethrough~~. A top-level table sits in its own pane at natural
+  width and scrolls sideways when it is wider than the panel, so the
+  prose around it keeps wrapping.
 
 ## [0.2.2] - 2026-10-04
 
