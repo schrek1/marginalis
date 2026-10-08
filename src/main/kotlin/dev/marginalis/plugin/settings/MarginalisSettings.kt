@@ -40,6 +40,8 @@ class MarginalisSettings : PersistentStateComponent<MarginalisSettings.State> {
 
         var notifyOnAgentReply: Boolean = true
 
+        var liveByDefault: Boolean = false
+
         var projectTabList: String = ListWhileInFront.LIVE.stored
 
         var expandOnYourMove: Boolean = true
