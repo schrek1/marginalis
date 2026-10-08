@@ -65,7 +65,10 @@ editable until an agent has read it.
 - **Live threads.** Switch a thread to *Live* (⚡) to go back and forth
   on one item without waiting for the next round: each Submit wakes the
   agent you're answering with that thread alone, and the header shows
-  when it is listening or working.
+  when it is listening or working. *Live by default* (⚡ in the Marginalis
+  tool window's toolbar) makes every open thread of the project live; a thread's
+  own ⚡ still switches it off. Settings → Tools → Marginalis picks where
+  a project starts.
 - **Pull request reviews in the margin.** Your agent can bring a PR's
   review discussion — teammates, review bots and your own comments —
   next to the code it is about, each comment attributed to its author
