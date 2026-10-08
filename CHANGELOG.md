@@ -7,6 +7,14 @@ History before 0.1.19 lives in git tags.
 
 ## [Unreleased]
 
+### Added
+
+- Expand and Collapse in the Marginalis tool window's toolbar start at
+  the folder of the selection and work one level further out with each
+  press, up to its section and then every section. Collapse folds
+  everything inside, as IntelliJ's Collapse All does. Folders you fold
+  stay folded when the tree refreshes.
+
 ### Fixed
 
 - Stepping through the Marginalis tool window with Next and Previous no
