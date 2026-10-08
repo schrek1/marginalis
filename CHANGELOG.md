@@ -5,6 +5,14 @@ All notable changes to Marginalis. The format follows
 current version's section into the plugin's Marketplace change notes.
 History before 0.1.19 lives in git tags.
 
+## [Unreleased]
+
+### Fixed
+
+- With several walkthroughs open, a step's number no longer runs into the
+  walkthrough's label ("CBP-7244 · r21/5" for step 1 of 5): steps show
+  just their number, and the section title names the walkthrough.
+
 ## [0.2.2] - 2026-10-04
 
 ### Changed

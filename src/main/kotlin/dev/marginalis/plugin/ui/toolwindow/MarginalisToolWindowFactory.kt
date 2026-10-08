@@ -497,7 +497,6 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
         val openStops = allThreads.filter { it.status is ThreadStatus.Open && it.order != null }
         if (openStops.isEmpty()) return
         val walkthroughs = openStops.groupBy { it.walkthrough ?: "" }.toSortedMap()
-        val labelNeeded = walkthroughs.size > 1
         for ((label, walkthroughThreads) in walkthroughs) {
             val title = if (label.isEmpty()) "Guided" else "Guided $label"
             val section = DefaultMutableTreeNode(
@@ -505,8 +504,8 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
             )
             val total = WalkthroughNavigator.stableTotal(project, walkthroughThreads.first())
                 ?: walkthroughThreads.size
-            val shownLabel = if (labelNeeded && label.isNotEmpty()) label else ""
-            val prefixFor = { thread: CommentThread -> "($shownLabel${thread.order}/$total)" }
+            // The section title names the walkthrough; glued to the number, a label like "r2" made step 1 read "r21".
+            val prefixFor = { thread: CommentThread -> "(${thread.order}/$total)" }
             addProjectNode(section, walkthroughThreads.filter { it.isProjectLevel }, prefixFor)
             val trie = PathTrie().apply { walkthroughThreads.forEach(::insert) }
             emitTrie(trie, section, prefixFor)
