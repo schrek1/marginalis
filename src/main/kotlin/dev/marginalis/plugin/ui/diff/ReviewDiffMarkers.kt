@@ -8,6 +8,7 @@ import com.intellij.diff.requests.DiffRequest
 import com.intellij.diff.tools.fragmented.UnifiedDiffViewer
 import com.intellij.diff.tools.util.base.DiffViewerBase
 import com.intellij.diff.tools.util.base.DiffViewerListener
+import com.intellij.diff.tools.util.side.OnesideTextDiffViewer
 import com.intellij.diff.tools.util.side.TwosideTextDiffViewer
 import com.intellij.diff.util.Side
 import com.intellij.openapi.editor.Document
@@ -77,6 +78,10 @@ class ReviewDiffMarkers : DiffExtension() {
                     RightSide(viewer, viewer.getContent(Side.RIGHT), viewer.editor) {
                         viewer.transferLineFromOnesideStrict(Side.RIGHT, it)
                     }
+
+                // A file the change adds: the diff shows only its new text.
+                is OnesideTextDiffViewer ->
+                    if (viewer.side == Side.RIGHT) RightSide(viewer, viewer.content, viewer.editor) { it } else null
 
                 else -> null
             }
