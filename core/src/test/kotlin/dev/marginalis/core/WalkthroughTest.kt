@@ -33,6 +33,19 @@ class WalkthroughTest {
     }
 
     @Test
+    fun `steps sort by number wherever they sit, a tie going to the earlier step`() {
+        val inFolder = thread("src/deep/x.py", order = 5)
+        val inDocs = thread("docs/notes.md", order = 7)
+        val earlierTwo = thread("z.py", order = 2)
+        val laterTwo = thread("a.py", order = 2)
+        val first = thread("z.py", order = 1)
+
+        val walked = listOf(inFolder, inDocs, laterTwo, earlierTwo, first).sortedWith(Walkthrough.byStepNumber)
+
+        assertEquals(listOf(first, earlierTwo, laterTwo, inFolder, inDocs), walked)
+    }
+
+    @Test
     fun `an unordered thread walks every open thread in directory-tree order`() {
         val deep = thread("src/util/a.py", line = 5)
         val shallow = thread("readme.md")

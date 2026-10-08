@@ -45,6 +45,7 @@ import dev.marginalis.core.ThreadStatus
 import dev.marginalis.core.Turn
 import dev.marginalis.core.TurnSignal
 import dev.marginalis.core.TurnTally
+import dev.marginalis.core.Walkthrough
 import dev.marginalis.plugin.avatars.AvatarsListener
 import dev.marginalis.plugin.store.Authors
 import dev.marginalis.plugin.store.MarginalisStore
@@ -250,7 +251,7 @@ private sealed class NodeData {
     /** Names the node across rebuilds, which replace every node object. */
     abstract val key: String
 
-    class Section(val title: String, val count: Int, val blockers: Int = 0) : NodeData() {
+    class Section(val title: String, val count: Int, val blockers: Int = 0, val guided: Boolean = false) : NodeData() {
         override val key get() = "section:$title"
     }
 
@@ -441,10 +442,16 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
         val section = selected?.path?.getOrNull(1) as? DefaultMutableTreeNode
             ?: root.children().asSequence().filterIsInstance<DefaultMutableTreeNode>().firstOrNull()
             ?: return none
-        val walk = section.preorderEnumeration().asSequence()
+        val nodes = section.preorderEnumeration().asSequence()
             .filterIsInstance<DefaultMutableTreeNode>()
             .filter { it.userObject is NodeData.ThreadNode }
             .toList()
+        // The Guided tree groups steps by folder and file, so its top-to-bottom order is not the step order.
+        val walk = if ((section.userObject as NodeData.Section).guided) {
+            nodes.sortedWith(compareBy(Walkthrough.byStepNumber) { (it.userObject as NodeData.ThreadNode).thread })
+        } else {
+            nodes
+        }
         val index = if (selected?.userObject is NodeData.ThreadNode) walk.indexOf(selected) else -1
         return walk to index
     }
@@ -541,7 +548,12 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
         for ((label, walkthroughThreads) in walkthroughs) {
             val title = if (label.isEmpty()) "Guided" else "Guided $label"
             val section = DefaultMutableTreeNode(
-                NodeData.Section(title, walkthroughThreads.size, walkthroughThreads.count { it.severity == Severity.BLOCKER }),
+                NodeData.Section(
+                    title,
+                    walkthroughThreads.size,
+                    walkthroughThreads.count { it.severity == Severity.BLOCKER },
+                    guided = true,
+                ),
             )
             val total = WalkthroughNavigator.stableTotal(project, walkthroughThreads.first())
                 ?: walkthroughThreads.size

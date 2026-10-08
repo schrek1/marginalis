@@ -13,6 +13,9 @@ History before 0.1.19 lives in git tags.
   longer loses its place: the selection survives the tree refreshing,
   so the next press continues from the step you are on instead of the
   first one.
+- In a Guided section, First, Previous, Next and Last Step in the tool
+  window follow the step numbers, as the arrows in a thread's header do,
+  instead of the folder-and-file order the tree shows them in.
 
 ## [0.2.2] - 2026-10-04
 
