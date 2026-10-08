@@ -5,6 +5,16 @@ All notable changes to Marginalis. The format follows
 current version's section into the plugin's Marketplace change notes.
 History before 0.1.19 lives in git tags.
 
+## [Unreleased]
+
+### Added
+
+- *Live by default*, a ⚡ toggle in the Marginalis tool window's toolbar: every open
+  thread of the project is live without switching each one. A thread's
+  own ⚡ still switches it off. The choice is kept per project, in your
+  workspace, not in version control; a checkbox in Settings sets where a
+  project starts.
+
 ## [0.2.2] - 2026-10-04
 
 ### Changed

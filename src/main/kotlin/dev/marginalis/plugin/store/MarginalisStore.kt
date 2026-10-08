@@ -47,6 +47,8 @@ class MarginalisStore(private val project: Project) : Disposable {
 
     private val liveThreads = ConcurrentHashMap.newKeySet<String>()
 
+    private val notLiveThreads = ConcurrentHashMap.newKeySet<String>()
+
     private val liveTargets = ConcurrentHashMap<String, String>()
 
     init {
@@ -55,7 +57,19 @@ class MarginalisStore(private val project: Project) : Disposable {
         }
     }
 
-    fun isLive(thread: CommentThread): Boolean = thread.id in liveThreads
+    val liveByDefault: Boolean
+        get() = LiveDefault.getInstance(project).enabled
+
+    fun isLive(thread: CommentThread): Boolean =
+        LiveThread.isLive(thread, liveByDefault, switchedOn = liveThreads, switchedOff = notLiveThreads)
+
+    fun setLiveByDefault(enabled: Boolean) {
+        val wasLive = threads.all().filter(::isLive)
+        LiveDefault.getInstance(project).enabled = enabled
+        liveThreads.clear()
+        notLiveThreads.clear()
+        wasLive.filterNot(::isLive).forEach(::endLive)
+    }
 
     fun liveAgentKey(thread: CommentThread, to: Addressee?): String? =
         LiveAgent.keyOf(thread.messages, to, handBack.waitingAgents) ?: liveTargets[thread.id]
@@ -66,15 +80,18 @@ class MarginalisStore(private val project: Project) : Disposable {
     fun setLive(thread: CommentThread, live: Boolean, to: Addressee?) {
         if (live) {
             liveThreads.add(thread.id)
+            notLiveThreads.remove(thread.id)
             LiveThread.goLive(handBack, thread, liveTarget(thread, to))
         } else {
             endLive(thread)
+            notLiveThreads.add(thread.id)
         }
         threads.notifyChanged(thread)
     }
 
     private fun endLive(thread: CommentThread) {
         liveThreads.remove(thread.id)
+        notLiveThreads.remove(thread.id)
         liveTargets.remove(thread.id)
         handBack.forgetLive(thread.id)
     }

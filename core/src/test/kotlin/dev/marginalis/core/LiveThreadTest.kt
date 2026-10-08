@@ -26,6 +26,23 @@ class LiveThreadTest {
     }
 
     @Test
+    fun `without the project default only a thread switched on is live`() {
+        val t = thread()
+
+        assertFalse(LiveThread.isLive(t, byDefault = false, switchedOn = emptySet(), switchedOff = emptySet()))
+        assertTrue(LiveThread.isLive(t, byDefault = false, switchedOn = setOf(t.id), switchedOff = emptySet()))
+    }
+
+    @Test
+    fun `with the project default every open thread is live unless switched off`() {
+        val t = thread()
+
+        assertTrue(LiveThread.isLive(t, byDefault = true, switchedOn = emptySet(), switchedOff = emptySet()))
+        assertFalse(LiveThread.isLive(t, byDefault = true, switchedOn = emptySet(), switchedOff = setOf(t.id)))
+        assertFalse(LiveThread.isLive(t.also { it.resolve(user) }, byDefault = true, switchedOn = emptySet(), switchedOff = emptySet()))
+    }
+
+    @Test
     fun `an open thread holds news for an agent until that agent has seen every message`() {
         val followUp = Message(user, "And another thing")
         val t = thread(Message(claude, "Done."), followUp)
