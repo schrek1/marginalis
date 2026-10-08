@@ -5,6 +5,14 @@ All notable changes to Marginalis. The format follows
 current version's section into the plugin's Marketplace change notes.
 History before 0.1.19 lives in git tags.
 
+## [Unreleased]
+
+### Added
+
+- Thread icons now show in the gutter of a pull or merge request review
+  diff too, and in any other diff that shows a file from a commit. Click
+  one to open the thread right there in the diff.
+
 ## [0.2.2] - 2026-10-04
 
 ### Changed
