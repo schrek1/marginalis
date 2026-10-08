@@ -18,6 +18,11 @@ History before 0.1.19 lives in git tags.
   ~~strikethrough~~. A top-level table sits in its own pane at natural
   width and scrolls sideways when it is wider than the panel, so the
   prose around it keeps wrapping.
+### Added
+
+- Thread icons now show in the gutter of a pull or merge request review
+  diff too, and in any other diff that shows a file from a commit. Click
+  one to open the thread right there in the diff.
 
 ## [0.2.2] - 2026-10-04
 

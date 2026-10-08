@@ -20,6 +20,9 @@ object ThreadInlayManager {
     private val OPEN_INLAYS = Key.create<MutableMap<String, Pair<Inlay<*>, ThreadPanel>>>("marginalis.open.inlays")
     private val LISTENER_INSTALLED = Key.create<Boolean>("marginalis.store.listener")
 
+    /** Set on editors that show a thread's file at other line numbers than the file itself, such as a review diff. */
+    val THREAD_LINE = Key.create<(CommentThread) -> Int?>("marginalis.thread.line")
+
     fun toggle(project: Project, editor: Editor, thread: CommentThread) {
         val open = openInlays(editor)
         open.remove(thread.id)?.let { (inlay, _) ->
@@ -69,8 +72,11 @@ object ThreadInlayManager {
             hostWidth = { inlayWidth(editor) },
         )
         val aboveFirstLine = thread.isFileLevel
-        val line = (MarginalisStore.getInstance(project).syncLine(thread) ?: 0)
-            .coerceAtMost(editor.document.lineCount - 1)
+        val line = (
+            editor.getUserData(THREAD_LINE)?.invoke(thread)
+                ?: MarginalisStore.getInstance(project).syncLine(thread)
+                ?: 0
+            ).coerceAtMost(editor.document.lineCount - 1)
         val offset =
             if (aboveFirstLine) editor.document.getLineStartOffset(0)
             else editor.document.getLineEndOffset(line.coerceAtLeast(0))
@@ -114,6 +120,7 @@ object ThreadInlayManager {
             editor.getUserData(OPEN_INLAYS)?.values?.forEach { (inlay, _) -> Disposer.dispose(inlay) }
             editor.putUserData(OPEN_INLAYS, null)
             editor.putUserData(LISTENER_INSTALLED, null)
+            editor.putUserData(THREAD_LINE, null)
         }
     }
 

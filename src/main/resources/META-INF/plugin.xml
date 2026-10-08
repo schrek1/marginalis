@@ -92,6 +92,8 @@
         <toolWindow id="Marginalis" anchor="left"
                     icon="/icons/marginalisToolWindow.svg"
                     factoryClass="dev.marginalis.plugin.ui.toolwindow.MarginalisToolWindowFactory"/>
+        <!-- Review diffs show a revision's copy of the file; this brings the gutter icons there too. -->
+        <diff.DiffExtension implementation="dev.marginalis.plugin.ui.diff.ReviewDiffMarkers"/>
         <!-- At-a-glance: the turn signal badges the file's own icon — editor tabs and the Project view alike. -->
         <fileIconPatcher implementation="dev.marginalis.plugin.ui.TurnSignalIconPatcher"/>
         <!-- The project tab: project-level threads in an editor tab of their own. -->
