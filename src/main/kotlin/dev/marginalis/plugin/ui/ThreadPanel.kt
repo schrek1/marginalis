@@ -331,7 +331,7 @@ class ThreadPanel(
             MarginalisStore.getInstance(project).threads.notifyChanged(thread)
             if (next != null) {
                 onClose()
-                WalkthroughNavigator.navigateTo(project, next)
+                WalkthroughNavigator.navigateTo(project, next, from = editor)
             }
         } else {
             thread.reopen()
@@ -517,7 +517,7 @@ class ThreadPanel(
             val (walk, i) = WalkthroughNavigator.walkFrom(project, thread)
             val destination = target(walk, i) ?: return
             onClose()
-            WalkthroughNavigator.navigateTo(project, destination)
+            WalkthroughNavigator.navigateTo(project, destination, from = editor)
         }
     }
 
