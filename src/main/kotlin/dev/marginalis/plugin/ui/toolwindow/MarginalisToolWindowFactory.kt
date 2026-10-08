@@ -45,6 +45,7 @@ import dev.marginalis.core.ThreadStatus
 import dev.marginalis.core.Turn
 import dev.marginalis.core.TurnSignal
 import dev.marginalis.core.TurnTally
+import dev.marginalis.core.Walkthrough
 import dev.marginalis.plugin.avatars.AvatarsListener
 import dev.marginalis.plugin.store.Authors
 import dev.marginalis.plugin.store.MarginalisStore
@@ -249,11 +250,28 @@ private class ClearAllAction : AnAction("Delete All", "Delete all threads, inclu
 }
 
 private sealed class NodeData {
-    class Section(val title: String, val count: Int, val blockers: Int = 0) : NodeData()
-    class ProjectNode(val count: Int) : NodeData()
-    class DirNode(val name: String, val count: Int) : NodeData()
-    class FileNode(val name: String, val threads: List<CommentThread>) : NodeData()
-    class ThreadNode(val thread: CommentThread, val walkthroughPrefix: String? = null) : NodeData()
+    /** Names the node across rebuilds, which replace every node object. */
+    abstract val key: String
+
+    class Section(val title: String, val count: Int, val blockers: Int = 0, val guided: Boolean = false) : NodeData() {
+        override val key get() = "section:$title"
+    }
+
+    class ProjectNode(val count: Int) : NodeData() {
+        override val key get() = "project"
+    }
+
+    class DirNode(val name: String, val count: Int) : NodeData() {
+        override val key get() = "dir:$name"
+    }
+
+    class FileNode(val name: String, val threads: List<CommentThread>) : NodeData() {
+        override val key get() = "file:$name"
+    }
+
+    class ThreadNode(val thread: CommentThread, val walkthroughPrefix: String? = null) : NodeData() {
+        override val key get() = "thread:${thread.id}"
+    }
 }
 
 internal class MarginalisToolWindowPanel(private val project: Project) :
@@ -426,10 +444,16 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
         val section = selected?.path?.getOrNull(1) as? DefaultMutableTreeNode
             ?: root.children().asSequence().filterIsInstance<DefaultMutableTreeNode>().firstOrNull()
             ?: return none
-        val walk = section.preorderEnumeration().asSequence()
+        val nodes = section.preorderEnumeration().asSequence()
             .filterIsInstance<DefaultMutableTreeNode>()
             .filter { it.userObject is NodeData.ThreadNode }
             .toList()
+        // The Guided tree groups steps by folder and file, so its top-to-bottom order is not the step order.
+        val walk = if ((section.userObject as NodeData.Section).guided) {
+            nodes.sortedWith(compareBy(Walkthrough.byStepNumber) { (it.userObject as NodeData.ThreadNode).thread })
+        } else {
+            nodes
+        }
         val index = if (selected?.userObject is NodeData.ThreadNode) walk.indexOf(selected) else -1
         return walk to index
     }
@@ -475,7 +499,10 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
         steps().first.lastOrNull()?.let { goTo(it) }
     }
 
+    // Any thread change rebuilds the tree, and opening a step is one (it marks the step read); step navigation
+    // walks from the selection, so the selection is carried over by key.
     fun rebuild() {
+        val selected = (tree.lastSelectedPathComponent as? DefaultMutableTreeNode)?.let(::keyPath)
         val store = MarginalisStore.getInstance(project)
         store.syncLines()
         val threads = store.threads.all().filter(filter.matches)
@@ -493,6 +520,26 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
             val section = root.getChildAt(i) as DefaultMutableTreeNode
             if ((section.userObject as NodeData.Section).title != "Resolved") expandRecursively(section)
         }
+        selected?.let(::reselect)
+    }
+
+    private fun keyPath(node: DefaultMutableTreeNode): List<String> =
+        node.path.drop(1).map { ((it as DefaultMutableTreeNode).userObject as NodeData).key }
+
+    /** The same node by its key path, else the same thread in the same section (folders may group differently). */
+    private fun reselect(keys: List<String>) {
+        val root = tree.model.root as DefaultMutableTreeNode
+        val exact = keys.fold<String, DefaultMutableTreeNode?>(root) { parent, key ->
+            parent?.children()?.asSequence()?.filterIsInstance<DefaultMutableTreeNode>()
+                ?.firstOrNull { (it.userObject as NodeData).key == key }
+        }
+        val node = exact ?: keys.last().takeIf { it.startsWith("thread:") }?.let { threadKey ->
+            root.children().asSequence().filterIsInstance<DefaultMutableTreeNode>()
+                .firstOrNull { (it.userObject as NodeData).key == keys.first() }
+                ?.preorderEnumeration()?.asSequence()?.filterIsInstance<DefaultMutableTreeNode>()
+                ?.firstOrNull { (it.userObject as NodeData).key == threadKey }
+        } ?: return
+        tree.selectionPath = TreePath(node.path)
     }
 
     private fun addGuidedSection(root: DefaultMutableTreeNode, allThreads: List<CommentThread>) {
@@ -503,7 +550,12 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
         for ((label, walkthroughThreads) in walkthroughs) {
             val title = if (label.isEmpty()) "Guided" else "Guided $label"
             val section = DefaultMutableTreeNode(
-                NodeData.Section(title, walkthroughThreads.size, walkthroughThreads.count { it.severity == Severity.BLOCKER }),
+                NodeData.Section(
+                    title,
+                    walkthroughThreads.size,
+                    walkthroughThreads.count { it.severity == Severity.BLOCKER },
+                    guided = true,
+                ),
             )
             val total = WalkthroughNavigator.stableTotal(project, walkthroughThreads.first())
                 ?: walkthroughThreads.size

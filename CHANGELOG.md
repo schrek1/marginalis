@@ -37,6 +37,13 @@ History before 0.1.19 lives in git tags.
   between paragraphs stays an empty line instead of collapsing.
 - Paragraphs and lists in a message get a small gap between them, so a
   long reply no longer reads as one dense block.
+- Stepping through the Marginalis tool window with Next and Previous no
+  longer loses its place: the selection survives the tree refreshing,
+  so the next press continues from the step you are on instead of the
+  first one.
+- In a Guided section, First, Previous, Next and Last Step in the tool
+  window follow the step numbers, as the arrows in a thread's header do,
+  instead of the folder-and-file order the tree shows them in.
 
 ## [0.2.2] - 2026-10-04
 
