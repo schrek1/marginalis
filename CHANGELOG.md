@@ -5,6 +5,18 @@ All notable changes to Marginalis. The format follows
 current version's section into the plugin's Marketplace change notes.
 History before 0.1.19 lives in git tags.
 
+## [Unreleased]
+
+### Changed
+
+- The Margin tab now reads top to bottom, oldest thread first, the same
+  way messages read inside a thread. A reply no longer makes a thread
+  jump, and a walkthrough's steps read 1, 2, 3.
+  - A Sort menu in the tab switches to newest first or to the previous
+    most-recent-activity order. Each project remembers its choice.
+  - A new thread you start, and threads that arrive while the list holds
+    still, appear on the side the chosen order puts new threads.
+
 ## [0.2.2] - 2026-10-04
 
 ### Changed
