@@ -10,6 +10,8 @@ class ProjectTabLayoutTest {
 
     private val user = Author.User("Muhammad")
 
+    private val byActivity = ProjectTabOrder.RECENT_ACTIVITY
+
     private var tick = 0L
 
     private fun at() = Instant.ofEpochSecond(tick++)
@@ -38,7 +40,98 @@ class ProjectTabLayoutTest {
             it.restoreUpdatedAt(Instant.ofEpochSecond(activeAt))
         }
 
+    private fun step(id: String, number: Int, createdAt: Long, activeAt: Long, walkthrough: String = "tour") =
+        CommentThread(
+            file = null,
+            line = null,
+            anchorText = null,
+            id = id,
+            createdAt = Instant.ofEpochSecond(createdAt),
+            order = number,
+            walkthrough = walkthrough,
+        ).also { it.restoreUpdatedAt(Instant.ofEpochSecond(activeAt)) }
+
     private fun keys(layout: ProjectTabLayout.Layout) = layout.active.map { it.key }
+
+    @Test
+    fun `by default threads read oldest first, and activity does not move them`() {
+        val first = project("first", createdAt = 1, activeAt = 1)
+        val second = project("second", createdAt = 2, activeAt = 2)
+        val third = project("third", createdAt = 3, activeAt = 3)
+
+        first.addMessage(Message(agent, "news"))
+
+        assertEquals(listOf("first", "second", "third"), keys(ProjectTabLayout.arrange(listOf(third, first, second))))
+    }
+
+    @Test
+    fun `newest first puts the latest created thread on top, whatever the activity`() {
+        val first = project("first", createdAt = 1, activeAt = 90)
+        val second = project("second", createdAt = 2, activeAt = 2)
+
+        val layout = ProjectTabLayout.arrange(listOf(first, second), order = ProjectTabOrder.NEWEST_FIRST)
+
+        assertEquals(listOf("second", "first"), keys(layout))
+    }
+
+    @Test
+    fun `a walkthrough's steps read in step order whichever order is chosen`() {
+        val stepTwo = step("two", number = 2, createdAt = 1, activeAt = 50)
+        val other = project("other", createdAt = 2, activeAt = 20)
+        val stepOne = step("one", number = 1, createdAt = 3, activeAt = 10)
+        val stepThree = step("three", number = 3, createdAt = 4, activeAt = 30)
+        val threads = listOf(stepThree, other, stepOne, stepTwo)
+
+        for (order in ProjectTabOrder.entries) {
+            val steps = keys(ProjectTabLayout.arrange(threads, order = order)).filter { it != "other" }
+            assertEquals(listOf("one", "two", "three"), steps, "steps under $order")
+        }
+    }
+
+    @Test
+    fun `steps keep the slots the order gives them, so other threads stay where the order puts them`() {
+        val stepTwo = step("two", number = 2, createdAt = 1, activeAt = 1)
+        val other = project("other", createdAt = 2, activeAt = 2)
+        val stepOne = step("one", number = 1, createdAt = 3, activeAt = 3)
+
+        assertEquals(listOf("one", "other", "two"), keys(ProjectTabLayout.arrange(listOf(stepTwo, other, stepOne))))
+    }
+
+    @Test
+    fun `two walkthroughs each read in their own step order`() {
+        val firstTourTwo = step("a2", number = 2, createdAt = 1, activeAt = 1, walkthrough = "first")
+        val secondTourOne = step("b1", number = 1, createdAt = 2, activeAt = 2, walkthrough = "second")
+        val firstTourOne = step("a1", number = 1, createdAt = 3, activeAt = 3, walkthrough = "first")
+        val secondTourTwo = step("b2", number = 2, createdAt = 0, activeAt = 0, walkthrough = "second")
+
+        val layout = ProjectTabLayout.arrange(listOf(firstTourTwo, secondTourOne, firstTourOne, secondTourTwo))
+
+        assertEquals(listOf("b1", "a1", "b2", "a2"), keys(layout))
+    }
+
+    @Test
+    fun `oldest first places a conversation at its oldest member and lists its members oldest first`() {
+        val older = relayed("older", pr = 41, activeAt = 10)
+        val middle = project("middle", createdAt = 20, activeAt = 20)
+        val newest = relayed("newest", pr = 41, activeAt = 30)
+
+        val layout = ProjectTabLayout.arrange(listOf(newest, middle, older))
+
+        assertEquals(listOf("conversation:PR #41", "middle"), keys(layout))
+        assertEquals(listOf(older, newest), conversation(layout, "PR #41").threads)
+    }
+
+    @Test
+    fun `the resolved fold follows the chosen order`() {
+        val first = resolved("first", createdAt = 1, activeAt = 30)
+        val second = resolved("second", createdAt = 2, activeAt = 10)
+
+        assertEquals(listOf(first, second), ProjectTabLayout.arrange(listOf(second, first)).resolved)
+        assertEquals(
+            listOf(second, first),
+            ProjectTabLayout.arrange(listOf(second, first), order = ProjectTabOrder.NEWEST_FIRST).resolved,
+        )
+    }
 
     @Test
     fun `only project-level threads appear — file and line threads never do`() {
@@ -60,7 +153,10 @@ class ProjectTabLayoutTest {
         val newerOfTwins = project("n", createdAt = 4, activeAt = 40)
         val sameAsNewerButLaterId = project("z", createdAt = 4, activeAt = 40)
 
-        val layout = ProjectTabLayout.arrange(listOf(quiet, sameAsNewerButLaterId, olderOfTwins, busy, newerOfTwins))
+        val layout = ProjectTabLayout.arrange(
+            listOf(quiet, sameAsNewerButLaterId, olderOfTwins, busy, newerOfTwins),
+            order = byActivity,
+        )
 
         assertEquals(listOf("b", "n", "z", "o", "q"), keys(layout))
     }
@@ -72,7 +168,7 @@ class ProjectTabLayoutTest {
 
         first.addMessage(Message(agent, "news"))
 
-        assertEquals(listOf("first", "second"), keys(ProjectTabLayout.arrange(listOf(second, first))))
+        assertEquals(listOf("first", "second"), keys(ProjectTabLayout.arrange(listOf(second, first), order = byActivity)))
     }
 
     @Test
@@ -80,12 +176,17 @@ class ProjectTabLayoutTest {
         val top = project("top", createdAt = 1, activeAt = 30)
         val drafting = project("drafting", createdAt = 2, activeAt = 20)
         val bottom = project("bottom", createdAt = 3, activeAt = 10)
-        val previous = ProjectTabLayout.arrange(listOf(top, drafting, bottom)).active
+        val previous = ProjectTabLayout.arrange(listOf(top, drafting, bottom), order = byActivity).active
 
         bottom.addMessage(Message(agent, "news"))
         drafting.addMessage(Message(agent, "even newer"))
 
-        val layout = ProjectTabLayout.arrange(listOf(top, drafting, bottom), previous, holdsDraft = { it == "drafting" })
+        val layout = ProjectTabLayout.arrange(
+            listOf(top, drafting, bottom),
+            previous,
+            holdsDraft = { it == "drafting" },
+            order = byActivity,
+        )
 
         assertEquals(listOf("bottom", "drafting", "top"), keys(layout))
     }
@@ -126,7 +227,7 @@ class ProjectTabLayoutTest {
         val open = project("open", createdAt = 2, activeAt = 2)
         val earlier = resolved("earlier", createdAt = 3, activeAt = 10)
 
-        val layout = ProjectTabLayout.arrange(listOf(earlier, open, later))
+        val layout = ProjectTabLayout.arrange(listOf(earlier, open, later), order = byActivity)
 
         assertEquals(listOf("open"), keys(layout))
         assertEquals(listOf(later, earlier), layout.resolved)
@@ -153,7 +254,7 @@ class ProjectTabLayoutTest {
         val middle = project("middle", createdAt = 2, activeAt = 20)
         val newest = relayed("newest", pr = 41, activeAt = 30)
 
-        val layout = ProjectTabLayout.arrange(listOf(older, middle, newest))
+        val layout = ProjectTabLayout.arrange(listOf(older, middle, newest), order = byActivity)
 
         assertEquals(listOf("conversation:PR #41", "middle"), keys(layout))
         assertEquals(listOf(newest, older), conversation(layout, "PR #41").threads)
@@ -176,6 +277,7 @@ class ProjectTabLayoutTest {
     fun `relayed threads from two pull requests form two conversations`() {
         val layout = ProjectTabLayout.arrange(
             listOf(relayed("a", pr = 41, activeAt = 10), relayed("b", pr = 42, activeAt = 20), relayed("c", pr = 41, activeAt = 5)),
+            order = byActivity,
         )
 
         assertEquals(listOf("conversation:PR #42", "conversation:PR #41"), keys(layout))
@@ -194,6 +296,7 @@ class ProjectTabLayoutTest {
         val layout = ProjectTabLayout.arrange(
             listOf(relayed("a", pr = 41, activeAt = 10), relayed("b", pr = 41, activeAt = 20)),
             groupRelayed = false,
+            order = byActivity,
         )
 
         assertEquals(listOf("b", "a"), keys(layout))
@@ -230,12 +333,17 @@ class ProjectTabLayoutTest {
         val top = project("top", createdAt = 1, activeAt = 30)
         val drafting = relayed("drafting", pr = 41, activeAt = 20)
         val bottom = project("bottom", createdAt = 3, activeAt = 10)
-        val previous = ProjectTabLayout.arrange(listOf(top, drafting, bottom)).active
+        val previous = ProjectTabLayout.arrange(listOf(top, drafting, bottom), order = byActivity).active
 
         drafting.resolve(user)
         bottom.addMessage(Message(agent, "news"))
 
-        val layout = ProjectTabLayout.arrange(listOf(top, drafting, bottom), previous, holdsDraft = { it == "drafting" })
+        val layout = ProjectTabLayout.arrange(
+            listOf(top, drafting, bottom),
+            previous,
+            holdsDraft = { it == "drafting" },
+            order = byActivity,
+        )
 
         assertEquals(listOf("bottom", "conversation:PR #41", "top"), keys(layout))
         assertEquals(listOf(drafting), conversation(layout, "PR #41").threads)
