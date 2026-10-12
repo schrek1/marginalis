@@ -5,6 +5,14 @@ All notable changes to Marginalis. The format follows
 current version's section into the plugin's Marketplace change notes.
 History before 0.1.19 lives in git tags.
 
+## [Unreleased]
+
+### Fixed
+
+- Walking through steps in the same file keeps you in the editor you are reading, a pull request's
+  review diff included. Resolve, Previous and Next scroll to the step there instead of opening the
+  file's regular editor tab.
+
 ## [0.2.2] - 2026-10-04
 
 ### Changed
