@@ -296,6 +296,14 @@ class MarginalisConfigurable : Configurable {
                     )
                     .bindSelected(state::notifyOnAgentReply)
             }
+            row {
+                checkBox("Live by default")
+                    .comment(
+                        "Every open thread is live, so each Submit wakes the listening agent. " +
+                            "A project takes this when first opened; ⚡ in its Marginalis toolbar changes it there.",
+                    )
+                    .bindSelected(state::liveByDefault)
+            }
             row("Time format:") {
                 comboBox(TimeFormat.entries, textListCellRenderer { it?.label })
                     .comment("Message timestamps in thread panels.")
