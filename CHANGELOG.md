@@ -5,6 +5,26 @@ All notable changes to Marginalis. The format follows
 current version's section into the plugin's Marketplace change notes.
 History before 0.1.19 lives in git tags.
 
+## [Unreleased]
+
+### Added
+
+- Expand and Collapse in the Marginalis tool window's toolbar start at
+  the folder of the selection and work one level further out with each
+  press, up to its section and then every section. Collapse folds
+  everything inside, as IntelliJ's Collapse All does. Folders you fold
+  stay folded when the tree refreshes.
+
+### Fixed
+
+- Stepping through the Marginalis tool window with Next and Previous no
+  longer loses its place: the selection survives the tree refreshing,
+  so the next press continues from the step you are on instead of the
+  first one.
+- In a Guided section, First, Previous, Next and Last Step in the tool
+  window follow the step numbers, as the arrows in a thread's header do,
+  instead of the folder-and-file order the tree shows them in.
+
 ## [0.2.2] - 2026-10-04
 
 ### Changed

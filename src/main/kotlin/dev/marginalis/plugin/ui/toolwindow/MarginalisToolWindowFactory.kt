@@ -45,6 +45,7 @@ import dev.marginalis.core.ThreadStatus
 import dev.marginalis.core.Turn
 import dev.marginalis.core.TurnSignal
 import dev.marginalis.core.TurnTally
+import dev.marginalis.core.Walkthrough
 import dev.marginalis.plugin.avatars.AvatarsListener
 import dev.marginalis.plugin.store.Authors
 import dev.marginalis.plugin.store.MarginalisStore
@@ -86,6 +87,8 @@ class MarginalisToolWindowFactory : ToolWindowFactory, DumbAware {
                 common.createPrevOccurenceAction(panel),
                 common.createNextOccurenceAction(panel),
                 LastStepAction(panel),
+                ExpandSectionAction(panel),
+                CollapseSectionAction(panel),
                 FilterMenuAction(panel),
                 AgentPresenceGroup(),
                 SubmitRoundAction(),
@@ -147,6 +150,30 @@ private class LastStepAction(private val panel: MarginalisToolWindowPanel) :
     }
 
     override fun actionPerformed(e: AnActionEvent) = panel.goLast()
+}
+
+private class ExpandSectionAction(private val panel: MarginalisToolWindowPanel) :
+    AnAction("Expand", "Expand the selected folder; each press one level further out, then every section", AllIcons.Actions.Expandall) {
+    override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+
+    override fun update(e: AnActionEvent) {
+        e.presentation.isEnabled = panel.hasSections()
+        e.presentation.text = panel.expandText()
+    }
+
+    override fun actionPerformed(e: AnActionEvent) = panel.expandStep()
+}
+
+private class CollapseSectionAction(private val panel: MarginalisToolWindowPanel) :
+    AnAction("Collapse", "Collapse the selected folder; each press one level further out, then every section", AllIcons.Actions.Collapseall) {
+    override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+
+    override fun update(e: AnActionEvent) {
+        e.presentation.isEnabled = panel.hasSections()
+        e.presentation.text = panel.collapseText()
+    }
+
+    override fun actionPerformed(e: AnActionEvent) = panel.collapseStep()
 }
 
 internal enum class TreeFilter(
@@ -247,11 +274,28 @@ private class ClearAllAction : AnAction("Delete All", "Delete all threads, inclu
 }
 
 private sealed class NodeData {
-    class Section(val title: String, val count: Int, val blockers: Int = 0) : NodeData()
-    class ProjectNode(val count: Int) : NodeData()
-    class DirNode(val name: String, val count: Int) : NodeData()
-    class FileNode(val name: String, val threads: List<CommentThread>) : NodeData()
-    class ThreadNode(val thread: CommentThread, val walkthroughPrefix: String? = null) : NodeData()
+    /** Names the node across rebuilds, which replace every node object. */
+    abstract val key: String
+
+    class Section(val title: String, val count: Int, val blockers: Int = 0, val guided: Boolean = false) : NodeData() {
+        override val key get() = "section:$title"
+    }
+
+    class ProjectNode(val count: Int) : NodeData() {
+        override val key get() = "project"
+    }
+
+    class DirNode(val name: String, val count: Int) : NodeData() {
+        override val key get() = "dir:$name"
+    }
+
+    class FileNode(val name: String, val threads: List<CommentThread>) : NodeData() {
+        override val key get() = "file:$name"
+    }
+
+    class ThreadNode(val thread: CommentThread, val walkthroughPrefix: String? = null) : NodeData() {
+        override val key get() = "thread:${thread.id}"
+    }
 }
 
 internal class MarginalisToolWindowPanel(private val project: Project) :
@@ -424,10 +468,16 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
         val section = selected?.path?.getOrNull(1) as? DefaultMutableTreeNode
             ?: root.children().asSequence().filterIsInstance<DefaultMutableTreeNode>().firstOrNull()
             ?: return none
-        val walk = section.preorderEnumeration().asSequence()
+        val nodes = section.preorderEnumeration().asSequence()
             .filterIsInstance<DefaultMutableTreeNode>()
             .filter { it.userObject is NodeData.ThreadNode }
             .toList()
+        // The Guided tree groups steps by folder and file, so its top-to-bottom order is not the step order.
+        val walk = if ((section.userObject as NodeData.Section).guided) {
+            nodes.sortedWith(compareBy(Walkthrough.byStepNumber) { (it.userObject as NodeData.ThreadNode).thread })
+        } else {
+            nodes
+        }
         val index = if (selected?.userObject is NodeData.ThreadNode) walk.indexOf(selected) else -1
         return walk to index
     }
@@ -473,7 +523,11 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
         steps().first.lastOrNull()?.let { goTo(it) }
     }
 
+    // Any thread change rebuilds the tree, and opening a step is one (it marks the step read); step navigation
+    // walks from the selection, and folders the user folded must stay folded, so both are carried over by key.
     fun rebuild() {
+        val selected = (tree.lastSelectedPathComponent as? DefaultMutableTreeNode)?.let(::keyPath)
+        val wasExpanded = branchStates()
         val store = MarginalisStore.getInstance(project)
         store.syncLines()
         val threads = store.threads.all().filter(filter.matches)
@@ -487,10 +541,111 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
         addTreeSection(root, "Resolved", threads.filter { it.status is ThreadStatus.Resolved })
 
         tree.model = DefaultTreeModel(root)
-        for (i in 0 until root.childCount) {
-            val section = root.getChildAt(i) as DefaultMutableTreeNode
-            if ((section.userObject as NodeData.Section).title != "Resolved") expandRecursively(section)
+        restoreExpansion(root, wasExpanded)
+        selected?.let(::reselect)
+    }
+
+    private fun keyPath(node: DefaultMutableTreeNode): List<String> =
+        node.path.drop(1).map { ((it as DefaultMutableTreeNode).userObject as NodeData).key }
+
+    /** Expanded or not, per branch node of the current tree; empty before the first build (the stock model). */
+    private fun branchStates(): Map<List<String>, Boolean> {
+        val root = tree.model.root as? DefaultMutableTreeNode ?: return emptyMap()
+        return root.preorderEnumeration().asSequence().filterIsInstance<DefaultMutableTreeNode>().drop(1)
+            .filter { !it.isLeaf && it.userObject is NodeData }
+            .associate { keyPath(it) to tree.isExpanded(TreePath(it.path)) }
+    }
+
+    /** A branch seen before keeps its state; a new one opens unless it is under Resolved. */
+    private fun restoreExpansion(root: DefaultMutableTreeNode, wasExpanded: Map<List<String>, Boolean>) {
+        val branches = root.preorderEnumeration().asSequence().filterIsInstance<DefaultMutableTreeNode>().drop(1)
+            .filter { !it.isLeaf }
+            .toList()
+        val (open, folded) = branches.partition { node ->
+            val section = (node.path[1] as DefaultMutableTreeNode).userObject as NodeData.Section
+            wasExpanded[keyPath(node)] ?: (section.title != "Resolved")
         }
+        open.forEach { tree.expandPath(TreePath(it.path)) }
+        // Deepest first: expanding a child opened its parents, and a folded parent keeps its children's state.
+        folded.sortedByDescending { it.level }.forEach { tree.collapsePath(TreePath(it.path)) }
+    }
+
+    private fun sections(): List<DefaultMutableTreeNode> =
+        (tree.model.root as? DefaultMutableTreeNode)?.children()?.asSequence()
+            ?.filterIsInstance<DefaultMutableTreeNode>()?.toList().orEmpty()
+
+    /** The folders and the section around the selection, innermost first; files are not a level of their own. */
+    private fun levelsAroundSelection(): List<DefaultMutableTreeNode> {
+        val selected = tree.lastSelectedPathComponent as? DefaultMutableTreeNode ?: return emptyList()
+        return selected.path.reversed().filterIsInstance<DefaultMutableTreeNode>().filter {
+            it.userObject is NodeData.DirNode || it.userObject is NodeData.ProjectNode || it.userObject is NodeData.Section
+        }
+    }
+
+    private fun isFullyExpanded(node: DefaultMutableTreeNode): Boolean =
+        node.preorderEnumeration().asSequence().filterIsInstance<DefaultMutableTreeNode>()
+            .all { it.isLeaf || tree.isExpanded(TreePath(it.path)) }
+
+    // Each press works one level further out from the selection, then on every section (a null target).
+    private fun collapseTarget(): DefaultMutableTreeNode? =
+        levelsAroundSelection().firstOrNull { tree.isExpanded(TreePath(it.path)) }
+
+    private fun expandTarget(): DefaultMutableTreeNode? = levelsAroundSelection().firstOrNull { !isFullyExpanded(it) }
+
+    fun collapseText(): String = "Collapse ${scopeOf(collapseTarget())}"
+
+    fun expandText(): String = "Expand ${scopeOf(expandTarget())}"
+
+    private fun scopeOf(target: DefaultMutableTreeNode?): String = when (target?.userObject) {
+        null -> "All Sections"
+        is NodeData.Section -> "Section"
+        else -> "Folder"
+    }
+
+    fun hasSections(): Boolean = sections().isNotEmpty()
+
+    fun collapseStep() {
+        val target = collapseTarget()
+        if (target == null) {
+            sections().forEach(::collapseRecursively)
+            return
+        }
+        collapseRecursively(target)
+        // The next press starts from here, one level further out.
+        tree.selectionPath = TreePath(target.path)
+    }
+
+    fun expandStep() {
+        val target = expandTarget()
+        if (target == null) {
+            sections().forEach(::expandRecursively)
+            return
+        }
+        expandRecursively(target)
+    }
+
+    // Like IntelliJ's Collapse All: reopening the node shows one level, not the folders as they were left.
+    private fun collapseRecursively(node: DefaultMutableTreeNode) {
+        node.preorderEnumeration().asSequence().filterIsInstance<DefaultMutableTreeNode>()
+            .filter { !it.isLeaf }
+            .sortedByDescending { it.level }
+            .forEach { tree.collapsePath(TreePath(it.path)) }
+    }
+
+    /** The same node by its key path, else the same thread in the same section (folders may group differently). */
+    private fun reselect(keys: List<String>) {
+        val root = tree.model.root as DefaultMutableTreeNode
+        val exact = keys.fold<String, DefaultMutableTreeNode?>(root) { parent, key ->
+            parent?.children()?.asSequence()?.filterIsInstance<DefaultMutableTreeNode>()
+                ?.firstOrNull { (it.userObject as NodeData).key == key }
+        }
+        val node = exact ?: keys.last().takeIf { it.startsWith("thread:") }?.let { threadKey ->
+            root.children().asSequence().filterIsInstance<DefaultMutableTreeNode>()
+                .firstOrNull { (it.userObject as NodeData).key == keys.first() }
+                ?.preorderEnumeration()?.asSequence()?.filterIsInstance<DefaultMutableTreeNode>()
+                ?.firstOrNull { (it.userObject as NodeData).key == threadKey }
+        } ?: return
+        tree.selectionPath = TreePath(node.path)
     }
 
     private fun addGuidedSection(root: DefaultMutableTreeNode, allThreads: List<CommentThread>) {
@@ -501,7 +656,12 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
         for ((label, walkthroughThreads) in walkthroughs) {
             val title = if (label.isEmpty()) "Guided" else "Guided $label"
             val section = DefaultMutableTreeNode(
-                NodeData.Section(title, walkthroughThreads.size, walkthroughThreads.count { it.severity == Severity.BLOCKER }),
+                NodeData.Section(
+                    title,
+                    walkthroughThreads.size,
+                    walkthroughThreads.count { it.severity == Severity.BLOCKER },
+                    guided = true,
+                ),
             )
             val total = WalkthroughNavigator.stableTotal(project, walkthroughThreads.first())
                 ?: walkthroughThreads.size
