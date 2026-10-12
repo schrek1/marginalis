@@ -4,11 +4,14 @@ data class WalkPosition(val steps: List<CommentThread>, val index: Int?)
 
 object Walkthrough {
 
+    /** The order steps are walked in: by step number, a tie going to the earlier step. */
+    val byStepNumber: Comparator<CommentThread> = compareBy({ it.order }, { it.createdAt })
+
     fun walkFrom(threads: List<CommentThread>, thread: CommentThread): WalkPosition {
         val open = threads.filter { it.status is ThreadStatus.Open }
         val walk = if (thread.order != null) {
             open.filter { it.order != null && (it.walkthrough ?: "") == (thread.walkthrough ?: "") }
-                .sortedWith(compareBy({ it.order }, { it.createdAt }))
+                .sortedWith(byStepNumber)
         } else {
             open.sortedWith(ThreadOrder.byAnchor)
         }
