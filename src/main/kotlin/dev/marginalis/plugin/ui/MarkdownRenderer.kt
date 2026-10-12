@@ -27,6 +27,9 @@ import dev.marginalis.core.Reference
 import dev.marginalis.core.Resolution
 import dev.marginalis.plugin.store.MarginalisStore
 import org.intellij.markdown.IElementType
+import org.intellij.markdown.MarkdownElementTypes
+import org.intellij.markdown.MarkdownTokenTypes
+import org.intellij.markdown.ast.ASTNode
 import org.intellij.markdown.flavours.gfm.GFMElementTypes
 import org.intellij.markdown.flavours.gfm.GFMFlavourDescriptor
 import org.intellij.markdown.flavours.gfm.GFMTokenTypes
@@ -120,8 +123,46 @@ object MarkdownRenderer {
     private class Flavour : GFMFlavourDescriptor() {
         override fun createHtmlGeneratingProviders(linkMap: LinkMap, baseURI: URI?): Map<IElementType, GeneratingProvider> =
             super.createHtmlGeneratingProviders(linkMap, baseURI) +
-                (GFMElementTypes.STRIKETHROUGH to EqualDelimiterTrimmingInlineTagProvider("s", GFMTokenTypes.TILDE))
+                (GFMElementTypes.STRIKETHROUGH to EqualDelimiterTrimmingInlineTagProvider("s", GFMTokenTypes.TILDE)) +
+                (MarkdownTokenTypes.EOL to TypedLineBreaks)
     }
+
+    // Line breaks render as typed: a single Enter inside a paragraph is a new line (as in GitHub comments), and each
+    // blank line beyond the first between two blocks is an empty line. CommonMark makes the first a space and drops
+    // the rest.
+    private object TypedLineBreaks : GeneratingProvider {
+        override fun processNode(visitor: HtmlGenerator.HtmlGeneratingVisitor, text: String, node: ASTNode) {
+            visitor.consumeHtml(
+                when {
+                    node.isSoftBreak() -> "<br />\n"
+                    node.isExtraBlankLine() -> "<p> </p>\n"
+                    else -> HtmlGenerator.leafText(text, node)
+                },
+            )
+        }
+
+        private fun ASTNode.isSoftBreak(): Boolean {
+            val inParagraph = generateSequence(parent) { it.parent }.any { it.type == MarkdownElementTypes.PARAGRAPH }
+            // Two trailing spaces or a backslash already emitted their own <br>.
+            val afterHardBreak = parent?.children?.let { it.getOrNull(it.indexOf(this) - 1) }?.type ==
+                MarkdownTokenTypes.HARD_LINE_BREAK
+            return inParagraph && !afterHardBreak
+        }
+
+        // Between top-level blocks one EOL ends a block and the next makes the first blank line.
+        private fun ASTNode.isExtraBlankLine(): Boolean {
+            val siblings = parent?.takeIf { it.type == MarkdownElementTypes.MARKDOWN_FILE }?.children ?: return false
+            val at = siblings.indexOf(this)
+            val endOfLinesBefore = siblings.subList(0, at).takeLastWhile { it.type == MarkdownTokenTypes.EOL }.size
+            val betweenBlocks = siblings.subList(0, at).any { it.type != MarkdownTokenTypes.EOL } &&
+                siblings.subList(at + 1, siblings.size).any { it.type != MarkdownTokenTypes.EOL }
+            return endOfLinesBefore >= 2 && betweenBlocks
+        }
+    }
+
+    // Swing CSS has no :first-child: the pane's first block gets a class so it sits flush with the message header.
+    private fun markFirstBlock(html: String): String =
+        Regex("""^\s*<(p|ul|ol)>""").replace(html) { "<${it.groupValues[1]} class=\"first\">" }
 
     private fun toHtml(markdown: String): String {
         val flavour = Flavour()
@@ -132,6 +173,7 @@ object MarkdownRenderer {
             // Added after sanitizing, so a body still cannot set any attribute.
             .replace("<table>", "<table cellspacing=\"0\">")
             .let(Reference::linkify)
+            .let(::markFirstBlock)
     }
 
     private fun htmlPane(project: Project, markdown: String, wrapWidth: Int): JComponent {
@@ -179,6 +221,12 @@ object MarkdownRenderer {
         val grid = ColorUtil.toHtmlColor(JBColor.border())
         kit.styleSheet.addRule("th, td { border-width: 1px; border-style: solid; border-color: $grid; padding: 3px 6px; }")
         kit.styleSheet.addRule("th { text-align: left; }")
+        // The IDE's kit gives paragraphs and lists no vertical gap, so consecutive ones read as one block.
+        kit.styleSheet.addRule("p { margin-top: 6px; }")
+        // Swing does not collapse margins: the list's own bottom margin would add to the next paragraph's.
+        kit.styleSheet.addRule("ul, ol { margin-top: 4px; margin-bottom: 0; }")
+        kit.styleSheet.addRule("li { margin-top: 2px; }")
+        kit.styleSheet.addRule("p.first, ul.first, ol.first { margin-top: 0; }")
         pane.editorKit = kit
         pane.isEditable = false
         pane.isOpaque = false
