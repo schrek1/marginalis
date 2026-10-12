@@ -57,6 +57,15 @@ History before 0.1.19 lives in git tags.
 - With several walkthroughs open, a step's number no longer runs into the
   walkthrough's label ("CBP-7244 · r21/5" for step 1 of 5): steps show
   just their number, and the section title names the walkthrough.
+### Changed
+
+- The Margin tab now reads top to bottom, oldest thread first, the same
+  way messages read inside a thread. A reply no longer makes a thread
+  jump, and a walkthrough's steps read 1, 2, 3.
+  - A Sort menu in the tab switches to newest first or to the previous
+    most-recent-activity order. Each project remembers its choice.
+  - A new thread you start, and threads that arrive while the list holds
+    still, appear on the side the chosen order puts new threads.
 
 ## [0.2.2] - 2026-10-04
 
