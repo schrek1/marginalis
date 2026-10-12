@@ -55,7 +55,7 @@ History before 0.1.19 lives in git tags.
 ### Fixed
 
 - With several walkthroughs open, a step's number no longer runs into the
-  walkthrough's label ("CBP-7244 · r21/5" for step 1 of 5): steps show
+  walkthrough's label ("SHOP-42 · r21/5" for step 1 of 5): steps show
   just their number, and the section title names the walkthrough.
 ### Changed
 
