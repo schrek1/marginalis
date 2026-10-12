@@ -36,6 +36,7 @@ import com.intellij.util.ui.UIUtil
 import com.intellij.util.ui.components.BorderLayoutPanel
 import dev.marginalis.core.CommentThread
 import dev.marginalis.core.Faces
+import dev.marginalis.core.GuidedLayout
 import dev.marginalis.core.Intent
 import dev.marginalis.core.PathTrie
 import dev.marginalis.core.Severity
@@ -88,6 +89,7 @@ class MarginalisToolWindowFactory : ToolWindowFactory, DumbAware {
                 common.createNextOccurenceAction(panel),
                 LastStepAction(panel),
                 FilterMenuAction(panel),
+                GuidedLayoutMenuAction(panel),
                 AgentPresenceGroup(),
                 SubmitRoundAction(),
                 StopAgentsGroup(),
@@ -184,6 +186,26 @@ private class FilterMenuAction(private val panel: MarginalisToolWindowPanel) :
     }
 }
 
+private class GuidedLayoutMenuAction(private val panel: MarginalisToolWindowPanel) :
+    DefaultActionGroup("Guided Layout", "Lay out walkthrough steps by number, by folder or by file", AllIcons.Actions.GroupBy),
+    DumbAware {
+    init {
+        isPopup = true
+        templatePresentation.isPerformGroup = false
+        GuidedLayout.entries.forEach { layout ->
+            add(object : ToggleAction(layout.label), DumbAware {
+                override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+
+                override fun isSelected(e: AnActionEvent): Boolean = panel.guidedLayout == layout
+
+                override fun setSelected(e: AnActionEvent, state: Boolean) {
+                    if (state) panel.guidedLayout = layout
+                }
+            })
+        }
+    }
+}
+
 private class ResolveAllAction : AnAction("Resolve All", "Mark every open thread resolved", AllIcons.Actions.Selectall) {
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
@@ -267,7 +289,12 @@ private sealed class NodeData {
         override val key get() = "file:$name"
     }
 
-    class ThreadNode(val thread: CommentThread, val walkthroughPrefix: String? = null) : NodeData() {
+    /** [showFile]: the row names its file, for a list that has no file nodes above it. */
+    class ThreadNode(
+        val thread: CommentThread,
+        val walkthroughPrefix: String? = null,
+        val showFile: Boolean = false,
+    ) : NodeData() {
         override val key get() = "thread:${thread.id}"
     }
 }
@@ -282,6 +309,13 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
     var filter: TreeFilter = TreeFilter.ALL
         set(value) {
             field = value
+            rebuild()
+        }
+
+    var guidedLayout: GuidedLayout
+        get() = GuidedLayoutSetting.getInstance(project).layout
+        set(value) {
+            GuidedLayoutSetting.getInstance(project).layout = value
             rebuild()
         }
 
@@ -559,10 +593,36 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
                 ?: walkthroughThreads.size
             val shownLabel = if (labelNeeded && label.isNotEmpty()) label else ""
             val prefixFor = { thread: CommentThread -> "($shownLabel${thread.order}/$total)" }
-            addProjectNode(section, walkthroughThreads.filter { it.isProjectLevel }, prefixFor)
-            val trie = PathTrie().apply { walkthroughThreads.forEach(::insert) }
-            emitTrie(trie, section, prefixFor)
+            when (guidedLayout) {
+                GuidedLayout.BY_STEP_NUMBER -> addStepList(section, walkthroughThreads, prefixFor)
+                GuidedLayout.BY_FOLDER -> {
+                    addProjectNode(section, walkthroughThreads.filter { it.isProjectLevel }, prefixFor)
+                    val trie = PathTrie().apply { walkthroughThreads.forEach(::insert) }
+                    emitTrie(trie, section, prefixFor)
+                }
+                GuidedLayout.BY_FILE -> {
+                    addProjectNode(section, walkthroughThreads.filter { it.isProjectLevel }, prefixFor)
+                    addFileList(section, walkthroughThreads.filterNot { it.isProjectLevel }, prefixFor)
+                }
+            }
             root.add(section)
+        }
+    }
+
+    private fun addStepList(section: DefaultMutableTreeNode, steps: List<CommentThread>, prefixFor: (CommentThread) -> String) {
+        for (step in steps.sortedWith(Walkthrough.byStepNumber)) {
+            section.add(DefaultMutableTreeNode(NodeData.ThreadNode(step, prefixFor(step), showFile = true)))
+        }
+    }
+
+    private fun addFileList(section: DefaultMutableTreeNode, steps: List<CommentThread>, prefixFor: (CommentThread) -> String) {
+        val byFile = steps.groupBy { it.file!! }.entries.sortedBy { (_, fileSteps) -> fileSteps.minOf { it.order!! } }
+        for ((path, fileSteps) in byFile) {
+            val fileNode = DefaultMutableTreeNode(NodeData.FileNode(path, fileSteps))
+            for (step in fileSteps.sortedWith(Walkthrough.byStepNumber)) {
+                fileNode.add(DefaultMutableTreeNode(NodeData.ThreadNode(step, prefixFor(step))))
+            }
+            section.add(fileNode)
         }
     }
 
@@ -759,7 +819,12 @@ private class RowWords : ColoredTreeCellRenderer() {
                 if (data.walkthroughPrefix != null) {
                     append("${data.walkthroughPrefix}  ", SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
                 }
-                val where = thread.line?.let { "L${it + 1}" } ?: if (thread.isProjectLevel) "project" else "file"
+                val line = thread.line?.let { "L${it + 1}" }
+                val where = when {
+                    thread.isProjectLevel -> "project"
+                    data.showFile -> listOfNotNull(thread.file?.substringAfterLast('/'), line).joinToString(" ")
+                    else -> line ?: "file"
+                }
                 append("$where  ", SimpleTextAttributes.GRAYED_ATTRIBUTES)
                 val preview = MarkdownRenderer.previewText(thread.messages.firstOrNull()?.body ?: "")
                 append(

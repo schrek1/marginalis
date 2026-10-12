@@ -7,6 +7,13 @@ History before 0.1.19 lives in git tags.
 
 ## [Unreleased]
 
+### Added
+
+- The Guided section of the Marginalis tool window can lay a walkthrough
+  out three ways: by folder as before, as one list in step order, or one
+  node per file in the order of its first step. A menu in the tool window
+  header switches it, and each project remembers its choice.
+
 ### Fixed
 
 - Stepping through the Marginalis tool window with Next and Previous no
