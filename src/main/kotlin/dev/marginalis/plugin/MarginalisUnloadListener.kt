@@ -9,6 +9,7 @@ import dev.marginalis.plugin.store.MarginalisStore
 import dev.marginalis.plugin.ui.FileTurn
 import dev.marginalis.plugin.ui.ThreadInlayManager
 import dev.marginalis.plugin.ui.TurnSignalIconPatcher
+import dev.marginalis.plugin.ui.diff.ReviewDiffMarkers
 import dev.marginalis.plugin.ui.tab.ProjectTab
 
 // Strips our classes from platform structures that outlive the classloader
@@ -36,6 +37,7 @@ class MarginalisUnloadListener : DynamicPluginListener {
             }
         }
         ProjectTab.closeEverywhere()
+        ReviewDiffMarkers.disposeAll()
         ThreadInlayManager.disposeAll()
     }
 }
