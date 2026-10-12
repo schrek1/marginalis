@@ -32,6 +32,11 @@ History before 0.1.19 lives in git tags.
   own ⚡ still switches it off. The choice is kept per project, in your
   workspace, not in version control; a checkbox in Settings sets where a
   project starts.
+- Line breaks you type in a comment now show up after you send it: a
+  single Enter inside a paragraph is a new line, and a second blank line
+  between paragraphs stays an empty line instead of collapsing.
+- Paragraphs and lists in a message get a small gap between them, so a
+  long reply no longer reads as one dense block.
 
 ## [0.2.2] - 2026-10-04
 
