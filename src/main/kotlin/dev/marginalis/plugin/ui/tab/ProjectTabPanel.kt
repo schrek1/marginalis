@@ -27,6 +27,7 @@ import dev.marginalis.core.People
 import dev.marginalis.core.ProjectTabExpansion
 import dev.marginalis.core.ProjectTabLayout
 import dev.marginalis.core.ProjectTabLayout.Entry
+import dev.marginalis.core.ProjectTabOrder
 import dev.marginalis.core.ProjectTabTally
 import dev.marginalis.core.ThreadText
 import dev.marginalis.plugin.settings.MarginalisSettings
@@ -64,6 +65,7 @@ class ProjectTabPanel(private val project: Project) : Disposable {
     private val store = MarginalisStore.getInstance(project)
     private val state = ProjectTabState.getInstance(project)
     private val settings = MarginalisSettings.getInstance()
+    private val sort = ProjectTabSort.getInstance(project)
 
     private val expansion = ProjectTabExpansion(::holdsDraft)
     private val newTags = NewTags()
@@ -159,7 +161,7 @@ class ProjectTabPanel(private val project: Project) : Disposable {
 
     private val root = JPanel(BorderLayout()).apply { isFocusable = true }
     private val toolbar = ActionManager.getInstance()
-        .createActionToolbar("MarginalisProjectTab", DefaultActionGroup(AgentPresenceGroup(), SubmitRoundAction(), StopAgentsGroup()), true)
+        .createActionToolbar("MarginalisProjectTab", DefaultActionGroup(AgentPresenceGroup(), SubmitRoundAction(), StopAgentsGroup(), ProjectTabSortMenu(::sortChanged)), true)
         .also {
             it.targetComponent = root
             it.component.isOpaque = false
@@ -221,7 +223,8 @@ class ProjectTabPanel(private val project: Project) : Disposable {
         val panel = draftShown?.panel ?: return
         ApplicationManager.getApplication().invokeLater {
             if (disposed || draftShown?.panel !== panel) return@invokeLater
-            stack.scrollRectToVisible(Rectangle(0, 0, 1, 1))
+            stack.validate()
+            panel.scrollRectToVisible(Rectangle(0, 0, panel.width, panel.height))
             panel.focusReply()
         }
     }
@@ -229,6 +232,11 @@ class ProjectTabPanel(private val project: Project) : Disposable {
     fun applyPrefs() {
         refresh()
         reading.request()
+    }
+
+    private fun sortChanged() {
+        holdStill.release()
+        applyPrefs()
     }
 
     override fun dispose() {
@@ -267,11 +275,12 @@ class ProjectTabPanel(private val project: Project) : Disposable {
     private fun refresh() {
         if (disposed) return
         val prefs = settings.projectTabPrefs
+        val order = sort.order
         val people = settings.people
         val threads = store.threads.all()
-        val live = ProjectTabLayout.arrange(threads, shownEntries, ::holdsDraft, prefs.groupRelayed)
+        val live = ProjectTabLayout.arrange(threads, shownEntries, ::holdsDraft, prefs.groupRelayed, order)
         val view = if (prefs.list == ListWhileInFront.HOLD_STILL) {
-            holdStill.update(live, inFront)
+            holdStill.update(live, inFront, order.newOnTop)
         } else {
             holdStill.release()
             HoldStill.View(shown = live, dimmed = emptySet(), pending = 0)
@@ -280,18 +289,21 @@ class ProjectTabPanel(private val project: Project) : Disposable {
         resolvedThreads = view.shown.resolved
         expansion.observe(shownEntries, prefs.expandOnYourMove)
         resolvedExpanded.retainAll(resolvedThreads.mapTo(HashSet()) { it.id })
-        refreshTop(threads, view.pending)
+        refreshTop(threads, view.pending, order)
 
         val filter = filterField.text
         val visible = shownEntries.filter { ThreadText.matches(it, filter, people) }
         val children = mutableListOf<JComponent>()
         val draft = state.draft
-        if (draft == null) draftShown = null else children += draftPanel(draft)
+        val draftCard = draft?.let(::draftPanel)
+        if (draftCard == null) draftShown = null
+        if (draftCard != null && order.newOnTop) children += draftCard
         when {
             shownEntries.isEmpty() && draft == null && view.pending == 0 -> children += emptyState
             visible.isEmpty() && filter.isNotBlank() -> children += noMatch.apply { text = "No open project thread mentions “${filter.trim()}”." }
         }
         visible.mapTo(children) { entryCard(it, view.dimmed, people) }
+        if (draftCard != null && !order.newOnTop) children += draftCard
         if (resolvedThreads.isNotEmpty()) children += resolvedFold(resolvedThreads, filter, people)
         stack.arrange(children)
         forgetCardsNotIn(shownEntries, resolvedThreads)
@@ -312,7 +324,7 @@ class ProjectTabPanel(private val project: Project) : Disposable {
         if (hadFocus) root.requestFocusInWindow()
     }
 
-    private fun refreshTop(threads: List<CommentThread>, pending: Int) {
+    private fun refreshTop(threads: List<CommentThread>, pending: Int, order: ProjectTabOrder) {
         val tally = ProjectTabTally.of(threads)
         counts.text = "${tally.open} open · ${tally.turns.user} your move · ${tally.turns.agent} agent's move"
         newCount.text = " · ${tally.newCount} new"
@@ -321,7 +333,7 @@ class ProjectTabPanel(private val project: Project) : Disposable {
         elsewhereRow.isVisible = elsewhere != null
         elsewhereLink.text = elsewhere?.let { "Also your move: ${it.count} ${if (it.count == 1) "thread" else "threads"} in files ›" }.orEmpty()
         pillRow.isVisible = pending > 0
-        pill.text = "↑ $pending new ${if (pending == 1) "thread" else "threads"}"
+        pill.text = "${if (order.newOnTop) "↑" else "↓"} $pending new ${if (pending == 1) "thread" else "threads"}"
     }
 
     private fun entryCard(entry: Entry, dimmed: Set<String>, people: People): JComponent = when (entry) {
