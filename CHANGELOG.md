@@ -7,6 +7,13 @@ History before 0.1.19 lives in git tags.
 
 ## [Unreleased]
 
+### Added
+
+- Find any thread in the Marginalis tool window in one click: "Select in
+  Marginalis" in the thread's header opens the tool window on it, and
+  "Select Opened Thread" in the tool window picks the thread on the line
+  your caret is on, or the file when that line has none.
+
 ### Fixed
 
 - Stepping through the Marginalis tool window with Next and Previous no
