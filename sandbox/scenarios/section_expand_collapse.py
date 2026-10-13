@@ -28,11 +28,15 @@ EXPAND = ("Expand Folder", "Expand Section", "Expand All Sections", "Expand")
 def folder_layout() -> None:
     """Folders are the levels Expand and Collapse step through; a build with a Guided layout menu (MARG-10) starts
     in step order, which has none."""
-    try:
-        ui.guided_layout()
-    except Exception:
-        return
-    ui.choose_guided_layout("By folder")
+    # Set on the panel, not through the header menu: this is setup, and the header is built a while after start.
+    ui.js(ui._TREE + """
+        var panel = marginalisTree();
+        while (panel != null && panel.getClass().getSimpleName() != 'MarginalisToolWindowPanel') panel = panel.getParent();
+        var layouts = null;
+        try { layouts = java.lang.Class.forName('dev.marginalis.core.GuidedLayout', true, panel.getClass().getClassLoader()); } catch (e) {}
+        if (layouts != null) panel.setGuidedLayout(java.lang.Enum.valueOf(layouts, 'BY_FOLDER'));
+        String(true)
+    """)
     time.sleep(PAUSE_S)
 
 
