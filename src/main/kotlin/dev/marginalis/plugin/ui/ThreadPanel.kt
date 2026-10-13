@@ -375,6 +375,7 @@ class ThreadPanel(
             Separator.getInstance(),
             historyAction(),
             liveAction(),
+            selectInToolWindowAction(),
             copyReferenceAction(),
             resolveAction(),
             deleteAction(),
@@ -507,6 +508,17 @@ class ThreadPanel(
 
         override fun actionPerformed(e: AnActionEvent) = copyReference(thread.id)
     }
+
+    private fun selectInToolWindowAction(): AnAction =
+        object : AnAction("Select in Marginalis", "Show this thread in the Marginalis tool window", AllIcons.General.Locate) {
+            override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+
+            override fun update(e: AnActionEvent) {
+                e.presentation.isEnabledAndVisible = !isDraft()
+            }
+
+            override fun actionPerformed(e: AnActionEvent) = FileLevelThreads.revealInToolWindow(project, thread)
+        }
 
     private fun copyReference(id: String) {
         CopyPasteManager.getInstance().setContents(StringSelection(Reference.of(id).toString()))

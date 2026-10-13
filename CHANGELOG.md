@@ -45,6 +45,13 @@ History before 0.1.19 lives in git tags.
   between paragraphs stays an empty line instead of collapsing.
 - Paragraphs and lists in a message get a small gap between them, so a
   long reply no longer reads as one dense block.
+- Find any thread in the Marginalis tool window in one click: "Select in
+  Marginalis" in the thread's header opens the tool window on it, and
+  "Select Opened Thread" in the tool window picks the thread on the line
+  your caret is on, or the file when that line has none.
+
+### Fixed
+
 - Stepping through the Marginalis tool window with Next and Previous no
   longer loses its place: the selection survives the tree refreshing,
   so the next press continues from the step you are on instead of the
