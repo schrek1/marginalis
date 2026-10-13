@@ -16,10 +16,18 @@ import robot
 import sandbox
 import sandbox_ui as ui
 from fixtures import deep_walkthrough as fixture
+from fixtures import interleaved_walkthrough as hopping
 
 SHOTS = sandbox.RUNTIME / "shots" / "guided_layout"
 PAUSE_S = 1.5
 OPEN_STEPS = sorted(order for order, _, _ in fixture.steps() if order not in fixture.RESOLVED)
+HOPPING = f"Guided {hopping.LABEL}"
+# The hopping walk by step number: runs of consecutive steps in one file fold, a lone step stays a row.
+HOPPING_BY_STEP = [[2, 3], [4, 5], [6], [7], [8], [9], [10], [11], [12, 13], [14], [15, 16], [17], [18]]
+
+
+def top_level_steps(shape: list[dict]) -> list[int]:
+    return [step for child in shape for step in child["steps"]]
 
 
 def press(*names: str) -> None:
@@ -56,6 +64,13 @@ class Scenarios:
                for order, path, line in fixture.steps()}
         for order in fixture.RESOLVED:
             ui.resolve_thread(ids[order])
+        hopping.write_files(sandbox.PROJECT)
+        ui.refresh_project_files()
+        time.sleep(2)
+        hopping_ids = {order: ui.agent_adds_step(path, line, f"Step {order}: review note", order, hopping.LABEL)
+                       for order, path, line in hopping.steps()}
+        for order in hopping.RESOLVED:
+            ui.resolve_thread(hopping_ids[order])
         time.sleep(3)
 
     def default_is_the_folder_tree(self) -> None:
@@ -64,22 +79,37 @@ class Scenarios:
         self.check("by default the layout is By folder", ui.guided_layout() == "BY_FOLDER", ui.guided_layout())
         self.check("By folder groups the steps under folders", any(c["kind"] == "DirNode" for c in shape), shape)
 
-    def by_step_number_is_a_flat_list(self) -> None:
+    def by_step_number_lists_steps_in_order(self) -> None:
         ui.choose_guided_layout("By step number")
         time.sleep(PAUSE_S)
         shape = ui.guided_shape()
         self.shot("2-by-step-number")
-        self.check("By step number lists only steps, no folder or file nodes",
-                   {c["kind"] for c in shape} == {"ThreadNode"}, {c["kind"] for c in shape})
+        self.check("By step number has no folder nodes",
+                   {c["kind"] for c in shape} <= {"ThreadNode", "FileNode"}, {c["kind"] for c in shape})
         self.check("By step number lists the steps 1, 2, 3 … in order",
-                   [c["steps"][0] for c in shape] == OPEN_STEPS, [c["steps"][0] for c in shape])
-        self.check("each row of the flat list names its file", all(c["showsFile"] for c in shape))
+                   top_level_steps(shape) == OPEN_STEPS, top_level_steps(shape))
+        self.check("each lone step's row names its file",
+                   all(c["showsFile"] for c in shape if c["kind"] == "ThreadNode"))
+
+    def by_step_number_folds_runs_in_one_file(self) -> None:
+        shape = ui.guided_shape(HOPPING)
+        self.shot("3-by-step-number-hopping")
+        self.check("in a hopping walk, consecutive steps in one file fold under one node and lone steps stay rows",
+                   [c["steps"] for c in shape] == HOPPING_BY_STEP, [c["steps"] for c in shape])
+        runs = [c for c in shape if c["kind"] == "FileNode"]
+        self.check("every folded run holds two or more steps, four runs in all", all(len(c["steps"]) > 1 for c in runs) and len(runs) == 4,
+                   [(c["name"], c["steps"]) for c in runs])
+        service = hopping.SERVICE
+        self.check("a file the walk comes back to appears again in step order",
+                   [c["steps"] for c in shape if c["name"] == service] == [[2, 3]]
+                   and [6] in [c["steps"] for c in shape] and [9] in [c["steps"] for c in shape],
+                   [(c["name"], c["steps"]) for c in shape])
 
     def by_file_has_one_node_per_file(self) -> None:
         ui.choose_guided_layout("By file")
         time.sleep(PAUSE_S)
         shape = ui.guided_shape()
-        self.shot("3-by-file")
+        self.shot("4-by-file")
         files = [c for c in shape if c["kind"] == "FileNode"]
         self.check("By file has a file node per file and no folders",
                    len(files) == len(shape) and len(files) > 1, [c["kind"] for c in shape])
@@ -88,6 +118,9 @@ class Scenarios:
         firsts = [min(c["steps"]) for c in files]
         self.check("files follow their first step", firsts == sorted(firsts), firsts)
         self.check("steps inside a file follow their numbers", all(c["steps"] == sorted(c["steps"]) for c in files))
+        hopping_files = {c["name"]: c["steps"] for c in ui.guided_shape(HOPPING)}
+        self.check("in a hopping walk, By file gathers every step of a file",
+                   hopping_files.get(hopping.SERVICE) == [2, 3, 6, 9], hopping_files)
 
     def arrows_follow_step_numbers_by_file(self) -> None:
         ui.select_step(OPEN_STEPS[0])
@@ -112,7 +145,8 @@ class Scenarios:
         self.build()
         for scenario in (
             self.default_is_the_folder_tree,
-            self.by_step_number_is_a_flat_list,
+            self.by_step_number_lists_steps_in_order,
+            self.by_step_number_folds_runs_in_one_file,
             self.by_file_has_one_node_per_file,
             self.arrows_follow_step_numbers_by_file,
             self.choice_survives_a_restart,

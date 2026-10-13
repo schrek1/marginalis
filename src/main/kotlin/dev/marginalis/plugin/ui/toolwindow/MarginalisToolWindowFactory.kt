@@ -40,6 +40,7 @@ import dev.marginalis.core.GuidedLayout
 import dev.marginalis.core.Intent
 import dev.marginalis.core.PathTrie
 import dev.marginalis.core.Severity
+import dev.marginalis.core.StepRuns
 import dev.marginalis.core.StripeBadge
 import dev.marginalis.core.ThreadOrder
 import dev.marginalis.core.ThreadStatus
@@ -285,8 +286,9 @@ private sealed class NodeData {
         override val key get() = "dir:$name"
     }
 
-    class FileNode(val name: String, val threads: List<CommentThread>) : NodeData() {
-        override val key get() = "file:$name"
+    /** [steps]: set for a run of consecutive walkthrough steps in a step-number list, where the file may recur. */
+    class FileNode(val name: String, val threads: List<CommentThread>, val steps: IntRange? = null) : NodeData() {
+        override val key get() = "file:$name" + (steps?.let { "@${it.first}" } ?: "")
     }
 
     /** [showFile]: the row names its file, for a list that has no file nodes above it. */
@@ -610,8 +612,15 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
     }
 
     private fun addStepList(section: DefaultMutableTreeNode, steps: List<CommentThread>, prefixFor: (CommentThread) -> String) {
-        for (step in steps.sortedWith(Walkthrough.byStepNumber)) {
-            section.add(DefaultMutableTreeNode(NodeData.ThreadNode(step, prefixFor(step), showFile = true)))
+        val ordered = steps.sortedWith(Walkthrough.byStepNumber)
+        for (run in StepRuns.of(ordered) { step -> step.file.takeUnless { step.isProjectLevel } }) {
+            if (run.size == 1) {
+                section.add(DefaultMutableTreeNode(NodeData.ThreadNode(run.single(), prefixFor(run.single()), showFile = true)))
+                continue
+            }
+            val runNode = DefaultMutableTreeNode(NodeData.FileNode(run.first().file!!, run, run.first().order!!..run.last().order!!))
+            run.forEach { step -> runNode.add(DefaultMutableTreeNode(NodeData.ThreadNode(step, prefixFor(step)))) }
+            section.add(runNode)
         }
     }
 
@@ -811,7 +820,13 @@ private class RowWords : ColoredTreeCellRenderer() {
             is NodeData.FileNode -> {
                 icon = FileTypeManager.getInstance().getFileTypeByFileName(data.name).icon
                     ?: AllIcons.FileTypes.Any_type
-                append(data.name, SimpleTextAttributes.REGULAR_ATTRIBUTES)
+                val steps = data.steps
+                if (steps == null) {
+                    append(data.name, SimpleTextAttributes.REGULAR_ATTRIBUTES)
+                } else {
+                    append(data.name.substringAfterLast('/'), SimpleTextAttributes.REGULAR_ATTRIBUTES)
+                    append("  steps ${steps.first}–${steps.last}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+                }
             }
             is NodeData.ThreadNode -> {
                 val thread = data.thread
