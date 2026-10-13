@@ -633,8 +633,15 @@ def select_step(order: int, section_prefix: str = "Guided") -> None:
 
 
 def screenshot_tool_window(target) -> None:
-    panel = robot.find_one("//div[@class='MarginalisToolWindowPanel' or @javaclass='dev.marginalis.plugin.ui.toolwindow.MarginalisToolWindowPanel']")
-    robot.screenshot(target, panel["id"])
+    xpath = "//div[@class='MarginalisToolWindowPanel' or @javaclass='dev.marginalis.plugin.ui.toolwindow.MarginalisToolWindowPanel']"
+    # The robot's hierarchy misses the panel for a moment while the tool window relays out.
+    for attempt in range(5):
+        found = robot.find_all(xpath)
+        if len(found) == 1:
+            robot.screenshot(target, found[0]["id"])
+            return
+        time.sleep(1)
+    robot.find_one(xpath)
 
 
 def toggle_thread_live(thread_id: str) -> None:
