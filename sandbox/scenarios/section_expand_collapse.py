@@ -25,6 +25,17 @@ COLLAPSE = ("Collapse Folder", "Collapse Section", "Collapse All Sections", "Col
 EXPAND = ("Expand Folder", "Expand Section", "Expand All Sections", "Expand")
 
 
+def folder_layout() -> None:
+    """Folders are the levels Expand and Collapse step through; a build with a Guided layout menu (MARG-10) starts
+    in step order, which has none."""
+    try:
+        ui.guided_layout()
+    except Exception:
+        return
+    ui.choose_guided_layout("By folder")
+    time.sleep(PAUSE_S)
+
+
 class Scenarios:
     def __init__(self) -> None:
         self.failures: list[str] = []
@@ -97,6 +108,7 @@ class Scenarios:
         SHOTS.mkdir(parents=True, exist_ok=True)
         ui.show_tool_window()
         build_walkthrough()
+        folder_layout()
         # Creating 33 threads queues rebuilds; let them land before the first press.
         time.sleep(5)
         self.collapse_levels()
