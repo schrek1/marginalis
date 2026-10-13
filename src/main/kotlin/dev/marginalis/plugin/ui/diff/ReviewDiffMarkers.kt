@@ -115,8 +115,12 @@ class ReviewDiffMarkers : DiffExtension() {
         }
 
         fun uninstall() {
-            live -= this
             target.viewer.removeListener(this)
+            release()
+        }
+
+        private fun release() {
+            live -= this
             observer?.close()
             observer = null
             clear()
@@ -127,7 +131,9 @@ class ReviewDiffMarkers : DiffExtension() {
         // A unified viewer rebuilds its document on every rediff, a side-by-side one has it only once the first diff lands.
         override fun onAfterRediff() = paint()
 
-        override fun onDispose() = uninstall()
+        // The viewer is iterating its listeners right now: removing ourselves here throws
+        // ConcurrentModificationException and skips the listeners after us. The list dies with the viewer anyway.
+        override fun onDispose() = release()
 
         private fun paint() {
             if (observer == null || target.editor.isDisposed) return
