@@ -11,7 +11,7 @@ upstream-ready branches off `main`; this file never leaves this branch.
 |---|---|---|---|---|---|
 | MARG-18 | Steps in the same file stay in the editor you are reading | `fix/stay-in-diff-on-resolve` | schrek1/marginalis#1 | MuhammadFarag/marginalis#39 | `8714a4c` |
 | MARG-19 | Tables and strikethrough in message bodies; a wide table scrolls sideways | `feat/gfm-tables-scroll` | schrek1/marginalis#2 | MuhammadFarag/marginalis#40 | `16be761` |
-| MARG-20 | Thread icons in pull request review diffs | `feat/gutter-icons-in-review-diff` | schrek1/marginalis#3 | MuhammadFarag/marginalis#41 | `83f863f` |
+| MARG-20 | Thread icons in pull request review diffs | `feat/gutter-icons-in-review-diff` | schrek1/marginalis#3 | MuhammadFarag/marginalis#41 | `4e2167a` |
 | MARG-21 | Zooming with a thread open keeps the code view where the mouse points | `fix/no-scroll-on-zoom` | schrek1/marginalis#4 | MuhammadFarag/marginalis#42 | `0e2bb1d` |
 | MARG-22 | Live by default: every open thread of a project can be live at once | `feat/live-by-default` | schrek1/marginalis#5 | MuhammadFarag/marginalis#43 | `f25bbc1` |
 | MARG-23 | Margin text renders as typed: line breaks, blank lines and spacing | `fix/margin-text-spacing` | schrek1/marginalis#6 | MuhammadFarag/marginalis#44 | `fb15583` |
