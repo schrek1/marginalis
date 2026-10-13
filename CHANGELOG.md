@@ -66,6 +66,10 @@ History before 0.1.19 lives in git tags.
     most-recent-activity order. Each project remembers its choice.
   - A new thread you start, and threads that arrive while the list holds
     still, appear on the side the chosen order puts new threads.
+- Long threads stay readable. You see the opening message, the last two
+  and anything you haven't read yet; the read middle hides behind one line
+  that shows the full history with a click, and Shorten History in the
+  thread header hides it again.
 
 ## [0.2.2] - 2026-10-04
 

@@ -3,7 +3,7 @@
 Ondra's everyday Marginalis: upstream `main` plus the fork's features below. Each feature lands as one squash
 commit through a pull request into this branch, after the gate (core tests and every sandbox scenario) passed.
 No force-push, no direct commits. A release is `<upstream version>-schreko.N` (git tag = version); `builds.md`
-and the fork issues say which release carries what. A feature build (`…-schreko.N-dev`) never comes from here.
+and the fork issues say which release carries what. A feature build (`â€¦-schreko.N-dev`) never comes from here.
 `MARG-N` is the fork issue (or, for the older features, the fork PR) `schrek1/marginalis#N`. The features stay
 upstream-ready branches off `main`; this file never leaves this branch.
 
@@ -19,3 +19,4 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-25 | Expand and Collapse in the tool window; folded folders survive rebuilds | `feat/section-expand-collapse` | schrek1/marginalis#8 | MuhammadFarag/marginalis#46 | `848760c` |
 | MARG-26 | Guided steps show just their number, not the label glued to it | `fix/guided-step-number` | schrek1/marginalis#9 | MuhammadFarag/marginalis#47 | `fd8ff53` |
 | MARG-27 | The Margin tab reads oldest first, with a Sort menu per project | `feat/project-tab-order` | schrek1/marginalis#15 | MuhammadFarag/marginalis#48 | `ed5d181` |
+| MARG-12 | Shorten the history of long threads | `feat/MARG-12-shorten-long-history` | schrek1/marginalis#31 | MuhammadFarag/marginalis#49 | `aa52485` |
