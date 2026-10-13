@@ -21,3 +21,4 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-27 | The Margin tab reads oldest first, with a Sort menu per project | `feat/project-tab-order` | schrek1/marginalis#15 | MuhammadFarag/marginalis#48 | `ed5d181` |
 | MARG-12 | Shorten the history of long threads | `feat/MARG-12-shorten-long-history` | schrek1/marginalis#31 | MuhammadFarag/marginalis#49 | `aa52485` |
 | MARG-11 | Select a thread in the tool window from the thread itself | `feat/MARG-11-select-thread-in-tool-window` | schrek1/marginalis#34 | MuhammadFarag/marginalis#50 | `3da3df3` |
+| MARG-10 | Lay out the Guided section by step number, by folder or by file | `feat/MARG-10-guided-layout` | schrek1/marginalis#37 | MuhammadFarag/marginalis#51 | `a6a78f7` |
