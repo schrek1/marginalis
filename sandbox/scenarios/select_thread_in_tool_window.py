@@ -21,6 +21,28 @@ PAUSE_S = 1.5
 FILE = "src/review_target.py"
 
 
+def wait_for_panel(thread_id: str, timeout_s: float = 10) -> None:
+    """A freshly reopened editor lays its inlays out a moment later; the robot sees a panel only once it is on screen."""
+    deadline = time.monotonic() + timeout_s
+    while True:
+        try:
+            ui.thread_panel(thread_id)
+            return
+        except RuntimeError:
+            if time.monotonic() > deadline:
+                raise
+            time.sleep(0.5)
+
+
+def user_reads(thread_id: str) -> None:
+    ui.js(f"""
+        var thread = store.getThreads().byId('{thread_id}');
+        thread.markReadByUser(thread.getMessages());
+        store.getThreads().notifyChanged(thread);
+        String(true)
+    """)
+
+
 class Scenarios:
     def __init__(self) -> None:
         self.failures: list[str] = []
@@ -52,6 +74,7 @@ class Scenarios:
     def header_button_selects_a_step_in_its_guided_section(self) -> None:
         order = 27
         path = next(path for o, path, _ in fixture.steps() if o == order)
+        ui.open_in_editor(path)
         ui.open_thread_in_editor(self.steps[order], path)
         time.sleep(PAUSE_S)
         ui.press_panel_action(self.steps[order], "Select in Marginalis")
@@ -70,8 +93,15 @@ class Scenarios:
                    got.get("thread") == self.plain and got.get("section") == "Open", got)
 
     def header_button_reaches_into_the_folded_resolved_section(self) -> None:
-        ui.open_thread_in_editor(self.done, FILE)
+        # Opening an unread resolved thread marks it read, and that change closes a resolved thread's panel at once.
+        user_reads(self.done)
+        # The robot only sees panels on screen; the plain thread's open panel would push this one below the fold.
+        ui.close_all_editors()
         time.sleep(PAUSE_S)
+        ui.open_in_editor(FILE)
+        time.sleep(PAUSE_S)
+        ui.open_thread_in_editor(self.done, FILE)
+        wait_for_panel(self.done)
         ui.press_panel_action(self.done, "Select in Marginalis")
         got = self.selected()
         ui.screenshot_tool_window(SHOTS / "2-resolved.png")
@@ -106,7 +136,7 @@ class Scenarios:
                 scenario()
             except Exception as error:
                 self.check(scenario.__name__, False, f"{type(error).__name__}: {error}")
-                traceback.print_exc(limit=1)
+                traceback.print_exc()
         print(f"\n{len(self.failures)} failed" if self.failures else "\nall passed")
         return 1 if self.failures else 0
 
