@@ -3,6 +3,7 @@ package dev.marginalis.plugin.ui
 import com.intellij.icons.AllIcons
 import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.ActionToolbar
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
@@ -42,6 +43,7 @@ import dev.marginalis.core.Author
 import dev.marginalis.core.CommentThread
 import dev.marginalis.core.FaceKey
 import dev.marginalis.core.Faces
+import dev.marginalis.core.HistoryShortener
 import dev.marginalis.core.Identities
 import dev.marginalis.core.Identity
 import dev.marginalis.core.Intent
@@ -210,6 +212,10 @@ class ThreadPanel(
         }
     }
     private var editingMessageId: String? = null
+    // Reading a message must not hide it under the reader; it hides the next time the thread opens.
+    private val shownHere = mutableSetOf<String>()
+    private var historyHidden = false
+    private var headerToolbar: ActionToolbar? = null
 
     init {
         val accent = when (thread.severity) {
@@ -367,6 +373,7 @@ class ThreadPanel(
             nextStep,
             lastStep,
             Separator.getInstance(),
+            historyAction(),
             liveAction(),
             copyReferenceAction(),
             resolveAction(),
@@ -374,6 +381,7 @@ class ThreadPanel(
             closeAction(),
         )
         val toolbar = ActionManager.getInstance().createActionToolbar("MarginalisThreadPanel", group, true)
+        headerToolbar = toolbar
         toolbar.targetComponent = this
         toolbar.component.isOpaque = false
         return toolbar.component
@@ -396,6 +404,20 @@ class ThreadPanel(
         }
 
         override fun actionPerformed(e: AnActionEvent) = toggleResolved()
+    }
+
+    private fun historyAction(): AnAction = object : AnAction() {
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+
+        override fun update(e: AnActionEvent) {
+            e.presentation.isEnabledAndVisible = historyHidden || HistoryShortener
+                .rows(thread.messages, fullHistory = false, keep = { it.id == editingMessageId })
+                .any { it is HistoryShortener.Row.Hidden }
+            e.presentation.text = if (historyHidden) "Show Full History" else "Shorten History"
+            e.presentation.icon = if (historyHidden) AllIcons.Actions.Expandall else AllIcons.Actions.Collapseall
+        }
+
+        override fun actionPerformed(e: AnActionEvent) = if (historyHidden) showFullHistory() else shortenHistory()
     }
 
     private fun liveAction(): AnAction = object : ToggleAction() {
@@ -491,6 +513,7 @@ class ThreadPanel(
     }
 
     fun reveal(message: Message) {
+        if (message.id !in messageComponents) showFullHistory()
         messageComponents[message.id]?.let { it.scrollRectToVisible(Rectangle(it.size)) }
         markReadIfSeen()
     }
@@ -889,10 +912,26 @@ class ThreadPanel(
         val faces = Authors.facesOf(people)
         var previous: Message? = null
         var githubBlock: JPanel? = null
-        renderedMessages = thread.messages
+        val rows = HistoryShortener.rows(
+            thread.messages,
+            fullHistory = FullHistoryThreads.getInstance(project).showsFullHistory(thread.id),
+            keep = { it.id == editingMessageId || it.id in shownHere },
+        )
+        renderedMessages = rows.filterIsInstance<HistoryShortener.Row.Shown>().map { it.message }
+        renderedMessages.mapTo(shownHere) { it.id }
+        historyHidden = rows.any { it is HistoryShortener.Row.Hidden }
         val tagged = newTags(thread)
         showsNewTags = renderedMessages.any { it.id in tagged }
-        for (message in renderedMessages) {
+        for (row in rows) {
+            if (row is HistoryShortener.Row.Hidden) {
+                if (messagesBox.componentCount > 0) messagesBox.add(Box.createVerticalStrut(JBUI.scale(8)))
+                val count = row.messages.size
+                messagesBox.add(linkRow("Show $count more ${if (count == 1) "message" else "messages"}") { showFullHistory() })
+                githubBlock = null
+                previous = null
+                continue
+            }
+            val message = (row as HistoryShortener.Row.Shown).message
             val grouped = message.continues(previous)
             val relayed = message.relayed
             if (relayed == null || relayed.discussion != previous?.relayed?.discussion) {
@@ -915,6 +954,26 @@ class ThreadPanel(
         }
         revalidate()
         repaint()
+    }
+
+    private fun linkRow(text: String, onClick: () -> Unit): JComponent = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
+        isOpaque = false
+        border = JBUI.Borders.emptyLeft(9)
+        add(ActionLink(text) { onClick() })
+        maximumSize = Dimension(Int.MAX_VALUE, preferredSize.height)
+    }
+
+    private fun showFullHistory() {
+        FullHistoryThreads.getInstance(project).showFullHistory(thread.id)
+        refresh()
+        headerToolbar?.updateActionsAsync()
+    }
+
+    private fun shortenHistory() {
+        FullHistoryThreads.getInstance(project).shorten(thread.id)
+        shownHere.clear()
+        refresh()
+        headerToolbar?.updateActionsAsync()
     }
 
     private fun githubBlock(first: Relayed): JPanel = JPanel().apply {
