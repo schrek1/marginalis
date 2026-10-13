@@ -5,6 +5,25 @@ All notable changes to Marginalis. The format follows
 current version's section into the plugin's Marketplace change notes.
 History before 0.1.19 lives in git tags.
 
+## [Unreleased]
+
+### Added
+
+- Find any thread in the Marginalis tool window in one click: "Select in
+  Marginalis" in the thread's header opens the tool window on it, and
+  "Select Opened Thread" in the tool window picks the thread on the line
+  your caret is on, or the file when that line has none.
+
+### Fixed
+
+- Stepping through the Marginalis tool window with Next and Previous no
+  longer loses its place: the selection survives the tree refreshing,
+  so the next press continues from the step you are on instead of the
+  first one.
+- In a Guided section, First, Previous, Next and Last Step in the tool
+  window follow the step numbers, as the arrows in a thread's header do,
+  instead of the folder-and-file order the tree shows them in.
+
 ## [0.2.2] - 2026-10-04
 
 ### Changed

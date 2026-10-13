@@ -29,11 +29,14 @@ object FileLevelThreads {
         )
     }
 
-    fun showInToolWindow(project: Project, file: String) {
+    fun showInToolWindow(project: Project, file: String) = withToolWindowPanel(project) { it.selectFile(file) }
+
+    fun revealInToolWindow(project: Project, thread: CommentThread) = withToolWindowPanel(project) { it.reveal(thread) }
+
+    private fun withToolWindowPanel(project: Project, action: (MarginalisToolWindowPanel) -> Unit) {
         val toolWindow = ToolWindowManager.getInstance(project).getToolWindow(TOOL_WINDOW_ID) ?: return
         toolWindow.activate {
-            val panel = toolWindow.contentManager.contents.firstOrNull()?.component as? MarginalisToolWindowPanel
-            panel?.selectFile(file)
+            (toolWindow.contentManager.contents.firstOrNull()?.component as? MarginalisToolWindowPanel)?.let(action)
         }
     }
 }
