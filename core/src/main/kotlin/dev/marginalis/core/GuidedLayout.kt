@@ -7,7 +7,7 @@ enum class GuidedLayout(val stored: String, val label: String) {
     BY_FILE("BY_FILE", "By file");
 
     companion object {
-        val DEFAULT = BY_FOLDER
+        val DEFAULT = BY_STEP_NUMBER
 
         fun fromStored(stored: String?): GuidedLayout = entries.firstOrNull { it.stored == stored } ?: DEFAULT
     }

@@ -1,5 +1,6 @@
-"""Guided layout (fork MARG-10): the tool window lays a walkthrough out by folder (default), by step number or by
-file, remembers the choice per project, and the step arrows follow step numbers in every layout.
+"""Guided layout (fork MARG-10): the tool window lays a walkthrough out by step number (default; consecutive steps
+in one file fold under it), by folder or by file, remembers the choice per project, and the step arrows follow step
+numbers in every layout.
 
     py sandbox/scenarios/guided_layout.py [--feature-dir <checkout>]
 """
@@ -73,10 +74,16 @@ class Scenarios:
             ui.resolve_thread(hopping_ids[order])
         time.sleep(3)
 
-    def default_is_the_folder_tree(self) -> None:
+    def default_is_the_step_number_list(self) -> None:
+        shape = ui.guided_shape()
+        self.check("by default the layout is By step number", ui.guided_layout() == "BY_STEP_NUMBER", ui.guided_layout())
+        self.check("by default the steps read in step order", top_level_steps(shape) == OPEN_STEPS, top_level_steps(shape))
+
+    def by_folder_groups_under_folders(self) -> None:
+        ui.choose_guided_layout("By folder")
+        time.sleep(PAUSE_S)
         shape = ui.guided_shape()
         self.shot("1-by-folder")
-        self.check("by default the layout is By folder", ui.guided_layout() == "BY_FOLDER", ui.guided_layout())
         self.check("By folder groups the steps under folders", any(c["kind"] == "DirNode" for c in shape), shape)
 
     def by_step_number_lists_steps_in_order(self) -> None:
@@ -144,7 +151,8 @@ class Scenarios:
     def run(self) -> int:
         self.build()
         for scenario in (
-            self.default_is_the_folder_tree,
+            self.default_is_the_step_number_list,
+            self.by_folder_groups_under_folders,
             self.by_step_number_lists_steps_in_order,
             self.by_step_number_folds_runs_in_one_file,
             self.by_file_has_one_node_per_file,

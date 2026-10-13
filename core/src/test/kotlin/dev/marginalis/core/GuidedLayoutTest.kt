@@ -13,8 +13,8 @@ class GuidedLayoutTest {
     }
 
     @Test
-    fun `nothing stored, or an unknown value, reads as the folder tree`() {
-        assertEquals(GuidedLayout.BY_FOLDER, GuidedLayout.fromStored(null))
-        assertEquals(GuidedLayout.BY_FOLDER, GuidedLayout.fromStored("BY_COLOUR"))
+    fun `nothing stored, or an unknown value, reads as the step-number list`() {
+        assertEquals(GuidedLayout.BY_STEP_NUMBER, GuidedLayout.fromStored(null))
+        assertEquals(GuidedLayout.BY_STEP_NUMBER, GuidedLayout.fromStored("BY_COLOUR"))
     }
 }
