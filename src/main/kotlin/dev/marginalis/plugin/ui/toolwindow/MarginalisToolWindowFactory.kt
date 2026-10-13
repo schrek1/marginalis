@@ -14,12 +14,16 @@ import com.intellij.openapi.actionSystem.ToggleAction
 import com.intellij.openapi.actionSystem.UiDataProvider
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.text.StringUtil
+import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.pom.Navigatable
@@ -91,6 +95,7 @@ class MarginalisToolWindowFactory : ToolWindowFactory, DumbAware {
                 ExpandSectionAction(panel),
                 CollapseSectionAction(panel),
                 FilterMenuAction(panel),
+                SelectOpenedThreadAction(panel),
                 AgentPresenceGroup(),
                 SubmitRoundAction(),
                 LiveByDefaultAction(),
@@ -209,6 +214,29 @@ private class FilterMenuAction(private val panel: MarginalisToolWindowPanel) :
                 }
             })
         }
+    }
+}
+
+private class SelectOpenedThreadAction(private val panel: MarginalisToolWindowPanel) :
+    AnAction("Select Opened Thread", "Select the thread on the caret's line, else the open file", AllIcons.General.Locate),
+    DumbAware {
+    override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+
+    override fun update(e: AnActionEvent) {
+        e.presentation.isEnabled = e.project?.let { FileEditorManager.getInstance(it).selectedTextEditor } != null
+    }
+
+    override fun actionPerformed(e: AnActionEvent) {
+        val project = e.project ?: return
+        val editor = FileEditorManager.getInstance(project).selectedTextEditor ?: return
+        val vFile = FileDocumentManager.getInstance().getFile(editor.document) ?: return
+        val file = project.guessProjectDir()?.let { VfsUtilCore.getRelativePath(vFile, it) } ?: return
+        val line = editor.caretModel.logicalPosition.line
+        val store = MarginalisStore.getInstance(project)
+        store.syncLines()
+        val onLine = store.threads.all().filter { it.file == file && it.line == line }
+        val thread = onLine.firstOrNull { it.status is ThreadStatus.Open } ?: onLine.firstOrNull()
+        if (thread != null) panel.reveal(thread) else panel.selectFile(file)
     }
 }
 
@@ -366,6 +394,23 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
         val path = TreePath(node.path)
         tree.selectionPath = path
         tree.scrollPathToVisible(path)
+    }
+
+    /** Selects [thread] where the tree lists it: a walkthrough step in its Guided section, any other in its own. */
+    fun reveal(thread: CommentThread) {
+        if (!filter.matches(thread)) filter = TreeFilter.ALL
+        val root = tree.model.root as? DefaultMutableTreeNode ?: return
+        val threadKey = NodeData.ThreadNode(thread).key
+        val node = root.children().asSequence().filterIsInstance<DefaultMutableTreeNode>()
+            .sortedBy { section -> if ((section.userObject as NodeData.Section).guided == (thread.order != null)) 0 else 1 }
+            .firstNotNullOfOrNull { section ->
+                section.preorderEnumeration().asSequence().filterIsInstance<DefaultMutableTreeNode>()
+                    .firstOrNull { (it.userObject as NodeData).key == threadKey }
+            } ?: return
+        val path = TreePath(node.path)
+        tree.selectionPath = path
+        tree.scrollPathToVisible(path)
+        tree.requestFocusInWindow()
     }
 
     private fun selectedThread(): CommentThread? {
