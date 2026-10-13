@@ -49,6 +49,11 @@ History before 0.1.19 lives in git tags.
   Marginalis" in the thread's header opens the tool window on it, and
   "Select Opened Thread" in the tool window picks the thread on the line
   your caret is on, or the file when that line has none.
+- A walkthrough in the Marginalis tool window now reads in step order, the
+  way Next and Previous walk it. Steps in a row in the same file fold
+  under that file. The Guided Layout menu in the tool window header
+  switches to the folder tree as before, or to one node per file, and
+  each project remembers its choice.
 
 ### Fixed
 
