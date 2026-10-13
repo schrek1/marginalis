@@ -8,12 +8,13 @@ import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
-import com.intellij.openapi.vfs.VirtualFile
 import dev.marginalis.core.CommentThread
 import dev.marginalis.core.Message
 import dev.marginalis.core.WalkPosition
 import dev.marginalis.core.Walkthrough
 import dev.marginalis.plugin.store.MarginalisStore
+import dev.marginalis.plugin.ui.diff.ReviewDiffMarkers
+import dev.marginalis.plugin.ui.diff.ReviewDiffSteps
 import dev.marginalis.plugin.ui.tab.ProjectTab
 
 object WalkthroughNavigator {
@@ -25,39 +26,49 @@ object WalkthroughNavigator {
         Walkthrough.stableTotal(MarginalisStore.getInstance(project).threads.all(), thread)
 
     /**
-     * @param from the editor the move starts in; a step in the file it shows scrolls that editor, a diff included
+     * @param from the editor the move starts in; a step in the file it shows scrolls that editor, a diff included,
+     *   and a step in another file of a review diff switches that diff to the file
      */
     fun navigateTo(project: Project, thread: CommentThread, revealing: Message? = null, from: Editor? = null) {
         val path = thread.file ?: return ProjectTab.reveal(project, thread, revealing)
-        val base = project.guessProjectDir() ?: return
-        val targetFile = base.findFileByRelativePath(path) ?: return
-        val line = MarginalisStore.getInstance(project).syncLine(thread) ?: 0
         val currentEditor = from?.takeIf { !it.isDisposed }
-        if (currentEditor != null && currentEditor.shows(targetFile)) {
-            scrollToStep(project, currentEditor, line, thread, revealing)
-        } else {
-            openStepInFileTab(project, targetFile, line, thread, revealing)
+        val stayed = when {
+            currentEditor == null -> false
+            currentEditor.shows(project, path) -> showStepIn(project, currentEditor, thread, revealing)
+            else -> ReviewDiffSteps.switchTo(project, currentEditor, path, thread, revealing)
         }
+        if (!stayed) openStepInFileTab(project, thread, revealing)
     }
 
-    private fun Editor.shows(file: VirtualFile): Boolean = FileDocumentManager.getInstance().getFile(document) == file
-
-    private fun scrollToStep(project: Project, editor: Editor, line: Int, thread: CommentThread, revealing: Message?) {
+    /**
+     * Scrolls [editor] to the step and opens its thread there.
+     *
+     * @return false when the text [editor] shows holds no anchor for the step; nothing was changed then
+     */
+    fun showStepIn(project: Project, editor: Editor, thread: CommentThread, revealing: Message?): Boolean {
+        val diffLine = editor.getUserData(ThreadInlayManager.THREAD_LINE)
+        val line = if (diffLine != null) diffLine(thread) ?: return false
+        else MarginalisStore.getInstance(project).syncLine(thread) ?: 0
         editor.caretModel.moveToLogicalPosition(LogicalPosition(line, 0))
         editor.scrollingModel.scrollToCaret(ScrollType.CENTER)
         editor.contentComponent.requestFocusInWindow()
         ThreadInlayManager.open(project, editor, thread, revealing)
+        return true
     }
 
-    private fun openStepInFileTab(
-        project: Project,
-        file: VirtualFile,
-        line: Int,
-        thread: CommentThread,
-        revealing: Message?,
-    ) {
+    fun openStepInFileTab(project: Project, thread: CommentThread, revealing: Message?) {
+        val path = thread.file ?: return
+        val file = project.guessProjectDir()?.findFileByRelativePath(path) ?: return
+        val line = MarginalisStore.getInstance(project).syncLine(thread) ?: 0
         OpenFileDescriptor(project, file, line, 0).navigate(true)
         val editor = FileEditorManager.getInstance(project).selectedTextEditor ?: return
         ThreadInlayManager.open(project, editor, thread, revealing)
+    }
+
+    // A review diff's editor holds a revision's copy of the file, so only its tag names the file it shows.
+    private fun Editor.shows(project: Project, path: String): Boolean {
+        getUserData(ReviewDiffMarkers.PROJECT_PATH)?.let { return it == path }
+        val file = FileDocumentManager.getInstance().getFile(document) ?: return false
+        return file == project.guessProjectDir()?.findFileByRelativePath(path)
     }
 }

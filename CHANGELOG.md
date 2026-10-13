@@ -12,6 +12,12 @@ History before 0.1.19 lives in git tags.
 - Thread icons now show in the gutter of a pull or merge request review
   diff too, and in any other diff that shows a file from a commit. Click
   one to open the thread right there in the diff.
+- A guided walkthrough you follow in a pull or merge request review diff
+  stays in that diff. Resolve, Previous and Next switch the diff to the
+  next step's file when the review contains it, scroll to the step and
+  open its thread, also when the review branch is not checked out. A step
+  in a file outside the review still opens in a regular editor tab.
+
 ### Fixed
 
 - Walking through steps in the same file keeps you in the editor you are reading, a pull request's

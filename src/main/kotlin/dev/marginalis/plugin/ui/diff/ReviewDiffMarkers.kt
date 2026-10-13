@@ -11,6 +11,7 @@ import com.intellij.diff.tools.util.base.DiffViewerListener
 import com.intellij.diff.tools.util.side.OnesideTextDiffViewer
 import com.intellij.diff.tools.util.side.TwosideTextDiffViewer
 import com.intellij.diff.util.Side
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.editor.markup.HighlighterLayer
@@ -18,6 +19,7 @@ import com.intellij.openapi.editor.markup.RangeHighlighter
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
+import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VfsUtilCore
 import dev.marginalis.core.AnchorPolicy
@@ -27,6 +29,7 @@ import dev.marginalis.plugin.store.MarginalisStore
 import dev.marginalis.plugin.ui.CoalescedEdtRunner
 import dev.marginalis.plugin.ui.ThreadGutterIconRenderer
 import dev.marginalis.plugin.ui.ThreadInlayManager
+import dev.marginalis.plugin.ui.WalkthroughNavigator
 
 /**
  * Gutter icons in diffs whose right side is a project file shown from a
@@ -34,7 +37,8 @@ import dev.marginalis.plugin.ui.ThreadInlayManager
  * copy of the text, so the markers on the file's own document never reach them.
  *
  * Icons are editor-local and re-anchored on the diff's text; a thread whose
- * anchor isn't there gets no icon. EDT only.
+ * anchor isn't there gets no icon. A walkthrough step waiting for this diff's
+ * file ([ReviewDiffSteps]) opens here the same way. EDT only.
  */
 class ReviewDiffMarkers : DiffExtension() {
 
@@ -43,8 +47,8 @@ class ReviewDiffMarkers : DiffExtension() {
         val target = RightSide.of(viewer) ?: return
         val file = projectPath(project, target.content) ?: return
         val local = target.content.highlightFile?.let { FileDocumentManager.getInstance().getCachedDocument(it) }
-        if (target.editor.document === local) return
-        DiffPainter(project, target, file).install()
+        if (target.editor.document !== local) DiffPainter(project, target, file).install()
+        ReviewDiffSteps.takePending(context, file)?.let { step -> StepOpener(project, target, step).install() }
     }
 
     private fun projectPath(project: Project, content: DocumentContent): String? {
@@ -54,6 +58,9 @@ class ReviewDiffMarkers : DiffExtension() {
     }
 
     companion object {
+        /** The project-relative file a diff editor shows, on editors that hold a copy of its text. */
+        val PROJECT_PATH = Key.create<String>("marginalis.review.diff.path")
+
         private val live = mutableSetOf<DiffPainter>()
 
         /** Strips our highlighters and listeners from open diffs before a dynamic unload. */
@@ -103,6 +110,7 @@ class ReviewDiffMarkers : DiffExtension() {
             target.viewer.addListener(this)
             observer = store.threads.observe { thread -> if (thread.file == file) repaint.request() }
             target.editor.putUserData(ThreadInlayManager.THREAD_LINE, ::editorLineOf)
+            target.editor.putUserData(PROJECT_PATH, file)
             live += this
         }
 
@@ -113,6 +121,7 @@ class ReviewDiffMarkers : DiffExtension() {
             observer = null
             clear()
             target.editor.putUserData(ThreadInlayManager.THREAD_LINE, null)
+            target.editor.putUserData(PROJECT_PATH, null)
         }
 
         // A unified viewer rebuilds its document on every rediff, a side-by-side one has it only once the first diff lands.
@@ -156,5 +165,29 @@ class ReviewDiffMarkers : DiffExtension() {
 
         private fun lineText(document: Document, line: Int): String =
             document.getText(TextRange(document.getLineStartOffset(line), document.getLineEndOffset(line)))
+    }
+
+    /** Opens a step [ReviewDiffSteps] switched this diff to, once the diff's text has landed. */
+    private class StepOpener(
+        private val project: Project,
+        private val target: RightSide,
+        private val step: ReviewDiffSteps.PendingStep,
+    ) : DiffViewerListener() {
+
+        private var opened = false
+
+        fun install() = target.viewer.addListener(this)
+
+        override fun onAfterRediff() {
+            if (opened || target.editor.isDisposed) return
+            opened = true
+            // The viewer is iterating its listeners right now; removing one in place fails that iteration.
+            ApplicationManager.getApplication().invokeLater {
+                if (!target.viewer.isDisposed) target.viewer.removeListener(this)
+            }
+            if (!WalkthroughNavigator.showStepIn(project, target.editor, step.thread, step.revealing)) {
+                WalkthroughNavigator.openStepInFileTab(project, step.thread, step.revealing)
+            }
+        }
     }
 }
