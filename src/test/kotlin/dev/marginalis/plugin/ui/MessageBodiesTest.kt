@@ -4,6 +4,7 @@ import com.intellij.openapi.fileTypes.PlainTextFileType
 import dev.marginalis.plugin.testing.Browser
 import dev.marginalis.plugin.testing.RenderedBody
 import dev.marginalis.plugin.transport.HttpContractTestCase
+import javax.swing.ScrollPaneConstants
 import javax.swing.text.html.HTML
 
 class MessageBodiesTest : HttpContractTestCase() {
@@ -76,11 +77,11 @@ class MessageBodiesTest : HttpContractTestCase() {
         assertEquals(emptyList<String>(), browser.opened)
     }
 
-    fun testAnAngleBracketedAddressIsALinkButABareOneIsNot() {
+    fun testAnAngleBracketedAndABareAddressAreBothLinks() {
         val body = rendered("See <https://example.com/a> or https://example.com/b.")
 
         assertEquals("https://example.com/a", body.linkOn("https://example.com/a"))
-        assertNull(body.linkOn("https://example.com/b"))
+        assertEquals("https://example.com/b", body.linkOn("https://example.com/b"))
     }
 
     fun testACodeLinkIsALinkToo() {
@@ -157,25 +158,25 @@ class MessageBodiesTest : HttpContractTestCase() {
         assertEquals(listOf("Line one", "Line two"), body.lines())
     }
 
-    // FixMe: Known issue - #44 a single line break in a message is lost: the two lines run together
-    fun testASingleLineBreakIsLostAndTheLinesRunTogether() {
+    fun testASingleLineBreakStartsANewLine() {
         val body = rendered("Line one\nLine two")
 
-        assertEquals(listOf("Line one Line two"), body.lines())
+        assertEquals(listOf("Line one", "Line two"), body.lines())
     }
 
-    // FixMe: Known issue - #40 a table is not drawn as a table: its rows run together as raw pipes on one line
-    fun testATableRunsTogetherAsRawPipes() {
-        val body = rendered("| Name | Age |\n|------|-----|\n| Ann  | 3   |")
+    fun testATopLevelTableSitsInItsOwnSidewaysScrollingPane() {
+        val body = rendered("Before.\n\n| Name | Age |\n|------|-----|\n| Ann  | 3   |\n\nAfter.")
 
-        assertEquals(listOf("| Name | Age | |------|-----| | Ann | 3 |"), body.lines())
+        assertEquals(listOf("prose", "table", "prose"), body.kinds())
+        assertTrue(body.enclosingBlocks("Ann").contains("td"))
+        assertEquals(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED, body.tables.single().horizontalScrollBarPolicy)
     }
 
-    // FixMe: Known issue - #40 strikethrough is not drawn: the tildes stay in the text
-    fun testStrikethroughKeepsItsTildes() {
+    fun testStrikethroughIsDrawnStruckThrough() {
         val body = rendered("Use ~~old~~ new.")
 
-        assertEquals(listOf("Use ~~old~~ new."), body.lines())
+        assertEquals(listOf("Use old new."), body.lines())
+        assertEquals(setOf("s"), body.markedAs("old"))
     }
 
     fun testAOneLinePreviewKeepsOnlyTheStartOfAFencedBlock() {

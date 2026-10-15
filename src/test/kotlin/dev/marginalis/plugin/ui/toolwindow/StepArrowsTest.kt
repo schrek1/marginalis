@@ -17,7 +17,7 @@ class StepArrowsTest : ToolWindowTestCase() {
         assertEquals(emptyList<String>(), enabledArrows())
     }
 
-    fun testTheArrowsNameTheirStepsAndStartFromTheTopOfTheFirstSection() {
+    fun testTheArrowsNameTheirStepsAndStartFromTheLowestOpenStep() {
         interleaved()
 
         assertEquals("Next Step", window.presentation("Next Step").text)
@@ -27,18 +27,17 @@ class StepArrowsTest : ToolWindowTestCase() {
 
         window.press("Next Step")
 
-        assertEquals("✉ (10/18)  L30  Step 10", window.selected())
-        assertEquals("OrderController.java", openFile())
-        assertEquals(30, caretLine())
-        assertEquals("Step 10", shownThread())
+        assertEquals("✉ (2/18)  L20  Step 2", window.selected())
+        assertEquals("OrderService.java", openFile())
+        assertEquals(20, caretLine())
+        assertEquals("Step 2", shownThread())
         assertEquals(listOf("Next Step", "Last Step"), enabledArrows())
 
         window.press("Next Step")
         assertEquals(arrows, enabledArrows())
     }
 
-    // FixMe: Known issue - #45 in a Guided section the arrows walk the folder tree, not the step numbers
-    fun testNextStepFollowsTheTreeRatherThanTheStepNumbers() {
+    fun testNextStepFollowsTheStepNumbers() {
         interleaved()
         val visited = mutableListOf<String>()
 
@@ -47,7 +46,7 @@ class StepArrowsTest : ToolWindowTestCase() {
             visited += window.selected()!!.substringBefore("  ")
         }
 
-        assertEquals(listOf("✉ (10/18)", "✉ (18/18)", "✉ (2/18)", "✉ (3/18)", "✉ (6/18)"), visited)
+        assertEquals(listOf("✉ (2/18)", "✉ (3/18)", "✉ (4/18)", "✉ (5/18)", "✉ (6/18)"), visited)
         assertEquals("OrderService.java", openFile())
         assertEquals(41, caretLine())
     }
@@ -56,17 +55,17 @@ class StepArrowsTest : ToolWindowTestCase() {
         interleaved()
 
         window.press("Last Step")
-        assertEquals("✉ (8/18)  L10  Step 8", window.selected())
-        assertEquals("Order.java", openFile())
+        assertEquals("✉ (18/18)  OrderController.java L45  Step 18", window.selected())
+        assertEquals("OrderController.java", openFile())
         assertEquals(listOf("First Step", "Previous Step"), enabledArrows())
 
         window.press("Previous Step")
-        assertEquals("✉ (14/18)  L40  Step 14", window.selected())
-        assertEquals("LoyaltyDiscountPolicy.java", openFile())
-        assertEquals(40, caretLine())
+        assertEquals("✉ (17/18)  OrderServiceTest.java L58  Step 17", window.selected())
+        assertEquals("OrderServiceTest.java", openFile())
+        assertEquals(58, caretLine())
 
         window.press("First Step")
-        assertEquals("✉ (10/18)  L30  Step 10", window.selected())
+        assertEquals("✉ (2/18)  L20  Step 2", window.selected())
         assertEquals(listOf("Next Step", "Last Step"), enabledArrows())
     }
 
@@ -114,20 +113,19 @@ class StepArrowsTest : ToolWindowTestCase() {
         assertEquals(emptyList<String>(), enabledArrows())
     }
 
-    // FixMe: Known issue - #45 an agent's reply mid-walk drops the selection, so Next Step starts over at the top of the first section
-    fun testAReplyMidWalkSendsTheNextStepBackToTheTop() {
+    fun testAReplyMidWalkKeepsItsPlaceAndNextStepContinues() {
         val steps = interleaved()
         window.press("Next Step")
         window.press("Next Step")
         window.press("Next Step")
-        assertEquals("✉ (2/18)  L20  Step 2", window.selected())
+        assertEquals("✉ (4/18)  L8  Step 4", window.selected())
 
         window.rebuiltBy { agent.reply(steps.getValue(9), "One more thing on step 9.") }
-        assertNull(window.selected())
+        assertEquals("✉ (4/18)  L8  Step 4", window.selected())
         window.press("Next Step")
 
-        assertEquals("✉ (10/18)  L30  Step 10", window.selected())
-        assertEquals("OrderController.java", openFile())
+        assertEquals("✉ (5/18)  L22  Step 5", window.selected())
+        assertEquals("LoyaltyDiscountPolicy.java", openFile())
     }
 
     fun testADeepWalkthroughIsWalkedAcrossItsModules() {
@@ -138,8 +136,8 @@ class StepArrowsTest : ToolWindowTestCase() {
         window.press("Last Step")
         val last = window.selected()
 
-        assertEquals("✉ (16/33)  L5  Step 16", first)
-        assertEquals("✉ (20/33)  L5  Step 20", last)
-        assertEquals("CustomerProductFixture.java", openFile())
+        assertEquals("✉ (8/33)  CustomerSettingsProvider.java L5  Step 8", first)
+        assertEquals("✉ (33/33)  InvoiceSettingsConfigurationTest.java L5  Step 33", last)
+        assertEquals("InvoiceSettingsConfigurationTest.java", openFile())
     }
 }

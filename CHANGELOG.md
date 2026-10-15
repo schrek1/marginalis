@@ -91,6 +91,8 @@ History before 0.1.19 lives in git tags.
   and anything you haven't read yet; the read middle hides behind one line
   that shows the full history with a click, and Shorten History in the
   thread header hides it again.
+- A web address written plainly in a message is a link, as on GitHub; it
+  no longer needs angle brackets.
 ### Fixed
 
 - A thread you left open shows the agent's reply when you come back to

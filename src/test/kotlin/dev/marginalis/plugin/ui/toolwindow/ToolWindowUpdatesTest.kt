@@ -109,9 +109,8 @@ class ToolWindowUpdatesTest : ToolWindowTestCase() {
         assertEquals("✉ L5  here", window.rows().last())
     }
 
-    // FixMe: Known issue - #45 any thread change rebuilds the tree and drops the user's selection
     @DisplayOnly
-    fun testTheSelectionIsLostWhenAnAgentReplies() {
+    fun testTheSelectionIsKeptWhenAnAgentReplies() {
         sample()
         val id = agent.addOnLine(5, "body" to "first")
         agent.addOnLine(9, "body" to "second")
@@ -120,11 +119,10 @@ class ToolWindowUpdatesTest : ToolWindowTestCase() {
 
         window.rebuiltBy { agent.reply(id, "more") }
 
-        assertNull(window.selected())
+        assertEquals("✉ L9  second", window.selected())
     }
 
-    // FixMe: Known issue - #46 any thread change unfolds every folder the user folded, and folds the Resolved section again
-    fun testFoldedFoldersUnfoldAndTheResolvedSectionFoldsAgainWhenAThreadChanges() {
+    fun testFoldedFoldersStayFoldedAndTheResolvedSectionStaysOpenWhenAThreadChanges() {
         sample()
         sample("lib/Other.kt")
         val id = agent.addOnLine(5, "body" to "first")
@@ -137,8 +135,8 @@ class ToolWindowUpdatesTest : ToolWindowTestCase() {
 
         window.rebuiltBy { agent.reply(id, "more") }
 
-        assertTrue(window.isExpanded("src"))
-        assertFalse(window.isExpanded("Resolved"))
+        assertFalse(window.isExpanded("src"))
+        assertTrue(window.isExpanded("Resolved"))
     }
 
     private fun assertBadge(badge: StripeBadge?) {

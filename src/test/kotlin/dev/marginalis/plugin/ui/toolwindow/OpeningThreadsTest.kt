@@ -124,7 +124,7 @@ class OpeningThreadsTest : ToolWindowTestCase() {
         window.outline()
 
         FileLevelThreads.showInToolWindow(project, "acme/backend/shop-orders/src/main/java/com/acme/orders/OrderService.java")
-        assertEquals("OrderService.java ✉4", window.selected())
+        assertEquals("OrderService.java  steps 2–3 ✉2", window.selected())
         assertEquals("Guided SHOP-77  17", window.selectedPath().first())
 
         FileLevelThreads.showInToolWindow(project, SAMPLE)
