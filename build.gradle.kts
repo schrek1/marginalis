@@ -1,3 +1,4 @@
+import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -7,6 +8,8 @@ plugins {
     id("org.jetbrains.intellij.platform") version "2.18.1"
     // CHANGELOG.md -> Marketplace change notes (see pluginConfiguration).
     id("org.jetbrains.changelog") version "2.2.1"
+    id("org.jetbrains.kotlinx.kover") version "0.9.11"
+    id("info.solidsoft.pitest") version "1.19.0"
 }
 
 group = "dev.marginalis"
@@ -30,9 +33,30 @@ repositories {
     }
 }
 
+sourceSets {
+    create("uiTest")
+}
+
+val ideStarterVersion = "262.9437.185"
+
 dependencies {
     // The domain core: model, lifecycle, anchoring policy, persistence codec.
     implementation(project(":core"))
+    kover(project(":core"))
+
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.opentest4j:opentest4j:1.3.0")
+
+    "uiTestImplementation"("org.junit.jupiter:junit-jupiter:5.13.4")
+    "uiTestRuntimeOnly"("org.junit.platform:junit-platform-launcher:1.13.4")
+    "uiTestImplementation"("org.kodein.di:kodein-di-jvm:7.26.1")
+    "uiTestImplementation"("org.jetbrains.kotlin:kotlin-stdlib:2.4.0")
+    "uiTestImplementation"("org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.10.2")
+    "uiTestImplementation"("org.jetbrains.teamcity:serviceMessages:2024.07")
+    // IDE Starter drives a separately installed IDE, so it is pinned apart
+    // from the compile platform; on a 2025.2 platform the product modules
+    // aren't added for us.
+    "uiTestImplementation"("com.jetbrains.intellij.tools:ide-starter-product-idea-ultimate:$ideStarterVersion")
 
     intellijPlatform {
         // Markdown parsing for message bodies comes from the IDE's bundled
@@ -51,6 +75,8 @@ dependencies {
         } else {
             intellijIdeaCommunity("2025.2")
         }
+        testFramework(TestFrameworkType.Platform)
+        testFramework(TestFrameworkType.Starter, version = ideStarterVersion, configurationName = "uiTestImplementation")
     }
 }
 
@@ -129,6 +155,28 @@ intellijPlatform {
     }
 }
 
+tasks.test {
+    // Bylines format the clock with the default locale; pin it so AM/PM reads
+    // the same on every machine, as it does on CI.
+    systemProperty("user.language", "en")
+    systemProperty("user.country", "US")
+}
+
+tasks.register<Test>("uiTest") {
+    description = "Drives a real IDE with the built plugin installed."
+    group = "verification"
+    val uiTestSourceSet = sourceSets["uiTest"]
+    testClassesDirs = uiTestSourceSet.output.classesDirs
+    classpath = uiTestSourceSet.runtimeClasspath
+    useJUnitPlatform { includeEngines("junit-jupiter") }
+    val plugin = tasks.buildPlugin.flatMap { it.archiveFile }
+    dependsOn(tasks.buildPlugin)
+    systemProperty("marginalis.plugin", plugin.get().asFile.absolutePath)
+    val installedIde = providers.gradleProperty("marginalis.localIde").orNull
+    onlyIf("marginalis.localIde names an installed IDE to drive") { installedIde != null }
+    installedIde?.let { systemProperty("marginalis.uiTestIde", it) }
+}
+
 tasks.named<org.gradle.api.tasks.JavaExec>("runIde") {
     // Open the toy project so the M0 loop can be exercised immediately.
     args(layout.projectDirectory.dir("sample-project").asFile.absolutePath)
@@ -156,4 +204,30 @@ kotlin {
         // -Xjvm-default=all.)
         freeCompilerArgs.add("-jvm-default=no-compatibility")
     }
+}
+
+tasks.withType<JavaCompile>().configureEach {
+    options.release = 21
+}
+
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    compilerOptions.jvmTarget = JvmTarget.JVM_21
+}
+
+pitest {
+    pitestVersion = "1.30.1"
+    targetClasses = setOf("dev.marginalis.plugin.ui.WalkthroughNavigator*")
+    targetTests = setOf("dev.marginalis.plugin.ui.WalkthroughNavigatorTest")
+    threads = 2
+    outputFormats = setOf("XML", "HTML")
+    timestampedReports = false
+    avoidCallsTo = setOf("kotlin.jvm.internal")
+    useClasspathFile = true
+}
+
+tasks.named<info.solidsoft.gradle.pitest.PitestTask>("pitest") {
+    dependsOn("prepareTestSandbox")
+    val test = tasks.test.get()
+    additionalClasspath.from(test.classpath)
+    childProcessJvmArgs = provider { test.allJvmArgs }
 }

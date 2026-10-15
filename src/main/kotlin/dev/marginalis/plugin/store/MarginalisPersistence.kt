@@ -3,6 +3,7 @@ package dev.marginalis.plugin.store
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
+import com.intellij.openapi.vfs.toNioPathOrNull
 import dev.marginalis.core.ThreadsCodec
 import java.nio.file.Files
 import java.nio.file.Path
@@ -11,7 +12,7 @@ object MarginalisPersistence {
     private val log = logger<MarginalisPersistence>()
 
     private fun storageFile(project: Project): Path? =
-        project.guessProjectDir()?.path?.let { Path.of(it, ".idea", "marginalis.json") }
+        project.guessProjectDir()?.toNioPathOrNull()?.resolve(".idea")?.resolve("marginalis.json")
 
     @Synchronized
     fun save(project: Project, document: ThreadsCodec.Document) {

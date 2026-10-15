@@ -16,13 +16,46 @@ class HtmlSanitizerTest {
     }
 
     @Test
-    fun `a GFM table and strikethrough pass, and cells keep only their alignment`() {
+    fun `a GFM table and strikethrough pass without the sections Swing ignores, and cells keep only their alignment`() {
         assertEquals(
-            "<table><thead><tr><th align=\"left\">a</th></tr></thead><tbody><tr><td align=\"right\"><s>b</s></td></tr></tbody></table>",
+            "<table><tr><th align=\"left\">a</th></tr><tr><td align=\"right\"><s>b</s></td></tr></table>",
             clean(
                 "<table style=\"background:url(http://t)\"><thead><tr><th align=\"left\" style=\"x\">a</th></tr></thead>" +
                     "<tbody><tr><td align=\"right\" background=\"http://t\"><s>b</s></td></tr></tbody></table>",
             ),
+        )
+    }
+
+    @Test
+    fun `a table nested in a cell loses its table tags but keeps its text, and the outer table survives`() {
+        assertEquals(
+            "<table><tr><td>a b c d</td></tr></table>",
+            clean("<table><tr><td>a <table><tr><td>b</td></tr></table> c <table><tr><td>d</td></tr></table></td></tr></table>"),
+        )
+    }
+
+    @Test
+    fun `stray table closers cannot make room for a nested table`() {
+        assertEquals(
+            "<table><tr><td>ab</td></tr></table>",
+            clean("</table></table><table><tr><td>a<table><tr><td>b</td></tr></table></td></tr></table>"),
+        )
+        assertEquals(
+            "<table><tr><td>a</td></tr></table><table><tr><td>bc",
+            clean("<table><tr><td>a</td></tr></table></table></table><table><tr><td>b<table><tr><td>c"),
+        )
+    }
+
+    @Test
+    fun `rows and cells outside a table are dropped for their text`() {
+        assertEquals("a b", clean("<tr><td>a</td></tr> <td>b</td>"))
+    }
+
+    @Test
+    fun `a table section cannot open a row inside a cell`() {
+        assertEquals(
+            "<table><tr><td>a<tr><td>b</td></tr></td></tr></table>",
+            clean("<table><tbody><tr><td>a<thead><tr><td>b</td></tr></thead></td></tr></tbody></table>"),
         )
     }
 

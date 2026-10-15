@@ -33,9 +33,9 @@ import org.intellij.markdown.ast.ASTNode
 import org.intellij.markdown.flavours.gfm.GFMElementTypes
 import org.intellij.markdown.flavours.gfm.GFMFlavourDescriptor
 import org.intellij.markdown.flavours.gfm.GFMTokenTypes
-import org.intellij.markdown.html.EqualDelimiterTrimmingInlineTagProvider
 import org.intellij.markdown.html.GeneratingProvider
 import org.intellij.markdown.html.HtmlGenerator
+import org.intellij.markdown.html.SimpleInlineTagProvider
 import org.intellij.markdown.parser.LinkMap
 import org.intellij.markdown.parser.MarkdownParser
 import java.awt.Component
@@ -55,9 +55,10 @@ import javax.swing.text.DefaultCaret
 import javax.swing.text.html.HTMLEditorKit
 
 /**
- * GitHub-flavoured, minus images and raw HTML: each extra construct carries
- * its own Swing sizing tax. A top-level table pays it in its own pane at
- * natural width, scrolling sideways, so the prose around it keeps wrapping.
+ * GitHub-flavoured, with images as placeholders and raw HTML reduced to
+ * what the Markdown itself produces: each extra construct carries its own
+ * Swing sizing tax. A top-level table pays it in its own pane at natural
+ * width, scrolling sideways, so the prose around it keeps wrapping.
  */
 object MarkdownRenderer {
 
@@ -67,7 +68,7 @@ object MarkdownRenderer {
     fun render(project: Project, body: String, wrapWidth: Int): JComponent {
         val box = Box.createVerticalBox()
         var consumedUpTo = 0
-        // An unclosed fence is still prose to CommonMark.
+        // An unclosed fence is still prose to GitHub-flavoured Markdown.
         for (fence in closedFences(body)) {
             val textBefore = body.substring(consumedUpTo, fence.start)
             if (textBefore.isNotBlank()) addProse(box, project, textBefore, wrapWidth)
@@ -95,7 +96,6 @@ object MarkdownRenderer {
         if (remainder.isNotBlank()) box.add(htmlPane(project, remainder, wrapWidth))
     }
 
-    // A table nested in a list or quote stays inline and wraps with its prose.
     private fun topLevelTables(markdown: String): List<IntRange> =
         MarkdownParser(Flavour()).buildMarkdownTreeFromString(markdown).children
             .filter { it.type == GFMElementTypes.TABLE }
@@ -105,15 +105,42 @@ object MarkdownRenderer {
         val flattened = StringBuilder()
         var consumedUpTo = 0
         for (fence in closedFences(body)) {
-            flattened.append(body, consumedUpTo, fence.start)
+            flattened.append(proseWithoutGfmSyntax(body.substring(consumedUpTo, fence.start)))
                 .append(' ').append(body.substring(fence.codeStart, fence.codeEnd).take(FENCE_PREVIEW_CHARS)).append(' ')
             consumedUpTo = fence.end
         }
-        flattened.append(body, consumedUpTo, body.length)
+        flattened.append(proseWithoutGfmSyntax(body.substring(consumedUpTo)))
         return flattened.toString()
             .replace(Regex("[`*_#>]"), "")
-            .replace('\n', ' ')
+            .replace(Regex("\\s+"), " ")
             .trim()
+    }
+
+    private fun proseWithoutGfmSyntax(markdown: String): String =
+        withoutGfmSyntax(MarkdownParser(Flavour()).buildMarkdownTreeFromString(markdown), markdown)
+
+    private fun withoutGfmSyntax(node: ASTNode, markdown: String): String = when (node.type) {
+        GFMElementTypes.TABLE -> node.children
+            .filter { it.type == GFMElementTypes.HEADER || it.type == GFMElementTypes.ROW }
+            .flatMap { row -> row.children.filter { it.type == GFMTokenTypes.CELL } }
+            .map { withoutGfmSyntax(it, markdown).trim() }
+            .filter { it.isNotEmpty() }
+            .joinToString(" · ")
+        GFMElementTypes.STRIKETHROUGH -> node.children
+            .filter { it.type != GFMTokenTypes.TILDE }
+            .joinToString("") { withoutGfmSyntax(it, markdown) }
+        else -> if (node.children.isEmpty()) {
+            markdown.substring(node.startOffset, node.endOffset)
+        } else {
+            buildString {
+                var consumedUpTo = node.startOffset
+                for (child in node.children) {
+                    append(markdown, consumedUpTo, child.startOffset).append(withoutGfmSyntax(child, markdown))
+                    consumedUpTo = child.endOffset
+                }
+                append(markdown, consumedUpTo, node.endOffset)
+            }
+        }
     }
 
     private fun closedFences(body: String): List<CodeFence> = CodeFences.find(body).filter { it.closed }
@@ -123,7 +150,7 @@ object MarkdownRenderer {
     private class Flavour : GFMFlavourDescriptor() {
         override fun createHtmlGeneratingProviders(linkMap: LinkMap, baseURI: URI?): Map<IElementType, GeneratingProvider> =
             super.createHtmlGeneratingProviders(linkMap, baseURI) +
-                (GFMElementTypes.STRIKETHROUGH to EqualDelimiterTrimmingInlineTagProvider("s", GFMTokenTypes.TILDE)) +
+                (GFMElementTypes.STRIKETHROUGH to SimpleInlineTagProvider("s", 2, -2)) +
                 (MarkdownTokenTypes.EOL to TypedLineBreaks)
     }
 
@@ -160,6 +187,8 @@ object MarkdownRenderer {
         }
     }
 
+    private val GENERATED_TASK_CHECKBOX = Regex("<input type=\"checkbox\" class=\"task-list-item-checkbox\"( checked)? disabled />")
+
     // Swing CSS has no :first-child: the pane's first block gets a class so it sits flush with the message header.
     private fun markFirstBlock(html: String): String =
         Regex("""^\s*<(p|ul|ol)>""").replace(html) { "<${it.groupValues[1]} class=\"first\">" }
@@ -169,6 +198,7 @@ object MarkdownRenderer {
         val tree = MarkdownParser(flavour).buildMarkdownTreeFromString(markdown)
         return HtmlGenerator(markdown, tree, flavour).generateHtml()
             .removePrefix("<body>").removeSuffix("</body>")
+            .replace(GENERATED_TASK_CHECKBOX) { checkbox -> if (checkbox.groupValues[1].isEmpty()) "☐ " else "☑ " }
             .let(HtmlSanitizer::sanitize)
             // Added after sanitizing, so a body still cannot set any attribute.
             .replace("<table>", "<table cellspacing=\"0\">")
@@ -232,9 +262,7 @@ object MarkdownRenderer {
         pane.isOpaque = false
         pane.putClientProperty(JEditorPane.HONOR_DISPLAY_PROPERTIES, true)
         pane.font = JBUI.Fonts.label()
-        // A caret that follows the text scrolls it into view later, and that
-        // scroll reaches the host editor: rebuilding a panel (e.g. on zoom)
-        // would yank the code view to the end of the thread.
+        // A caret that follows setText scrolls the host editor to the end of the thread.
         (pane.caret as? DefaultCaret)?.updatePolicy = DefaultCaret.NEVER_UPDATE
         pane.text = "<html><body>$html</body></html>"
         pane.addHyperlinkListener { e ->

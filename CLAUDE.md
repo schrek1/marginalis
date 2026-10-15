@@ -11,7 +11,8 @@ is the shipped record and decision log.
 - `./gradlew buildPlugin` → zip in `build/distributions/`;
   `./gradlew :core:test` runs the domain tests (`scripts/test-core.sh`
   runs them in a single JVM for environments where forked test workers
-  can't connect back).
+  can't connect back); `./gradlew test` runs the plugin's platform tests
+  against a real in-memory IDE.
 - CI (`.github/workflows/`) is the honest environment: compiles against
   the real `ideaIC-2025.2` floor and runs the Plugin Verifier
   (`recommended()` IDE set). Local builds may compile against a newer
@@ -86,7 +87,9 @@ is running the plugin:
 - Comments: write self-documenting code. Treat the urge to comment as a
   sign a rename or refactor is missing; comment only what the code can't
   say (typically a non-obvious platform quirk). Update comments a change
-  makes false.
+  makes false. One deliberate exception: a test that pins a known defect
+  carries `// FixMe: Known issue - #NN <one line>` above it; the fix flips
+  that test and removes the marker.
 - Icons: SVGs in `src/main/resources/icons/`, loaded through
   `MarginalisIcons`. Brand icons are single theme-neutral SVGs (no
   `_dark` twin), designed dark-first; monochrome toolbar icons (e.g.

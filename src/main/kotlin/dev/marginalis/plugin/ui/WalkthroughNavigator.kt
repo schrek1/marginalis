@@ -1,14 +1,15 @@
 package dev.marginalis.plugin.ui
 
+import com.intellij.openapi.command.CommandProcessor
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.LogicalPosition
 import com.intellij.openapi.editor.ScrollType
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
+import com.intellij.openapi.fileEditor.ex.IdeDocumentHistory
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
-import com.intellij.openapi.vfs.VirtualFile
 import dev.marginalis.core.CommentThread
 import dev.marginalis.core.Message
 import dev.marginalis.core.WalkPosition
@@ -32,38 +33,58 @@ object WalkthroughNavigator {
      */
     fun navigateTo(project: Project, thread: CommentThread, revealing: Message? = null, from: Editor? = null) {
         val path = thread.file ?: return ProjectTab.reveal(project, thread, revealing)
-        val currentEditor = from?.takeIf { !it.isDisposed }
         val stayed = when {
-            currentEditor == null -> false
-            currentEditor.shows(project, path) -> showStepIn(project, currentEditor, thread, revealing)
-            else -> ReviewDiffSteps.switchTo(project, currentEditor, path, thread, revealing)
+            from == null || from.isDisposed -> false
+            from.shows(project, path) -> navigateWithin(from, project, thread, revealing)
+            else -> ReviewDiffSteps.switchTo(project, from, path, thread, revealing)
         }
         if (!stayed) openStepInFileTab(project, thread, revealing)
     }
 
     /**
-     * Scrolls [editor] to the step and opens its thread there.
+     * Moves [editor] to the step and opens its thread there, as one step of the IDE's Back / Forward history.
      *
-     * @return false when the text [editor] shows holds no anchor for the step; nothing was changed then
+     * @return false when [editor] is released, shows another file, or (a review diff) holds no anchor for the step;
+     *   nothing was changed then
      */
-    fun showStepIn(project: Project, editor: Editor, thread: CommentThread, revealing: Message?): Boolean {
+    fun navigateWithin(editor: Editor, project: Project, thread: CommentThread, revealing: Message? = null): Boolean {
+        val path = thread.file ?: return false
+        if (editor.isDisposed || !editor.shows(project, path)) return false
         val diffLine = editor.getUserData(ThreadInlayManager.THREAD_LINE)
-        val line = if (diffLine != null) diffLine(thread) ?: return false
-        else MarginalisStore.getInstance(project).syncLine(thread) ?: 0
-        editor.caretModel.moveToLogicalPosition(LogicalPosition(line, 0))
-        editor.scrollingModel.scrollToCaret(ScrollType.CENTER)
+        if (diffLine != null) {
+            val line = diffLine(thread) ?: return false
+            recordingHistory(project) {
+                editor.caretModel.moveToLogicalPosition(LogicalPosition(line, 0))
+                editor.scrollingModel.scrollToCaret(ScrollType.CENTER)
+            }
+        } else {
+            val place = placeOf(project, thread) ?: return false
+            recordingHistory(project) { place.navigateIn(editor) }
+        }
         editor.contentComponent.requestFocusInWindow()
         ThreadInlayManager.open(project, editor, thread, revealing)
         return true
     }
 
     fun openStepInFileTab(project: Project, thread: CommentThread, revealing: Message?) {
-        val path = thread.file ?: return
-        val file = project.guessProjectDir()?.findFileByRelativePath(path) ?: return
-        val line = MarginalisStore.getInstance(project).syncLine(thread) ?: 0
-        OpenFileDescriptor(project, file, line, 0).navigate(true)
+        val place = placeOf(project, thread) ?: return
+        place.navigate(true)
         val editor = FileEditorManager.getInstance(project).selectedTextEditor ?: return
         ThreadInlayManager.open(project, editor, thread, revealing)
+    }
+
+    private fun placeOf(project: Project, thread: CommentThread): OpenFileDescriptor? {
+        val path = thread.file ?: return null
+        val file = project.guessProjectDir()?.findFileByRelativePath(path) ?: return null
+        val line = MarginalisStore.getInstance(project).syncLine(thread) ?: 0
+        return OpenFileDescriptor(project, file, line, 0)
+    }
+
+    private fun recordingHistory(project: Project, move: () -> Unit) {
+        CommandProcessor.getInstance().executeCommand(project, {
+            IdeDocumentHistory.getInstance(project).includeCurrentCommandAsNavigation()
+            move()
+        }, null, null)
     }
 
     // A review diff's editor holds a revision's copy of the file, so only its tag names the file it shows.
