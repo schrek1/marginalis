@@ -69,6 +69,35 @@ def put_caret_in_review(after: str, line: int) -> None:
     """)
 
 
+def focus_reply_box(thread_id: str) -> str:
+    """Opens the thread's reply box and makes it the frame's focus owner. The sandbox IDE runs in the background, so
+    a focus request alone is not kept: the frame's most recent focus owner is recorded, as the window would."""
+    ui.js(ui._FIND + """
+        var link = find(component, function (c) {
+            return c instanceof com.intellij.ui.components.ActionLink && c.getText() == 'Reply…';
+        });
+        if (link != null) link.doClick();
+        String(true)
+    """, component_id=ui.thread_panel(thread_id))
+    time.sleep(1.0)
+    return ui.js(ui._FIND + """
+        var area = find(component, function (c) { return c instanceof com.intellij.ui.EditorTextField; });
+        var target = area.getEditor().getContentComponent();
+        target.requestFocusInWindow();
+        var window = javax.swing.SwingUtilities.getWindowAncestor(target);
+        if (window.getMostRecentFocusOwner() !== target) {
+            var types = java.lang.reflect.Array.newInstance(java.lang.Class.forName('java.lang.Class'), 1);
+            types[0] = java.lang.Class.forName('java.awt.Component');
+            var remember = java.lang.Class.forName('java.awt.KeyboardFocusManager').getDeclaredMethod('setMostRecentFocusOwner', types);
+            remember.setAccessible(true);
+            var args = java.lang.reflect.Array.newInstance(java.lang.Class.forName('java.lang.Object'), 1);
+            args[0] = target;
+            remember.invoke(null, args);
+        }
+        String(window.getMostRecentFocusOwner() === target)
+    """, component_id=ui.thread_panel(thread_id))
+
+
 class Scenarios:
     def __init__(self) -> None:
         self.failures: list[str] = []
@@ -112,6 +141,20 @@ class Scenarios:
         name = ui.selected_node_name()
         self.check("on a line without a thread it selects the file", name == "review_target.py", name)
 
+    def button_selects_the_thread_whose_reply_box_has_the_focus(self) -> None:
+        ui.open_thread_in_diff(self.total, walkthrough.TARGET_AFTER)
+        walkthrough.wait_until(lambda: self.total in ui.thread_ids_open_in_diff(walkthrough.TARGET_AFTER))
+        put_caret_in_review(walkthrough.TARGET_AFTER, IMPORT_IN_REVIEW)
+        ui.select_dir("Open", "src")
+        focused = focus_reply_box(self.total)
+        self.check("setup: the step's reply box holds the focus", focused == "true", focused)
+        ui.press_tool_window_action(BUTTON)
+        time.sleep(PAUSE_S)
+        got = ui.selected_step() or {}
+        ui.screenshot_tool_window(SHOTS / "2-reply-box.png")
+        self.check("with the caret in a thread's reply box it selects that thread, not the caret line's file",
+                   got.get("thread") == self.total, got)
+
     def run(self) -> int:
         SHOTS.mkdir(parents=True, exist_ok=True)
         for scenario in (
@@ -119,6 +162,7 @@ class Scenarios:
             self.button_is_enabled_in_a_review_diff,
             self.button_selects_the_thread_on_the_caret_line,
             self.button_selects_the_file_elsewhere,
+            self.button_selects_the_thread_whose_reply_box_has_the_focus,
         ):
             try:
                 scenario()

@@ -19,7 +19,8 @@ History before 0.1.19 lives in git tags.
 - "Select Opened Thread" in the Marginalis tool window works with a
   pull or merge request review diff in front too, instead of staying
   greyed out: it picks the thread on your caret's line in the diff, or
-  the diff's file.
+  the diff's file. While you are writing a reply, it picks the thread
+  you are replying to, in an editor, a diff or the Margin tab.
 - Stepping through the Marginalis tool window with Next and Previous no
   longer loses its place: the selection survives the tree refreshing,
   so the next press continues from the step you are on instead of the

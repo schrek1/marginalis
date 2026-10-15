@@ -28,8 +28,10 @@ import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
+import com.intellij.openapi.wm.WindowManager
 import com.intellij.pom.Navigatable
 import com.intellij.ui.ColoredTreeCellRenderer
+import com.intellij.ui.ComponentUtil
 import com.intellij.ui.PopupHandler
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.JBLabel
@@ -64,12 +66,14 @@ import dev.marginalis.plugin.ui.RELAYED_STAYS_DELETED
 import dev.marginalis.plugin.ui.StopAgentsGroup
 import dev.marginalis.plugin.ui.SubmitRoundAction
 import dev.marginalis.plugin.ui.ThreadInlayManager
+import dev.marginalis.plugin.ui.ThreadPanel
 import dev.marginalis.plugin.ui.WalkthroughNavigator
 import dev.marginalis.plugin.ui.diff.ReviewDiffMarkers
 import dev.marginalis.plugin.ui.tab.ProjectTab
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Component
+import java.awt.KeyboardFocusManager
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import javax.swing.JMenuItem
@@ -200,11 +204,12 @@ private class SelectOpenedThreadAction(private val panel: MarginalisToolWindowPa
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
 
     override fun update(e: AnActionEvent) {
-        e.presentation.isEnabled = e.project?.let(::editorInFront) != null
+        e.presentation.isEnabled = e.project?.let { focusedThread(it) ?: editorInFront(it) } != null
     }
 
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
+        focusedThread(project)?.let { return panel.reveal(it) }
         val editor = editorInFront(project) ?: return
         val file = projectPathOf(project, editor) ?: return
         val caretLine = editor.caretModel.logicalPosition.line
@@ -214,6 +219,16 @@ private class SelectOpenedThreadAction(private val panel: MarginalisToolWindowPa
         val onLine = store.threads.all().filter { it.file == file && lineOf(it) == caretLine }
         val thread = onLine.firstOrNull { it.status is ThreadStatus.Open } ?: onLine.firstOrNull()
         if (thread != null) panel.reveal(thread) else panel.selectFile(file)
+    }
+
+    // Typing a reply is reading that thread, wherever the code's caret is: an editor, a diff or the Margin tab.
+    private fun focusedThread(project: Project): CommentThread? {
+        // With the IDE in the background there is no focus owner, only the frame's last one.
+        val focused = KeyboardFocusManager.getCurrentKeyboardFocusManager().focusOwner
+            ?: WindowManager.getInstance().getFrame(project)?.mostRecentFocusOwner
+            ?: return null
+        val threadPanel = ComponentUtil.getParentOfType(ThreadPanel::class.java, focused) ?: return null
+        return MarginalisStore.getInstance(project).threads.byId(threadPanel.threadId)
     }
 
     // A diff in an editor tab is no text editor to the file editor manager, so look for its side showing a project file.
