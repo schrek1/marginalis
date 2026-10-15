@@ -105,6 +105,8 @@ class ThreadPanel(
     private val onDraftPresenceChanged: () -> Unit = {},
 ) : JPanel(BorderLayout()) {
 
+    val threadId: String get() = thread.id
+
     private val messagesBox = Box.createVerticalBox()
     private val messageComponents = mutableMapOf<String, JComponent>()
     private val statusLabel = JBLabel()
@@ -331,7 +333,7 @@ class ThreadPanel(
             MarginalisStore.getInstance(project).threads.notifyChanged(thread)
             if (next != null) {
                 onClose()
-                WalkthroughNavigator.navigateTo(project, next)
+                WalkthroughNavigator.navigateTo(project, next, from = editor)
             }
         } else {
             thread.reopen()
@@ -368,6 +370,7 @@ class ThreadPanel(
             lastStep,
             Separator.getInstance(),
             liveAction(),
+            selectInToolWindowAction(),
             copyReferenceAction(),
             resolveAction(),
             deleteAction(),
@@ -486,6 +489,17 @@ class ThreadPanel(
         override fun actionPerformed(e: AnActionEvent) = copyReference(thread.id)
     }
 
+    private fun selectInToolWindowAction(): AnAction =
+        object : AnAction("Select in Marginalis", "Show this thread in the Marginalis tool window", AllIcons.General.Locate) {
+            override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+
+            override fun update(e: AnActionEvent) {
+                e.presentation.isEnabledAndVisible = !isDraft()
+            }
+
+            override fun actionPerformed(e: AnActionEvent) = FileLevelThreads.revealInToolWindow(project, thread)
+        }
+
     private fun copyReference(id: String) {
         CopyPasteManager.getInstance().setContents(StringSelection(Reference.of(id).toString()))
     }
@@ -517,7 +531,7 @@ class ThreadPanel(
             val (walk, i) = WalkthroughNavigator.walkFrom(project, thread)
             val destination = target(walk, i) ?: return
             onClose()
-            WalkthroughNavigator.navigateTo(project, destination)
+            WalkthroughNavigator.navigateTo(project, destination, from = editor)
         }
     }
 
