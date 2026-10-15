@@ -19,6 +19,7 @@ import sandbox
 
 PROJECT_NAME = "project"
 AGENT = {"author_name": "Claude", "author_id": "claude-sandbox"}
+HEADER_ATTEMPTS = 60  # one per second while the tool window header is still being built
 
 _PRELUDE = """
 var pluginLoader = com.intellij.ide.plugins.PluginManagerCore
@@ -101,13 +102,14 @@ def press_tool_window_action(text: str) -> None:
     absent from the robot's hierarchy, and both `click()` and `tryToExecute` silently skip them. The button's own
     action runs instead, with the button's data context."""
     escaped = json.dumps(text)
-    # Right after a start the header is built a moment after the tool window shows.
-    for attempt in range(15):
+    # Right after a start the header is built a while after the tool window shows; with several sandboxes busy at
+    # once that took longer than 15 s.
+    for attempt in range(HEADER_ATTEMPTS):
         try:
             _press_tool_window_action(escaped)
             return
         except robot.RobotError as error:
-            if "no tool window button" not in str(error) or attempt == 14:
+            if "no tool window button" not in str(error) or attempt == HEADER_ATTEMPTS - 1:
                 raise
             time.sleep(1)
 
@@ -837,7 +839,7 @@ def choose_guided_layout(label: str) -> None:
     """Picks an entry of the tool window header's Guided Layout menu through the button's own action group (the
     header paints its buttons only on hover, see press_tool_window_action)."""
     escaped = json.dumps(label)
-    for attempt in range(15):
+    for attempt in range(HEADER_ATTEMPTS):
         try:
             js(_FIND + f"""
                 var window = com.intellij.openapi.wm.ToolWindowManager.getInstance(project).getToolWindow('Marginalis');
@@ -861,7 +863,7 @@ def choose_guided_layout(label: str) -> None:
             """)
             return
         except robot.RobotError as error:
-            if "no tool window button" not in str(error) or attempt == 14:
+            if "no tool window button" not in str(error) or attempt == HEADER_ATTEMPTS - 1:
                 raise
             time.sleep(1)
 
