@@ -37,6 +37,7 @@ import javax.swing.JPopupMenu
 import javax.swing.event.HyperlinkEvent
 import javax.swing.event.PopupMenuEvent
 import javax.swing.event.PopupMenuListener
+import javax.swing.text.DefaultCaret
 
 /**
  * Deliberately CommonMark only (no tables/images/raw HTML): each extra
@@ -102,6 +103,10 @@ object MarkdownRenderer {
         pane.isOpaque = false
         pane.putClientProperty(JEditorPane.HONOR_DISPLAY_PROPERTIES, true)
         pane.font = JBUI.Fonts.label()
+        // A caret that follows the text scrolls it into view later, and that
+        // scroll reaches the host editor: rebuilding a panel (e.g. on zoom)
+        // would yank the code view to the end of the thread.
+        (pane.caret as? DefaultCaret)?.updatePolicy = DefaultCaret.NEVER_UPDATE
         pane.text = "<html><body>$html</body></html>"
         pane.addHyperlinkListener { e ->
             if (e.eventType == HyperlinkEvent.EventType.ACTIVATED) activate(project, e)

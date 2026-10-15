@@ -81,6 +81,7 @@ class ProjectTabPanel(private val project: Project) : Disposable {
     private val conversations = HashMap<String, ConversationCard>()
     private var draftShown: DraftShown? = null
     private var focusOnceShown: String? = null
+    private var clickedCard: String? = null
 
     private val counts = JBLabel()
     private val newCount = JBLabel().apply { foreground = MarginalisPalette.ACCENT }
@@ -106,6 +107,14 @@ class ProjectTabPanel(private val project: Project) : Disposable {
         override fun getScrollableTracksViewportWidth(): Boolean = true
 
         override fun getScrollableTracksViewportHeight(): Boolean = false
+
+        // A thread panel re-renders itself when its thread changes, so the anchor is kept around every layout,
+        // not only around refresh(): before it the cards still sit where the user sees them.
+        override fun validateTree() {
+            val anchor = anchorBeforeLayout()
+            super.validateTree()
+            anchor?.let(::keepInPlace)
+        }
     }.apply {
         layout = BoxLayout(this, BoxLayout.Y_AXIS)
         border = JBUI.Borders.empty(8, 12, 12, 12)
@@ -268,7 +277,7 @@ class ProjectTabPanel(private val project: Project) : Disposable {
 
     private fun refresh(anchorOn: String? = null) {
         if (disposed) return
-        val anchor = anchorBeforeRefresh(anchorOn)
+        anchorOn?.let { clickedCard = it }
         val prefs = settings.projectTabPrefs
         val people = settings.people
         val threads = store.threads.all()
@@ -299,22 +308,20 @@ class ProjectTabPanel(private val project: Project) : Disposable {
         stack.arrange(children)
         forgetCardsNotIn(shownEntries, resolvedThreads)
         focusFirstSentThread()
-        keepInPlace(anchor)
     }
 
-    private fun anchorBeforeRefresh(anchorOn: String?): ScrollAnchor.Anchor? {
+    private fun anchorBeforeLayout(): ScrollAnchor.Anchor? {
+        val clicked = clickedCard.also { clickedCard = null }
         val view = scroll.viewport.viewRect
         if (view.height <= 0 || scroll.verticalScrollBar.valueIsAdjusting) return null
         val boxes = anchorTargets().map { (key, component) ->
             val top = topInStack(component)
             ScrollAnchor.Box(key, top, top + component.height)
         }
-        return ScrollAnchor.pick(boxes, view.y, view.height, preferred = listOf(anchorOn, writingIn()))
+        return ScrollAnchor.pick(boxes, view.y, view.height, preferred = listOf(clicked, writingIn()))
     }
 
-    private fun keepInPlace(anchor: ScrollAnchor.Anchor?) {
-        anchor ?: return
-        root.validate()
+    private fun keepInPlace(anchor: ScrollAnchor.Anchor) {
         val component = anchorTargets()[anchor.key] ?: return
         val viewport = scroll.viewport
         val viewTop = ScrollAnchor.viewTopKeeping(anchor, topInStack(component), stack.height, viewport.extentSize.height)
