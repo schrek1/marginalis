@@ -30,10 +30,11 @@ import org.intellij.markdown.IElementType
 import org.intellij.markdown.MarkdownElementTypes
 import org.intellij.markdown.MarkdownTokenTypes
 import org.intellij.markdown.ast.ASTNode
+import org.intellij.markdown.ast.LeafASTNode
+import org.intellij.markdown.ast.accept
 import org.intellij.markdown.flavours.gfm.GFMElementTypes
 import org.intellij.markdown.flavours.gfm.GFMFlavourDescriptor
 import org.intellij.markdown.flavours.gfm.GFMTokenTypes
-import org.intellij.markdown.html.EqualDelimiterTrimmingInlineTagProvider
 import org.intellij.markdown.html.GeneratingProvider
 import org.intellij.markdown.html.HtmlGenerator
 import org.intellij.markdown.parser.LinkMap
@@ -123,8 +124,24 @@ object MarkdownRenderer {
     private class Flavour : GFMFlavourDescriptor() {
         override fun createHtmlGeneratingProviders(linkMap: LinkMap, baseURI: URI?): Map<IElementType, GeneratingProvider> =
             super.createHtmlGeneratingProviders(linkMap, baseURI) +
-                (GFMElementTypes.STRIKETHROUGH to EqualDelimiterTrimmingInlineTagProvider("s", GFMTokenTypes.TILDE)) +
+                (GFMElementTypes.STRIKETHROUGH to Strikethrough) +
                 (MarkdownTokenTypes.EOL to TypedLineBreaks)
+    }
+
+    // The markdown library's own delimiter-trimming provider is newer than the 2025.2 floor.
+    private object Strikethrough : GeneratingProvider {
+        override fun processNode(visitor: HtmlGenerator.HtmlGeneratingVisitor, text: String, node: ASTNode) {
+            val children = node.children
+            var from = 0
+            var to = children.size
+            while (from < to && children[from].type == GFMTokenTypes.TILDE) from++
+            while (to > from && children[to - 1].type == GFMTokenTypes.TILDE) to--
+            visitor.consumeHtml("<s>")
+            children.subList(from, to).forEach { child ->
+                if (child is LeafASTNode) visitor.visitLeaf(child) else child.accept(visitor)
+            }
+            visitor.consumeHtml("</s>")
+        }
     }
 
     // Line breaks render as typed: a single Enter inside a paragraph is a new line (as in GitHub comments), and each
