@@ -278,8 +278,9 @@ private sealed class NodeData {
         override val key get() = "section:$title"
     }
 
-    class ProjectNode(val count: Int) : NodeData() {
-        override val key get() = "project"
+    /** [steps]: set for a run of consecutive project-level walkthrough steps in a step-number list, which may recur. */
+    class ProjectNode(val count: Int, val steps: IntRange? = null) : NodeData() {
+        override val key get() = "project" + (steps?.let { "@${it.first}" } ?: "")
     }
 
     class DirNode(val name: String, val count: Int) : NodeData() {
@@ -613,12 +614,16 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
 
     private fun addStepList(section: DefaultMutableTreeNode, steps: List<CommentThread>, prefixFor: (CommentThread) -> String) {
         val ordered = steps.sortedWith(Walkthrough.byStepNumber)
-        for (run in StepRuns.of(ordered) { step -> step.file.takeUnless { step.isProjectLevel } }) {
+        for (run in StepRuns.of(ordered, CommentThread::file)) {
             if (run.size == 1) {
                 section.add(DefaultMutableTreeNode(NodeData.ThreadNode(run.single(), prefixFor(run.single()), showFile = true)))
                 continue
             }
-            val runNode = DefaultMutableTreeNode(NodeData.FileNode(run.first().file!!, run, run.first().order!!..run.last().order!!))
+            val stepRange = run.first().order!!..run.last().order!!
+            val file = run.first().file
+            val runNode = DefaultMutableTreeNode(
+                if (file == null) NodeData.ProjectNode(run.size, stepRange) else NodeData.FileNode(file, run, stepRange),
+            )
             run.forEach { step -> runNode.add(DefaultMutableTreeNode(NodeData.ThreadNode(step, prefixFor(step)))) }
             section.add(runNode)
         }
@@ -810,7 +815,9 @@ private class RowWords : ColoredTreeCellRenderer() {
             is NodeData.ProjectNode -> {
                 icon = MarginalisIcons.ProjectMark
                 append("Project", SimpleTextAttributes.REGULAR_ATTRIBUTES)
-                append("  ${data.count}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+                val steps = data.steps
+                val tally = if (steps == null) "${data.count}" else "steps ${steps.first}–${steps.last}"
+                append("  $tally", SimpleTextAttributes.GRAYED_ATTRIBUTES)
             }
             is NodeData.DirNode -> {
                 icon = AllIcons.Nodes.Folder
