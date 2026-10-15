@@ -5,8 +5,9 @@ Restarts the sandbox (fresh project) itself:
 
 Four line threads in one file cover every case: A an agent reply the user has not read, B one the user read but
 did not answer, C one the user answered (the agent's move), D an FYI the user read. Two project threads repeat
-A and B in the Margin tab. The user reads through the store, as an open thread panel does once it is on screen;
-the panel itself only marks read while the IDE is the active window, which the sandbox on another desktop is not.
+A and B in the Margin tab. The user reads B, C, D and Project B through the store, as an open thread panel does
+once it is on screen, so which threads are read does not depend on what the sandbox happens to show. Project A
+arrives while the code editor is in front: a card on screen in the Margin tab would be read at once.
 """
 from __future__ import annotations
 
@@ -226,7 +227,6 @@ class Scenarios:
         self.ids["D"] = agent_adds_fyi(2, "D · an FYI you have already read")
         self.ids["B"] = ui.agent_adds_line_thread(FILE, 5, "B · a reply you read but did not answer")
         self.ids["C"] = ui.agent_adds_line_thread(FILE, 9, "C · you answered, the agent is on it")
-        self.ids["Project A"] = ui.agent_starts_project_thread("Project A · a new project note, unread")
         self.ids["Project B"] = ui.agent_starts_project_thread("Project B · a project note you read, not answered")
         ui.open_thread_in_editor(self.ids["C"], FILE)
         time.sleep(SETTLE_S)
@@ -235,10 +235,20 @@ class Scenarios:
         time.sleep(SETTLE_S)
         for name in ("B", "C", "D", "Project B"):
             user_reads(self.ids[name])
+        # Project A arrives while the user is back in the code: an expanded card on screen in the active IDE is read
+        # at once, so posting it with the Margin tab in front would read it before any check.
+        ui.open_in_editor(FILE)
+        time.sleep(SETTLE_S)
+        self.ids["Project A"] = ui.agent_starts_project_thread("Project A · a new project note, unread")
+        time.sleep(SETTLE_S)
+        ui.open_in_editor(FILE)
         time.sleep(SETTLE_S)
         self.shot("1-seeded")
+        self.check_still_unread("setup")
+
+    def check_still_unread(self, when: str) -> None:
         unread = {name: unread_by_user(self.ids[name]) for name in ("A", "Project A")}
-        self.check("setup: A and Project A are still unread", all(count > 0 for count in unread.values()), unread)
+        self.check(f"{when}: A and Project A are still unread", all(count > 0 for count in unread.values()), unread)
 
     def tree_shows_the_envelope_only_while_unread(self) -> None:
         signals = self.thread_signals()
@@ -253,6 +263,7 @@ class Scenarios:
         self.check("stripe: the envelope badge stays while A is unread", badge == "AWAITING_YOU", badge)
 
     def margin_tab_shows_the_envelope_only_while_unread(self) -> None:
+        self.check_still_unread("before the Margin tab checks")
         title = margin_tab_title()
         self.check("Margin tab: the title counts only the unread project thread (✉ 1)", title == "✉ 1", title)
         cards = margin_card_signals()

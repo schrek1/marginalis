@@ -23,7 +23,7 @@
 Four line threads in `src/review_target.py`: A an agent reply you have not read, B one you read but did not
 answer, C one you answered, D an FYI you read. Project A and Project B repeat A and B in the Margin tab.
 
-- setup: A and Project A are still unread
+- setup: A and Project A are still unread (and again before the Margin tab checks)
 - tree: thread A shows you, B none, C agent, D none, Project A you, Project B none
 - tree: the file row counts ✉ 1 and ✈ 1
 - stripe: the envelope badge stays while A is unread
@@ -39,8 +39,10 @@ answer, C one you answered, D an FYI you read. Project A and Project B repeat A 
 - tree: a new agent message on B brings its envelope back; stripe: the envelope badge returns with it
 - stripe: an open blocker's red badge wins over the envelope
 
-The robot marks a thread read through the store, as an open thread panel does once it is on screen. The panel
-itself marks read only while the IDE is the active window, which the sandbox on another desktop never is.
+The robot marks B, C, D and Project B read through the store, as an open thread panel does once it is on
+screen. Project A is posted while the code editor is in front: a your-move card opens expanded, and on screen in
+the active IDE it is read at once. "A and Project A are still unread" is checked after the setup and again right
+before the Margin tab checks.
 
 ## Manual
 
@@ -56,6 +58,7 @@ itself marks read only while the IDE is the active window, which the sandbox on 
 
 ## On main
 
-Not recorded yet. Expected to fail on `main`: tree B and Project B (✉ shown), the file row's count (✉ 2),
-the Margin title (✉ 2) and Project B's card, and after everything is read the plain stripe button, the file
-row without ✉ and the "Margin" title. The rest is expected to pass on `main` too.
+On `schreko_stable` without the change, 8 of 24 checks fail: tree B and Project B (✉ shown), the file row's
+count (✉ 2), the Margin title (✉ 2), Project B's card (✉ shown), and once everything is read the stripe
+button (still the envelope), the file row (still ✉ 2) and the title (still ✉ 2). The rest pass there too.
+With the change all 24 pass.
