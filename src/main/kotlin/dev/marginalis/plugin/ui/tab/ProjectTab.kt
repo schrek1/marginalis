@@ -76,6 +76,10 @@ object ProjectTab {
         if (outcome != Outcome.STAY_CLOSED) openBehindSelection(project, pin = outcome == Outcome.OPEN_PINNED)
     }
 
+    fun showBehindSelection(project: Project) {
+        if (!FileEditorManager.getInstance(project).isFileOpen(MarginFile)) openBehindSelection(project, pin = false)
+    }
+
     private fun openBehindSelection(project: Project, pin: Boolean) {
         val editors = FileEditorManager.getInstance(project)
         val selected = editors.selectedFiles.firstOrNull()
