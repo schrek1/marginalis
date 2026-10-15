@@ -8,11 +8,14 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
 import dev.marginalis.core.CommentThread
 import dev.marginalis.core.Message
+import dev.marginalis.core.ProjectTabStartup
+import dev.marginalis.core.ProjectTabStartup.Outcome
+import dev.marginalis.plugin.store.MarginalisStore
 
 object ProjectTab {
 
-    private const val REOPEN_AFTER_RELOAD = "marginalis.projectTab.reopen"
-    private const val PINNED_BEFORE_RELOAD = "marginalis.projectTab.pinned"
+    private const val WAS_OPEN = "marginalis.projectTab.reopen"
+    private const val WAS_PINNED = "marginalis.projectTab.pinned"
     private const val INTRODUCED = "marginalis.projectTab.introduced"
 
     fun reveal(project: Project, thread: CommentThread, revealing: Message? = null) =
@@ -43,25 +46,34 @@ object ProjectTab {
     fun closeEverywhere() {
         for (project in ProjectManager.getInstance().openProjects) {
             if (project.isDisposed) continue
-            val editors = FileEditorManager.getInstance(project)
-            val properties = PropertiesComponent.getInstance(project)
-            properties.setValue(REOPEN_AFTER_RELOAD, editors.isFileOpen(MarginFile))
-            properties.setValue(PINNED_BEFORE_RELOAD, isPinned(project))
-            editors.closeFile(MarginFile)
+            park(project)
             EditorHistoryManager.getInstance(project).removeFile(MarginFile)
         }
         MarginFile.isValid = false
     }
 
+    // The platform restores editor tabs before the project's threads load, so it can't tell an empty tab from
+    // a busy one. The tab never reaches the saved editor state; openOnStartup decides once the threads are in.
+    fun park(project: Project) {
+        val editors = FileEditorManager.getInstance(project)
+        val properties = PropertiesComponent.getInstance(project)
+        properties.setValue(WAS_OPEN, editors.isFileOpen(MarginFile))
+        properties.setValue(WAS_PINNED, isPinned(project))
+        editors.closeFile(MarginFile)
+    }
+
     fun openOnStartup(project: Project) {
         val properties = PropertiesComponent.getInstance(project)
-        val reopen = properties.getBoolean(REOPEN_AFTER_RELOAD)
-        val pinned = properties.getBoolean(PINNED_BEFORE_RELOAD)
-        properties.unsetValue(REOPEN_AFTER_RELOAD)
-        properties.unsetValue(PINNED_BEFORE_RELOAD)
-        val firstRun = !properties.getBoolean(INTRODUCED)
+        val outcome = ProjectTabStartup.outcome(
+            threads = MarginalisStore.getInstance(project).threads.all(),
+            wasOpen = properties.getBoolean(WAS_OPEN),
+            wasPinned = properties.getBoolean(WAS_PINNED),
+            firstOpen = !properties.getBoolean(INTRODUCED),
+        )
+        properties.unsetValue(WAS_OPEN)
+        properties.unsetValue(WAS_PINNED)
         properties.setValue(INTRODUCED, true)
-        if (reopen || firstRun) openBehindSelection(project, pin = pinned || firstRun)
+        if (outcome != Outcome.STAY_CLOSED) openBehindSelection(project, pin = outcome == Outcome.OPEN_PINNED)
     }
 
     private fun openBehindSelection(project: Project, pin: Boolean) {

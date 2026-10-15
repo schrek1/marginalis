@@ -5,6 +5,15 @@ All notable changes to Marginalis. The format follows
 current version's section into the plugin's Marketplace change notes.
 History before 0.1.19 lives in git tags.
 
+## [Unreleased]
+
+### Fixed
+
+- The Margin tab shows only when there is something in it. A project
+  without project threads opens without it, and the tab appears with
+  the first one. It no longer pins itself, and a tab left empty stays
+  closed after a restart.
+
 ## [0.2.2] - 2026-10-04
 
 ### Changed
