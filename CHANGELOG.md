@@ -90,6 +90,12 @@ History before 0.1.19 lives in git tags.
   and anything you haven't read yet; the read middle hides behind one line
   that shows the full history with a click, and Shorten History in the
   thread header hides it again.
+### Fixed
+
+- The Margin tab shows only when there is something in it. A project
+  without project threads opens without it, and the tab appears with
+  the first one. It no longer pins itself, and a tab left empty stays
+  closed after a restart.
 
 ## [0.2.2] - 2026-10-04
 
