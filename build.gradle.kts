@@ -31,6 +31,10 @@ repositories {
     intellijPlatform {
         defaultRepositories()
     }
+    // Remote-Robot's client, for the sandbox UI tests only.
+    maven("https://packages.jetbrains.team/maven/p/ij/intellij-dependencies") {
+        content { includeGroup("com.intellij.remoterobot") }
+    }
 }
 
 sourceSets {
@@ -38,6 +42,8 @@ sourceSets {
 }
 
 val ideStarterVersion = "262.9437.185"
+// The same version as the robot-server plugin sandbox/init.gradle installs into the sandbox IDE.
+val remoteRobotVersion = "0.11.23"
 
 dependencies {
     // The domain core: model, lifecycle, anchoring policy, persistence codec.
@@ -57,6 +63,9 @@ dependencies {
     // from the compile platform; on a 2025.2 platform the product modules
     // aren't added for us.
     "uiTestImplementation"("com.jetbrains.intellij.tools:ide-starter-product-idea-ultimate:$ideStarterVersion")
+    "uiTestImplementation"("com.intellij.remoterobot:remote-robot:$remoteRobotVersion")
+    // Remote-Robot's own HTTP client, given a read timeout long enough for a forced settings save.
+    "uiTestImplementation"("com.squareup.okhttp3:okhttp:3.14.9")
 
     intellijPlatform {
         // Markdown parsing for message bodies comes from the IDE's bundled
@@ -169,12 +178,35 @@ tasks.register<Test>("uiTest") {
     testClassesDirs = uiTestSourceSet.output.classesDirs
     classpath = uiTestSourceSet.runtimeClasspath
     useJUnitPlatform { includeEngines("junit-jupiter") }
+    filter { excludeTestsMatching("dev.marginalis.plugin.sandbox.*") }
     val plugin = tasks.buildPlugin.flatMap { it.archiveFile }
     dependsOn(tasks.buildPlugin)
     systemProperty("marginalis.plugin", plugin.get().asFile.absolutePath)
     val installedIde = providers.gradleProperty("marginalis.localIde").orNull
     onlyIf("marginalis.localIde names an installed IDE to drive") { installedIde != null }
     installedIde?.let { systemProperty("marginalis.uiTestIde", it) }
+}
+
+tasks.register<Test>("uiSandboxTest") {
+    description = "Runs the sandbox scenarios against a sandbox IDE built from this checkout (see sandbox/README.md)."
+    group = "verification"
+    val uiTestSourceSet = sourceSets["uiTest"]
+    testClassesDirs = uiTestSourceSet.output.classesDirs
+    classpath = uiTestSourceSet.runtimeClasspath
+    useJUnitPlatform { includeEngines("junit-jupiter") }
+    filter { includeTestsMatching("dev.marginalis.plugin.sandbox.*") }
+    // A scenario's outcome depends on the IDE it drives, not only on these inputs.
+    outputs.upToDateWhen { false }
+    testLogging {
+        showStandardStreams = true
+        events("passed", "failed", "skipped")
+    }
+    // Remote-Robot's client reads an IDE-side error into a Throwable through Gson's reflection.
+    jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED")
+    systemProperty("marginalis.sandbox.featureDir", layout.projectDirectory.asFile.absolutePath)
+    val installedIde = providers.gradleProperty("marginalis.localIde").orNull
+    onlyIf("marginalis.localIde names the installed IDE the sandbox runs on") { installedIde != null }
+    installedIde?.let { systemProperty("marginalis.localIde", it) }
 }
 
 tasks.named<org.gradle.api.tasks.JavaExec>("runIde") {
