@@ -835,7 +835,10 @@ class ThreadPanel(
         ApplicationManager.getApplication().messageBus.connect(attached)
             .subscribe(AvatarsListener.TOPIC, AvatarsListener { repaint() })
         editor?.scrollingModel?.addVisibleAreaListener({ markReadIfSeen() }, attached)
-        markReadIfSeenLater()
+        // Nothing watches the thread while detached (a background editor tab is removed from the
+        // hierarchy), so catch up on what changed meanwhile; this also marks it read once seen.
+        // A draft is not in the store yet, and the update would close it as deleted.
+        if (!isDraft()) threadUpdate.request()
     }
 
     override fun removeNotify() {
