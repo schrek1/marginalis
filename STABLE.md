@@ -24,3 +24,4 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-10 | Lay out the Guided section by step number, by folder or by file | `feat/MARG-10-guided-layout` | schrek1/marginalis#37 | MuhammadFarag/marginalis#51 | `a6a78f7` |
 | MARG-29 | Sandbox harness in the repo, with one runbook per feature | `chore/MARG-29-sandbox-in-repo` | schrek1/marginalis#40 | — | `ba2ef0a` |
 | MARG-28 | Runbooks and scenarios for the features already in schreko_stable | `docs/MARG-28-runbooks` | — | — | `a90290b` |
+| MARG-17 | Walkthrough steps in other files of a review diff open in that diff | `feat/MARG-17-steps-open-in-review-diff` | schrek1/marginalis#52 | — | `ebbe7f7` |
