@@ -155,6 +155,13 @@ intellijPlatform {
     }
 }
 
+tasks.test {
+    // Bylines format the clock with the default locale; pin it so AM/PM reads
+    // the same on every machine, as it does on CI.
+    systemProperty("user.language", "en")
+    systemProperty("user.country", "US")
+}
+
 tasks.register<Test>("uiTest") {
     description = "Drives a real IDE with the built plugin installed."
     group = "verification"

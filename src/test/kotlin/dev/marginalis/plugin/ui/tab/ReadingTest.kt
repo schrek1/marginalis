@@ -99,7 +99,7 @@ class ReadingTest : TabInFrontTestCase() {
 
         tab.click("Which release name?")
 
-        assertEquals(listOf("✉ Which release name? [expanded]"), shown())
+        assertEquals(listOf("Which release name? [expanded]"), shown())
         assertEquals("1 open · 1 your move · 0 agent's move", tab.counts())
     }
 

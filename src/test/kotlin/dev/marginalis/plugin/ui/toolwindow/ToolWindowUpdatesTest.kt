@@ -135,7 +135,7 @@ class ToolWindowUpdatesTest : ToolWindowTestCase() {
     }
 
     @DisplayOnly
-    fun testARefreshUnfoldsTheResolvedSectionOnlyAlongTheSelectedThread() {
+    fun testARefreshKeepsAFolderYouUnfoldedUnderResolvedOpen() {
         val steps = interleaved()
         agent.post("comment_resolve", "thread_id" to steps.getValue(8))
         agent.post("comment_resolve", "thread_id" to steps.getValue(18))
@@ -155,13 +155,13 @@ class ToolWindowUpdatesTest : ToolWindowTestCase() {
                   Order.java
                     L10  Step 8
                 shop-orders/src/main/java/com/acme/orders/api  2
+                  OrderController.java
             """.trimIndent(),
             section("Resolved"),
         )
     }
 
-    // FixMe: Known issue - #46 any thread change unfolds every folder the user folded, and folds the Resolved section again
-    fun testFoldedFoldersUnfoldAndTheResolvedSectionFoldsAgainWhenAThreadChanges() {
+    fun testFoldedFoldersStayFoldedAndTheResolvedSectionStaysOpenWhenAThreadChanges() {
         sample()
         sample("lib/Other.kt")
         val id = agent.addOnLine(5, "body" to "first")
@@ -174,8 +174,8 @@ class ToolWindowUpdatesTest : ToolWindowTestCase() {
 
         window.rebuiltBy { agent.reply(id, "more") }
 
-        assertTrue(window.isExpanded("src"))
-        assertFalse(window.isExpanded("Resolved"))
+        assertFalse(window.isExpanded("src"))
+        assertTrue(window.isExpanded("Resolved"))
     }
 
     private fun assertBadge(badge: StripeBadge?) {

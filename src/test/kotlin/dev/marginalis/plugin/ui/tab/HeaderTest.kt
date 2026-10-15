@@ -28,7 +28,7 @@ class HeaderTest : MarginTabTestCase() {
 
     fun testSubmitRoundIsOffWhileNoAgentListensAndWakesTheListenerWithYourReplies() {
         val alpha = agent.ask("Which release name?")
-        assertEquals(listOf("Submit round", "Stop agents"), tab.toolbar())
+        assertEquals(listOf("Submit round", "Stop agents", "Sort: Oldest first"), tab.toolbar())
         assertFalse(tab.isEnabled("Submit round"))
 
         val waiting = agent.startWait()
@@ -73,17 +73,17 @@ class HeaderTest : MarginTabTestCase() {
         assertEquals(emptyList<String>(), tab.presence())
     }
 
-    fun testANewProjectThreadStartsAsADraftAtTheTopAndReachesTheAgentWhenSubmitted() {
+    fun testANewProjectThreadStartsAsADraftAtTheBottomAndReachesTheAgentWhenSubmitted() {
         agent.ask("Existing question")
 
         tab.newProjectThread()
-        assertEquals(listOf("[draft] new comment — unsent", "✉ Existing question ● [expanded]"), shown())
+        assertEquals(listOf("✉ Existing question ● [expanded]", "[draft] new comment — unsent"), shown())
 
         user.type(tab.draft()!!, "Plan the 0.3 release")
         user.submit(tab.draft()!!)
 
         assertNull(tab.draft())
-        assertEquals(listOf("✈ Plan the 0.3 release [expanded]", "✉ Existing question ● [expanded]"), shown())
+        assertEquals(listOf("✉ Existing question ● [expanded]", "✈ Plan the 0.3 release [expanded]"), shown())
         val started = agent.threads().single { it.messages().first().string("body") == "Plan the 0.3 release" }
         assertFalse(started.has("file"))
     }

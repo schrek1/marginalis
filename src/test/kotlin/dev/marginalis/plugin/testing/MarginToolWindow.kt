@@ -337,6 +337,13 @@ class MarginToolWindow(private val project: Project, private val disposable: Dis
         settle()
     }
 
+    fun layOutGuided(label: String) {
+        val choice = (action("Guided Layout") as ActionGroup).getChildren(null).filterIsInstance<ToggleAction>()
+            .single { it.templatePresentation.text == label }
+        choice.setSelected(event(choice), true)
+        settle()
+    }
+
     fun emptyText(): String = tree.emptyText.text
 
     private fun filterChoices(): List<ToggleAction> =

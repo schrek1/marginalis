@@ -165,11 +165,10 @@ class MessageBodiesTest : HttpContractTestCase() {
         assertEquals(listOf("Line one", "Line two"), body.lines())
     }
 
-    // FixMe: Known issue - #44 a single line break in a message is lost: the two lines run together
-    fun testASingleLineBreakIsLostAndTheLinesRunTogether() {
+    fun testASingleLineBreakStartsANewLine() {
         val body = rendered("Line one\nLine two")
 
-        assertEquals(listOf("Line one Line two"), body.lines())
+        assertEquals(listOf("Line one", "Line two"), body.lines())
     }
 
     fun testATableIsDrawnAsATableOfCells() {

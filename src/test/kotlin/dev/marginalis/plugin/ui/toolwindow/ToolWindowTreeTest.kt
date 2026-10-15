@@ -9,8 +9,40 @@ class ToolWindowTreeTest : ToolWindowTestCase() {
         assertEquals("No margin threads yet", window.emptyText())
     }
 
-    // FixMe: Known issue - #51 the Guided section is a folder tree ordered by each folder's smallest step, not the order the walkthrough is read
-    fun testAWalkthroughThatHopsBetweenFilesIsGuidedFolderByFolder() {
+    fun testAWalkthroughThatHopsBetweenFilesIsListedByStepNumber() {
+        interleaved()
+
+        assertEquals(
+            """
+            Guided SHOP-77  17
+              OrderService.java  steps 2–3 ✉2
+                ✉ (2/18)  L20  Step 2
+                ✉ (3/18)  L28  Step 3
+              LoyaltyDiscountPolicy.java  steps 4–5 ✉2
+                ✉ (4/18)  L8  Step 4
+                ✉ (5/18)  L22  Step 5
+              ✉ (6/18)  OrderService.java L41  Step 6
+              ✉ (7/18)  OrderRepository.java L15  Step 7
+              ✉ (8/18)  Order.java L10  Step 8
+              ✉ (9/18)  OrderService.java L55  Step 9
+              ✉ (10/18)  OrderController.java L30  Step 10
+              ✉ (11/18)  add-loyalty-discount.sql L3  Step 11
+              OrderServiceTest.java  steps 12–13 ✉2
+                ✉ (12/18)  L14  Step 12
+                ✉ (13/18)  L36  Step 13
+              ✉ (14/18)  LoyaltyDiscountPolicy.java L40  Step 14
+              LoyaltyDiscountPolicyTest.java  steps 15–16 ✉2
+                ✉ (15/18)  L12  Step 15
+                ✉ (16/18)  L30  Step 16
+              ✉ (17/18)  OrderServiceTest.java L58  Step 17
+              ✉ (18/18)  OrderController.java L45  Step 18
+            """.trimIndent(),
+            section("Guided"),
+        )
+    }
+
+    fun testInTheFolderLayoutAWalkthroughIsGuidedFolderByFolder() {
+        window.layOutGuided("By folder")
         interleaved()
 
         assertEquals(
@@ -140,10 +172,10 @@ class ToolWindowTreeTest : ToolWindowTestCase() {
 
         assertEquals(listOf("Guided SHOP-42  24", "Open  24", "Resolved  9"), sections())
         val guided = section("Guided")
-        assertEquals("acme  24", guided.lines()[1].trim())
-        assertEquals("backend  23", guided.lines()[2].trim())
-        assertTrue(guided, guided.contains("(8/33)  L5  Step 8"))
-        assertTrue(guided, guided.contains("(33/33)  L5  Step 33"))
+        assertEquals("✉ (8/33)  CustomerSettingsProvider.java L5  Step 8", guided.lines()[1].trim())
+        assertEquals("✉ (9/33)  HasSortOrder.java L5  Step 9", guided.lines()[2].trim())
+        assertTrue(guided, guided.contains("(8/33)  CustomerSettingsProvider.java L5  Step 8"))
+        assertTrue(guided, guided.contains("(33/33)  InvoiceSettingsConfigurationTest.java L5  Step 33"))
         assertFalse(guided, guided.contains("(1/33)"))
         assertEquals(24, Regex("""\((\d+)/33\)""").findAll(guided).count())
         assertEquals(33, steps.size)
@@ -160,10 +192,9 @@ class ToolWindowTreeTest : ToolWindowTestCase() {
         assertEquals(
             """
             Guided tour  2
-              src  2
-                Sample.kt ✉2
-                  ✉ (2/3)  L6  two
-                  ✉ (3/3)  L9  three
+              Sample.kt  steps 2–3 ✉2
+                ✉ (2/3)  L6  two
+                ✉ (3/3)  L9  three
             """.trimIndent(),
             section("Guided"),
         )
@@ -186,7 +217,7 @@ class ToolWindowTreeTest : ToolWindowTestCase() {
 
         assertEquals(listOf("Guided SHOP-42  2", "Guided r2  1", "Open  3"), sections())
         assertTrue(section("Guided SHOP-42"), section("Guided SHOP-42").contains("(1/2)  L3  first walk, one"))
-        assertTrue(section("Guided r2"), section("Guided r2").contains("(1/1)  L9  second walk"))
+        assertTrue(section("Guided r2"), section("Guided r2").contains("(1/1)  Sample.kt L9  second walk"))
     }
 
     fun testProjectFileAndLineThreadsEachSayWhereTheyAre() {
@@ -211,7 +242,26 @@ class ToolWindowTreeTest : ToolWindowTestCase() {
         )
     }
 
-    fun testProjectStepsOfAWalkthroughComeFirstInStepOrder() {
+    fun testProjectStepsOfAWalkthroughTakeTheirPlaceInStepOrder() {
+        sample()
+        agent.addOnLine(3, "order" to 1, "walkthrough" to "tour", "body" to "code")
+        agent.add("order" to 3, "walkthrough" to "tour", "body" to "wrap up")
+        agent.add("order" to 2, "walkthrough" to "tour", "body" to "the big picture")
+
+        assertEquals(
+            """
+            Guided tour  3
+              ✉ (1/3)  Sample.kt L3  code
+              Project  steps 2–3
+                ✉ (2/3)  project  the big picture
+                ✉ (3/3)  project  wrap up
+            """.trimIndent(),
+            section("Guided"),
+        )
+    }
+
+    fun testInTheFolderLayoutProjectStepsComeFirst() {
+        window.layOutGuided("By folder")
         sample()
         agent.addOnLine(3, "order" to 1, "walkthrough" to "tour", "body" to "code")
         agent.add("order" to 3, "walkthrough" to "tour", "body" to "wrap up")
@@ -341,6 +391,6 @@ class ToolWindowTreeTest : ToolWindowTestCase() {
 
         assertEquals(listOf("Guided  2", "Guided r2  1", "Open  3"), sections())
         assertTrue(section("Guided  2"), section("Guided  2").contains("(2/2)  L6  plain two"))
-        assertTrue(section("Guided r2"), section("Guided r2").contains("(1/1)  L9  labelled"))
+        assertTrue(section("Guided r2"), section("Guided r2").contains("(1/1)  Sample.kt L9  labelled"))
     }
 }

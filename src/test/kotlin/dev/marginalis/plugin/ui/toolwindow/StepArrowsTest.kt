@@ -57,12 +57,12 @@ class StepArrowsTest : ToolWindowTestCase() {
         interleaved()
 
         window.press("Last Step")
-        assertEquals("✉ (18/18)  L45  Step 18", window.selected())
+        assertEquals("✉ (18/18)  OrderController.java L45  Step 18", window.selected())
         assertEquals("OrderController.java", openFile())
         assertEquals(listOf("First Step", "Previous Step"), enabledArrows())
 
         window.press("Previous Step")
-        assertEquals("✉ (17/18)  L58  Step 17", window.selected())
+        assertEquals("✉ (17/18)  OrderServiceTest.java L58  Step 17", window.selected())
         assertEquals("OrderServiceTest.java", openFile())
         assertEquals(58, caretLine())
 
@@ -182,8 +182,8 @@ class StepArrowsTest : ToolWindowTestCase() {
         window.press("Last Step")
         val last = window.selected()
 
-        assertEquals("✉ (8/33)  L5  Step 8", first)
-        assertEquals("✉ (33/33)  L5  Step 33", last)
+        assertEquals("✉ (8/33)  CustomerSettingsProvider.java L5  Step 8", first)
+        assertEquals("✉ (33/33)  InvoiceSettingsConfigurationTest.java L5  Step 33", last)
         assertEquals("InvoiceSettingsConfigurationTest.java", openFile())
     }
 

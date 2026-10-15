@@ -12,7 +12,7 @@ class FilterTest : MarginTabTestCase() {
         tab.find("release")
 
         assertEquals("release", tab.filterText())
-        assertEquals(listOf("✉ Who reviews the release? ● [expanded]", "✉ Release notes for 0.3 ● [expanded]"), shown())
+        assertEquals(listOf("✉ Release notes for 0.3 ● [expanded]", "✉ Who reviews the release? ● [expanded]"), shown())
     }
 
     fun testFindMatchesWhoSpoke() {
