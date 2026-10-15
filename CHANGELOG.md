@@ -66,6 +66,17 @@ History before 0.1.19 lives in git tags.
 
 ### Fixed
 
+### Fixed
+
+- Marginalis now runs on 2025.2 versions of JetBrains IDEs. Until now those versions couldn't load
+  it, even though the Marketplace listed them as supported.
+- Walking through steps in the same file keeps you in the editor you are reading, a pull request's
+  review diff included. Resolve, Previous and Next scroll to the step there instead of opening the
+  file's regular editor tab.
+- Zooming the editor with a thread open keeps the code where you were looking. It no longer jumps
+  to the end of the thread.
+- With several walkthroughs open, step numbers read cleanly: the section title names the walkthrough,
+  and the number stands on its own.
 - Stepping through the Marginalis tool window with Next and Previous no
   longer loses its place: the selection survives the tree refreshing,
   so the next press continues from the step you are on instead of the
@@ -104,6 +115,12 @@ History before 0.1.19 lives in git tags.
   Marginalis tool window, on its stripe button and in the Margin tab,
   so ✉ points at what is new. A thread you read but did not answer
   stays in "Awaiting You" and keeps its badge on the file's editor tab.
+
+### Added
+
+- Messages render GitHub-flavoured Markdown: tables, ~~strikethrough~~
+  and task lists. A wide table scrolls sideways instead of squeezing the
+  text around it, and plain web addresses are links.
 
 ## [0.2.2] - 2026-10-04
 

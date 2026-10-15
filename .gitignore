@@ -4,6 +4,7 @@ build/
 .idea/
 *.iml
 .kotlin/
+out/
 /image.png
 
 # Private-audience docs: this machine's sandbox/operator setup, not the project
