@@ -9,11 +9,14 @@ History before 0.1.19 lives in git tags.
 
 ### Added
 
-- Expand and Collapse in the Marginalis tool window's toolbar start at
-  the folder of the selection and work one level further out with each
-  press, up to its section and then every section. Collapse folds
-  everything inside, as IntelliJ's Collapse All does. Folders you fold
-  stay folded when the tree refreshes.
+- Messages render GitHub-flavoured Markdown: tables, ~~strikethrough~~
+  and task lists. A wide table scrolls sideways instead of squeezing the
+  text around it, and plain web addresses are links.
+- Line breaks you type in a comment now show up after you send it: a
+  single Enter inside a paragraph is a new line, and a second blank line
+  between paragraphs stays an empty line instead of collapsing.
+- Paragraphs and lists in a message get a small gap between them, so a
+  long reply no longer reads as one dense block.
 - Thread icons now show in the gutter of a pull or merge request review
   diff too, and in any other diff that shows a file from a commit. Click
   one to open the thread right there in the diff.
@@ -22,37 +25,16 @@ History before 0.1.19 lives in git tags.
   next step's file when the review contains it, scroll to the step and
   open its thread, also when the review branch is not checked out. A step
   in a file outside the review still opens in a regular editor tab.
-
-### Fixed
-
-- Walking through steps in the same file keeps you in the editor you are reading, a pull request's
-  review diff included. Resolve, Previous and Next scroll to the step there instead of opening the
-  file's regular editor tab.
-### Added
-
-- Message bodies render GitHub-flavoured Markdown: tables and
-  ~~strikethrough~~. A top-level table sits in its own pane at natural
-  width and scrolls sideways when it is wider than the panel, so the
-  prose around it keeps wrapping.
-### Added
-
-- Thread icons now show in the gutter of a pull or merge request review
-  diff too, and in any other diff that shows a file from a commit. Click
-  one to open the thread right there in the diff.
-- Zooming the editor (Ctrl+mouse wheel) with a thread open no longer scrolls the code to the end of
-  that thread; the zoom stays where the mouse points.
-### Added
-
 - *Live by default*, a ⚡ toggle in the Marginalis tool window's toolbar: every open
   thread of the project is live without switching each one. A thread's
   own ⚡ still switches it off. The choice is kept per project, in your
   workspace, not in version control; a checkbox in Settings sets where a
   project starts.
-- Line breaks you type in a comment now show up after you send it: a
-  single Enter inside a paragraph is a new line, and a second blank line
-  between paragraphs stays an empty line instead of collapsing.
-- Paragraphs and lists in a message get a small gap between them, so a
-  long reply no longer reads as one dense block.
+- Expand and Collapse in the Marginalis tool window's toolbar start at
+  the folder of the selection and work one level further out with each
+  press, up to its section and then every section. Collapse folds
+  everything inside, as IntelliJ's Collapse All does. Folders you fold
+  stay folded when the tree refreshes.
 - Find any thread in the Marginalis tool window in one click: "Select in
   Marginalis" in the thread's header opens the tool window on it, and
   "Select Opened Thread" in the tool window picks the thread on the line
@@ -64,7 +46,24 @@ History before 0.1.19 lives in git tags.
   switches to the folder tree as before, or to one node per file, and
   each project remembers its choice.
 
-### Fixed
+### Changed
+
+- The Margin tab now reads top to bottom, oldest thread first, the same
+  way messages read inside a thread. A reply no longer makes a thread
+  jump, and a walkthrough's steps read 1, 2, 3.
+  - A Sort menu in the tab switches to newest first or to the previous
+    most-recent-activity order. Each project remembers its choice.
+  - A new thread you start, and threads that arrive while the list holds
+    still, appear on the side the chosen order puts new threads.
+- Long threads stay readable. You see the opening message, the last two
+  and anything you haven't read yet; the read middle hides behind one line
+  that shows the full history with a click, and Shorten History in the
+  thread header hides it again.
+- The ✉ envelope now shows only while a thread has a message you have
+  not read. Once you read a reply, its envelope goes away in the
+  Marginalis tool window, on its stripe button and in the Margin tab,
+  so ✉ points at what is new. A thread you read but did not answer
+  stays in "Awaiting You" and keeps its badge on the file's editor tab.
 
 ### Fixed
 
@@ -84,43 +83,10 @@ History before 0.1.19 lives in git tags.
 - In a Guided section, First, Previous, Next and Last Step in the tool
   window follow the step numbers, as the arrows in a thread's header do,
   instead of the folder-and-file order the tree shows them in.
-### Fixed
-
-- With several walkthroughs open, a step's number no longer runs into the
-  walkthrough's label ("SHOP-42 · r21/5" for step 1 of 5): steps show
-  just their number, and the section title names the walkthrough.
-### Changed
-
-- The Margin tab now reads top to bottom, oldest thread first, the same
-  way messages read inside a thread. A reply no longer makes a thread
-  jump, and a walkthrough's steps read 1, 2, 3.
-  - A Sort menu in the tab switches to newest first or to the previous
-    most-recent-activity order. Each project remembers its choice.
-  - A new thread you start, and threads that arrive while the list holds
-    still, appear on the side the chosen order puts new threads.
-- Long threads stay readable. You see the opening message, the last two
-  and anything you haven't read yet; the read middle hides behind one line
-  that shows the full history with a click, and Shorten History in the
-  thread header hides it again.
-### Fixed
-
 - A thread you left open shows the agent's reply when you come back to
   it. A reply that arrived while its file, or the Margin tab, was in a
   background tab used to stay hidden until something else changed on
   the thread.
-### Changed
-
-- The ✉ envelope now shows only while a thread has a message you have
-  not read. Once you read a reply, its envelope goes away in the
-  Marginalis tool window, on its stripe button and in the Margin tab,
-  so ✉ points at what is new. A thread you read but did not answer
-  stays in "Awaiting You" and keeps its badge on the file's editor tab.
-
-### Added
-
-- Messages render GitHub-flavoured Markdown: tables, ~~strikethrough~~
-  and task lists. A wide table scrolls sideways instead of squeezing the
-  text around it, and plain web addresses are links.
 
 ## [0.2.2] - 2026-10-04
 
