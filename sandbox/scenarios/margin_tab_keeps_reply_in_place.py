@@ -52,9 +52,14 @@ function rememberFocus(component) {
     component.requestFocusInWindow();
     var window = windowOf(component);
     if (window.getMostRecentFocusOwner() === component) return 'requested';
-    var remember = java.awt.KeyboardFocusManager.class.getDeclaredMethod('setMostRecentFocusOwner', java.awt.Component.class);
+    var types = java.lang.reflect.Array.newInstance(java.lang.Class.forName('java.lang.Class'), 1);
+    types[0] = java.lang.Class.forName('java.awt.Component');
+    var remember = java.lang.Class.forName('java.awt.KeyboardFocusManager').getDeclaredMethod('setMostRecentFocusOwner', types);
     remember.setAccessible(true);
-    remember.invoke(null, component);
+    var args = java.lang.reflect.Array.newInstance(java.lang.Class.forName('java.lang.Object'), 1);
+    args[0] = component;
+    remember.invoke(null, args);
+    if (window.getMostRecentFocusOwner() !== component) throw 'the focus owner could not be recorded';
     return 'recorded';
 }
 """
@@ -83,12 +88,17 @@ def expanded_thread_ids() -> list[str]:
 
 def start_draft_in(key: str) -> str:
     """Opens the composer (the real "Reply…" link when the card shows one), types the draft and places the caret."""
-    return tab_js(f"""
-        var host = target({json.dumps(key)});
-        var link = find(host, function (c) {{
+    tab_js(f"""
+        var link = find(target({json.dumps(key)}), function (c) {{
             return c instanceof com.intellij.ui.components.ActionLink && c.getText() == 'Reply…';
         }});
         if (link != null) link.doClick();
+        String(JSON.stringify(link != null))
+    """)
+    # Only a laid-out, showing reply box can take the focus.
+    time.sleep(1.0)
+    return tab_js(f"""
+        var host = target({json.dumps(key)});
         var area = replyAreaOf(host);
         area.setText({json.dumps(DRAFT_TEXT)});
         var editor = area.getEditor();

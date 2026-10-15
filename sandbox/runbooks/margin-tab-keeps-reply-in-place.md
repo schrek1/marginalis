@@ -40,6 +40,10 @@
 
 ## On main
 
-Without the change, 1-reading and 2-draft-in-thread fail: the card in view moves down by exactly the height the
-thread above gained. 3-draft-new-thread passes on main: there a new thread's draft sits on top, so nothing above
-it can grow. It guards the order that puts new threads at the bottom.
+Run against schreko_stable without the change (7fe12c5), three checks fail, each by exactly the height the thread
+above gained (281 px): the topmost visible card while reading, the reply draft, and the new thread's draft (oldest
+first puts it below the threads). Focus, draft and caret survive there too, so those checks pass.
+
+On upstream main the view also jumps to the end of the grown thread: its message panes scroll their caret into
+view. The change takes MARG-21's caret fix for that. With newest first, a new thread's draft sits on top, so the
+third check cannot fail on main.
