@@ -5,6 +5,8 @@
 // the plugin module, ever.
 plugins {
     id("org.jetbrains.kotlin.jvm")
+    id("org.jetbrains.kotlinx.kover")
+    id("info.solidsoft.pitest") version "1.19.0"
 }
 
 repositories {
@@ -35,4 +37,14 @@ java {
 
 tasks.test {
     useJUnitPlatform()
+}
+
+pitest {
+    pitestVersion = "1.30.1"
+    junit5PluginVersion = "1.2.3"
+    targetClasses = setOf("dev.marginalis.core.*")
+    threads = 8
+    outputFormats = setOf("XML", "HTML")
+    timestampedReports = false
+    avoidCallsTo = setOf("kotlin.jvm.internal")
 }

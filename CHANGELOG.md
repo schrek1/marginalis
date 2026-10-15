@@ -104,6 +104,13 @@ History before 0.1.19 lives in git tags.
   Marginalis tool window, on its stripe button and in the Margin tab,
   so ✉ points at what is new. A thread you read but did not answer
   stays in "Awaiting You" and keeps its badge on the file's editor tab.
+### Fixed
+
+- Marginalis now runs on 2025.2 versions of JetBrains IDEs. Until now those versions couldn't load
+  it, even though the Marketplace listed them as supported.
+- Walking through steps in the same file keeps you in the editor you are reading, a pull request's
+  review diff included. Resolve, Previous and Next scroll to the step there instead of opening the
+  file's regular editor tab.
 
 ## [0.2.2] - 2026-10-04
 

@@ -191,7 +191,7 @@ class ReviewDiffMarkers : DiffExtension() {
             ApplicationManager.getApplication().invokeLater {
                 if (!target.viewer.isDisposed) target.viewer.removeListener(this)
             }
-            if (!WalkthroughNavigator.showStepIn(project, target.editor, step.thread, step.revealing)) {
+            if (!WalkthroughNavigator.navigateWithin(target.editor, project, step.thread, step.revealing)) {
                 WalkthroughNavigator.openStepInFileTab(project, step.thread, step.revealing)
             }
         }
