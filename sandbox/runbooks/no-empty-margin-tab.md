@@ -33,6 +33,6 @@
 
 ## On main
 
-Not recorded yet. Expected to fail: the fresh project opens with the tab, pinned; the tab the first thread lands
-in is that pinned tab; the empty tab comes back after the restart; the first open of a project with a thread
-pins the tab.
+On schreko_stable 7fe12c5, 4 of 7 fail: the fresh project opens with the tab, pinned; the first thread lands in
+that pinned tab; the empty tab comes back after the restart; the first open of a project with a thread pins the
+tab.
