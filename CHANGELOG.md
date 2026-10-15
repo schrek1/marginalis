@@ -5,6 +5,27 @@ All notable changes to Marginalis. The format follows
 current version's section into the plugin's Marketplace change notes.
 History before 0.1.19 lives in git tags.
 
+## [Unreleased]
+
+### Added
+
+- A walkthrough in the Marginalis tool window now reads in step order, the
+  way Next and Previous walk it. Steps in a row in the same file fold
+  under that file, and steps in a row about the whole project under a
+  Project node. The Guided Layout menu in the tool window header
+  switches to the folder tree as before, or to one node per file, and
+  each project remembers its choice.
+
+### Fixed
+
+- Stepping through the Marginalis tool window with Next and Previous no
+  longer loses its place: the selection survives the tree refreshing,
+  so the next press continues from the step you are on instead of the
+  first one.
+- In a Guided section, First, Previous, Next and Last Step in the tool
+  window follow the step numbers, as the arrows in a thread's header do,
+  instead of the folder-and-file order the tree shows them in.
+
 ## [0.2.2] - 2026-10-04
 
 ### Changed

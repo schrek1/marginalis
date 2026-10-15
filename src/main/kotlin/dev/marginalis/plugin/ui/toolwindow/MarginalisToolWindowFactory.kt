@@ -36,15 +36,18 @@ import com.intellij.util.ui.UIUtil
 import com.intellij.util.ui.components.BorderLayoutPanel
 import dev.marginalis.core.CommentThread
 import dev.marginalis.core.Faces
+import dev.marginalis.core.GuidedLayout
 import dev.marginalis.core.Intent
 import dev.marginalis.core.PathTrie
 import dev.marginalis.core.Severity
+import dev.marginalis.core.StepRuns
 import dev.marginalis.core.StripeBadge
 import dev.marginalis.core.ThreadOrder
 import dev.marginalis.core.ThreadStatus
 import dev.marginalis.core.Turn
 import dev.marginalis.core.TurnSignal
 import dev.marginalis.core.TurnTally
+import dev.marginalis.core.Walkthrough
 import dev.marginalis.plugin.avatars.AvatarsListener
 import dev.marginalis.plugin.store.Authors
 import dev.marginalis.plugin.store.MarginalisStore
@@ -87,6 +90,7 @@ class MarginalisToolWindowFactory : ToolWindowFactory, DumbAware {
                 common.createNextOccurenceAction(panel),
                 LastStepAction(panel),
                 FilterMenuAction(panel),
+                GuidedLayoutMenuAction(panel),
                 AgentPresenceGroup(),
                 SubmitRoundAction(),
                 StopAgentsGroup(),
@@ -183,6 +187,26 @@ private class FilterMenuAction(private val panel: MarginalisToolWindowPanel) :
     }
 }
 
+private class GuidedLayoutMenuAction(private val panel: MarginalisToolWindowPanel) :
+    DefaultActionGroup("Guided Layout", "Lay out walkthrough steps by number, by folder or by file", AllIcons.Actions.GroupBy),
+    DumbAware {
+    init {
+        isPopup = true
+        templatePresentation.isPerformGroup = false
+        GuidedLayout.entries.forEach { layout ->
+            add(object : ToggleAction(layout.label), DumbAware {
+                override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+
+                override fun isSelected(e: AnActionEvent): Boolean = panel.guidedLayout == layout
+
+                override fun setSelected(e: AnActionEvent, state: Boolean) {
+                    if (state) panel.guidedLayout = layout
+                }
+            })
+        }
+    }
+}
+
 private class ResolveAllAction : AnAction("Resolve All", "Mark every open thread resolved", AllIcons.Actions.Selectall) {
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
@@ -247,11 +271,35 @@ private class ClearAllAction : AnAction("Delete All", "Delete all threads, inclu
 }
 
 private sealed class NodeData {
-    class Section(val title: String, val count: Int, val blockers: Int = 0) : NodeData()
-    class ProjectNode(val count: Int) : NodeData()
-    class DirNode(val name: String, val count: Int) : NodeData()
-    class FileNode(val name: String, val threads: List<CommentThread>) : NodeData()
-    class ThreadNode(val thread: CommentThread, val walkthroughPrefix: String? = null) : NodeData()
+    /** Names the node across rebuilds, which replace every node object. */
+    abstract val key: String
+
+    class Section(val title: String, val count: Int, val blockers: Int = 0, val guided: Boolean = false) : NodeData() {
+        override val key get() = "section:$title"
+    }
+
+    /** [steps]: set for a run of consecutive project-level walkthrough steps in a step-number list, which may recur. */
+    class ProjectNode(val count: Int, val steps: IntRange? = null) : NodeData() {
+        override val key get() = "project" + (steps?.let { "@${it.first}" } ?: "")
+    }
+
+    class DirNode(val name: String, val count: Int) : NodeData() {
+        override val key get() = "dir:$name"
+    }
+
+    /** [steps]: set for a run of consecutive walkthrough steps in a step-number list, where the file may recur. */
+    class FileNode(val name: String, val threads: List<CommentThread>, val steps: IntRange? = null) : NodeData() {
+        override val key get() = "file:$name" + (steps?.let { "@${it.first}" } ?: "")
+    }
+
+    /** [showFile]: the row names its file, for a list that has no file nodes above it. */
+    class ThreadNode(
+        val thread: CommentThread,
+        val walkthroughPrefix: String? = null,
+        val showFile: Boolean = false,
+    ) : NodeData() {
+        override val key get() = "thread:${thread.id}"
+    }
 }
 
 internal class MarginalisToolWindowPanel(private val project: Project) :
@@ -264,6 +312,13 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
     var filter: TreeFilter = TreeFilter.ALL
         set(value) {
             field = value
+            rebuild()
+        }
+
+    var guidedLayout: GuidedLayout
+        get() = GuidedLayoutSetting.getInstance(project).layout
+        set(value) {
+            GuidedLayoutSetting.getInstance(project).layout = value
             rebuild()
         }
 
@@ -424,10 +479,16 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
         val section = selected?.path?.getOrNull(1) as? DefaultMutableTreeNode
             ?: root.children().asSequence().filterIsInstance<DefaultMutableTreeNode>().firstOrNull()
             ?: return none
-        val walk = section.preorderEnumeration().asSequence()
+        val nodes = section.preorderEnumeration().asSequence()
             .filterIsInstance<DefaultMutableTreeNode>()
             .filter { it.userObject is NodeData.ThreadNode }
             .toList()
+        // The Guided tree groups steps by folder and file, so its top-to-bottom order is not the step order.
+        val walk = if ((section.userObject as NodeData.Section).guided) {
+            nodes.sortedWith(compareBy(Walkthrough.byStepNumber) { (it.userObject as NodeData.ThreadNode).thread })
+        } else {
+            nodes
+        }
         val index = if (selected?.userObject is NodeData.ThreadNode) walk.indexOf(selected) else -1
         return walk to index
     }
@@ -473,7 +534,10 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
         steps().first.lastOrNull()?.let { goTo(it) }
     }
 
+    // Any thread change rebuilds the tree, and opening a step is one (it marks the step read); step navigation
+    // walks from the selection, so the selection is carried over by key.
     fun rebuild() {
+        val selected = (tree.lastSelectedPathComponent as? DefaultMutableTreeNode)?.let(::keyPath)
         val store = MarginalisStore.getInstance(project)
         store.syncLines()
         val threads = store.threads.all().filter(filter.matches)
@@ -491,6 +555,26 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
             val section = root.getChildAt(i) as DefaultMutableTreeNode
             if ((section.userObject as NodeData.Section).title != "Resolved") expandRecursively(section)
         }
+        selected?.let(::reselect)
+    }
+
+    private fun keyPath(node: DefaultMutableTreeNode): List<String> =
+        node.path.drop(1).map { ((it as DefaultMutableTreeNode).userObject as NodeData).key }
+
+    /** The same node by its key path, else the same thread in the same section (folders may group differently). */
+    private fun reselect(keys: List<String>) {
+        val root = tree.model.root as DefaultMutableTreeNode
+        val exact = keys.fold<String, DefaultMutableTreeNode?>(root) { parent, key ->
+            parent?.children()?.asSequence()?.filterIsInstance<DefaultMutableTreeNode>()
+                ?.firstOrNull { (it.userObject as NodeData).key == key }
+        }
+        val node = exact ?: keys.last().takeIf { it.startsWith("thread:") }?.let { threadKey ->
+            root.children().asSequence().filterIsInstance<DefaultMutableTreeNode>()
+                .firstOrNull { (it.userObject as NodeData).key == keys.first() }
+                ?.preorderEnumeration()?.asSequence()?.filterIsInstance<DefaultMutableTreeNode>()
+                ?.firstOrNull { (it.userObject as NodeData).key == threadKey }
+        } ?: return
+        tree.selectionPath = TreePath(node.path)
     }
 
     private fun addGuidedSection(root: DefaultMutableTreeNode, allThreads: List<CommentThread>) {
@@ -501,16 +585,58 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
         for ((label, walkthroughThreads) in walkthroughs) {
             val title = if (label.isEmpty()) "Guided" else "Guided $label"
             val section = DefaultMutableTreeNode(
-                NodeData.Section(title, walkthroughThreads.size, walkthroughThreads.count { it.severity == Severity.BLOCKER }),
+                NodeData.Section(
+                    title,
+                    walkthroughThreads.size,
+                    walkthroughThreads.count { it.severity == Severity.BLOCKER },
+                    guided = true,
+                ),
             )
             val total = WalkthroughNavigator.stableTotal(project, walkthroughThreads.first())
                 ?: walkthroughThreads.size
             val shownLabel = if (labelNeeded && label.isNotEmpty()) label else ""
             val prefixFor = { thread: CommentThread -> "($shownLabel${thread.order}/$total)" }
-            addProjectNode(section, walkthroughThreads.filter { it.isProjectLevel }, prefixFor)
-            val trie = PathTrie().apply { walkthroughThreads.forEach(::insert) }
-            emitTrie(trie, section, prefixFor)
+            when (guidedLayout) {
+                GuidedLayout.BY_STEP_NUMBER -> addStepList(section, walkthroughThreads, prefixFor)
+                GuidedLayout.BY_FOLDER -> {
+                    addProjectNode(section, walkthroughThreads.filter { it.isProjectLevel }, prefixFor)
+                    val trie = PathTrie().apply { walkthroughThreads.forEach(::insert) }
+                    emitTrie(trie, section, prefixFor)
+                }
+                GuidedLayout.BY_FILE -> {
+                    addProjectNode(section, walkthroughThreads.filter { it.isProjectLevel }, prefixFor)
+                    addFileList(section, walkthroughThreads.filterNot { it.isProjectLevel }, prefixFor)
+                }
+            }
             root.add(section)
+        }
+    }
+
+    private fun addStepList(section: DefaultMutableTreeNode, steps: List<CommentThread>, prefixFor: (CommentThread) -> String) {
+        val ordered = steps.sortedWith(Walkthrough.byStepNumber)
+        for (run in StepRuns.of(ordered, CommentThread::file)) {
+            if (run.size == 1) {
+                section.add(DefaultMutableTreeNode(NodeData.ThreadNode(run.single(), prefixFor(run.single()), showFile = true)))
+                continue
+            }
+            val stepRange = run.first().order!!..run.last().order!!
+            val file = run.first().file
+            val runNode = DefaultMutableTreeNode(
+                if (file == null) NodeData.ProjectNode(run.size, stepRange) else NodeData.FileNode(file, run, stepRange),
+            )
+            run.forEach { step -> runNode.add(DefaultMutableTreeNode(NodeData.ThreadNode(step, prefixFor(step)))) }
+            section.add(runNode)
+        }
+    }
+
+    private fun addFileList(section: DefaultMutableTreeNode, steps: List<CommentThread>, prefixFor: (CommentThread) -> String) {
+        val byFile = steps.groupBy { it.file!! }.entries.sortedBy { (_, fileSteps) -> fileSteps.minOf { it.order!! } }
+        for ((path, fileSteps) in byFile) {
+            val fileNode = DefaultMutableTreeNode(NodeData.FileNode(path, fileSteps))
+            for (step in fileSteps.sortedWith(Walkthrough.byStepNumber)) {
+                fileNode.add(DefaultMutableTreeNode(NodeData.ThreadNode(step, prefixFor(step))))
+            }
+            section.add(fileNode)
         }
     }
 
@@ -689,7 +815,9 @@ private class RowWords : ColoredTreeCellRenderer() {
             is NodeData.ProjectNode -> {
                 icon = MarginalisIcons.ProjectMark
                 append("Project", SimpleTextAttributes.REGULAR_ATTRIBUTES)
-                append("  ${data.count}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+                val steps = data.steps
+                val tally = if (steps == null) "${data.count}" else "steps ${steps.first}–${steps.last}"
+                append("  $tally", SimpleTextAttributes.GRAYED_ATTRIBUTES)
             }
             is NodeData.DirNode -> {
                 icon = AllIcons.Nodes.Folder
@@ -699,7 +827,13 @@ private class RowWords : ColoredTreeCellRenderer() {
             is NodeData.FileNode -> {
                 icon = FileTypeManager.getInstance().getFileTypeByFileName(data.name).icon
                     ?: AllIcons.FileTypes.Any_type
-                append(data.name, SimpleTextAttributes.REGULAR_ATTRIBUTES)
+                val steps = data.steps
+                if (steps == null) {
+                    append(data.name, SimpleTextAttributes.REGULAR_ATTRIBUTES)
+                } else {
+                    append(data.name.substringAfterLast('/'), SimpleTextAttributes.REGULAR_ATTRIBUTES)
+                    append("  steps ${steps.first}–${steps.last}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+                }
             }
             is NodeData.ThreadNode -> {
                 val thread = data.thread
@@ -707,7 +841,12 @@ private class RowWords : ColoredTreeCellRenderer() {
                 if (data.walkthroughPrefix != null) {
                     append("${data.walkthroughPrefix}  ", SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
                 }
-                val where = thread.line?.let { "L${it + 1}" } ?: if (thread.isProjectLevel) "project" else "file"
+                val line = thread.line?.let { "L${it + 1}" }
+                val where = when {
+                    thread.isProjectLevel -> "project"
+                    data.showFile -> listOfNotNull(thread.file?.substringAfterLast('/'), line).joinToString(" ")
+                    else -> line ?: "file"
+                }
                 append("$where  ", SimpleTextAttributes.GRAYED_ATTRIBUTES)
                 val preview = MarkdownRenderer.previewText(thread.messages.firstOrNull()?.body ?: "")
                 append(
