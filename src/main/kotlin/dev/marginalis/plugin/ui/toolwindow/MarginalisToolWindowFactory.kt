@@ -629,7 +629,7 @@ private class MarginalisTreeRenderer : TreeCellRenderer {
 
     private fun showTurnSignals(data: Any?): String? = when (data) {
         is NodeData.FileNode -> {
-            val tally = TurnTally.of(data.threads)
+            val tally = TurnTally.signalled(data.threads)
             yourMove.showCount(tally.user)
             agentsMove.showCount(tally.agent)
             TurnSignal.spoken(tally)
@@ -637,7 +637,7 @@ private class MarginalisTreeRenderer : TreeCellRenderer {
         is NodeData.ThreadNode -> {
             yourMove.isVisible = false
             agentsMove.isVisible = false
-            data.thread.turn()?.let(TurnSignal::spoken)
+            TurnSignal.of(data.thread)?.let(TurnSignal::spoken)
         }
         else -> {
             yourMove.isVisible = false
@@ -703,7 +703,7 @@ private class RowWords : ColoredTreeCellRenderer() {
             }
             is NodeData.ThreadNode -> {
                 val thread = data.thread
-                icon = MarginalisIcons.withLeadingTurnSignal(MarginalisIcons.markOf(listOf(thread)), thread.turn())
+                icon = MarginalisIcons.withLeadingTurnSignal(MarginalisIcons.markOf(listOf(thread)), TurnSignal.of(thread))
                 if (data.walkthroughPrefix != null) {
                     append("${data.walkthroughPrefix}  ", SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
                 }

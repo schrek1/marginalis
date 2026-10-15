@@ -2,6 +2,7 @@ package dev.marginalis.core
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class TurnSignalTest {
 
@@ -18,6 +19,58 @@ class TurnSignalTest {
         val orphaned = thread(user).also { it.markOrphaned() }
         val tally = TurnTally.of(listOf(thread(agent), thread(agent), thread(user), resolved, orphaned))
         assertEquals(TurnTally(user = 2, agent = 1), tally)
+    }
+
+    private fun agentReply(read: Boolean) = thread(user).also {
+        it.addMessage(Message(agent, "Done."))
+        if (read) it.markReadByUser()
+    }
+
+    @Test
+    fun `an agent reply you have not read shows your move`() {
+        val unreadReply = agentReply(read = false)
+
+        assertEquals(Turn.USER_OWES, TurnSignal.of(unreadReply))
+    }
+
+    @Test
+    fun `an agent reply you read but did not answer shows no signal while the turn stays yours`() {
+        val readReply = agentReply(read = true)
+
+        assertNull(TurnSignal.of(readReply))
+        assertEquals(Turn.USER_OWES, readReply.turn())
+    }
+
+    @Test
+    fun `a new agent message on a read thread brings your move back`() {
+        val readReply = agentReply(read = true).also { it.addMessage(Message(agent, "One more thing.")) }
+
+        assertEquals(Turn.USER_OWES, TurnSignal.of(readReply))
+    }
+
+    @Test
+    fun `a thread you answered shows the agent's move`() {
+        val answered = agentReply(read = true).also { it.addMessage(Message(user, "Thanks, go on.")) }
+
+        assertEquals(Turn.AGENT_OWES, TurnSignal.of(answered))
+    }
+
+    @Test
+    fun `a read fyi shows no signal`() {
+        val readFyi = CommentThread(file = "a.py", line = 1, anchorText = "x", intent = Intent.FYI).also {
+            it.addMessage(Message(agent, "FYI."))
+            it.markReadByUser()
+        }
+
+        assertNull(TurnSignal.of(readFyi))
+    }
+
+    @Test
+    fun `a signalled tally leaves out what you have read but the turn tally keeps it`() {
+        val threads = listOf(agentReply(read = false), agentReply(read = true), thread(user))
+
+        assertEquals(TurnTally(user = 1, agent = 1), TurnTally.signalled(threads))
+        assertEquals(TurnTally(user = 2, agent = 1), TurnTally.of(threads))
     }
 
     @Test

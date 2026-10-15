@@ -5,6 +5,16 @@ All notable changes to Marginalis. The format follows
 current version's section into the plugin's Marketplace change notes.
 History before 0.1.19 lives in git tags.
 
+## [Unreleased]
+
+### Changed
+
+- The ✉ envelope now shows only while a thread has a message you have
+  not read. Once you read a reply, its envelope goes away in the
+  Marginalis tool window, on its stripe button and in the Margin tab,
+  so ✉ points at what is new. A thread you read but did not answer
+  stays in "Awaiting You" and keeps its badge on the file's editor tab.
+
 ## [0.2.2] - 2026-10-04
 
 ### Changed
