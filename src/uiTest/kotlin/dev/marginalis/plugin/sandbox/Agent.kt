@@ -38,9 +38,17 @@ object Agent {
     fun agentStartsProjectThread(body: String): String =
         threadId(apiPost("comment_add", mapOf("body" to body, "project" to PROJECT_NAME) + identity))
 
-    /** `line` is 1-based, as agents send it; the anchor text is read from the sandbox project's file. */
-    fun agentAddsLineThread(file: String, line: Int, body: String, order: Int? = null): String =
-        threadId(apiPost("comment_add", mapOf("body" to body, "file" to file, "line" to line, "anchor_text" to anchorOf(file, line), "project" to PROJECT_NAME, "order" to order) + identity))
+    /**
+     * `line` is 1-based, as agents send it; the anchor text is read from the sandbox project's file. `fields` adds
+     * further `comment_add` fields, e.g. `intent` or `severity`.
+     */
+    fun agentAddsLineThread(file: String, line: Int, body: String, order: Int? = null, fields: Map<String, Any> = emptyMap()): String =
+        threadId(
+            apiPost(
+                "comment_add",
+                mapOf("body" to body, "file" to file, "line" to line, "anchor_text" to anchorOf(file, line), "project" to PROJECT_NAME, "order" to order) + fields + identity,
+            ),
+        )
 
     fun agentAddsStep(file: String, line: Int, body: String, order: Int, walkthrough: String): String =
         threadId(
@@ -61,13 +69,21 @@ object Agent {
         apiPost("comment_resolve", mapOf("thread_id" to threadId) + identity)
     }
 
-    /** Blocks like an agent's `comment_wait` from now on; returns the wake or the timeout. */
-    fun agentWaits(timeoutSeconds: Int): JsonObject {
-        val query = (mapOf("project" to PROJECT_NAME, "since" to since.format(Instant.now()), "timeout" to timeoutSeconds.toString()) + identity)
+    /** A read of the API as the agent makes it: the project and the agent's identity go with `params`. */
+    fun apiGet(route: String, params: Map<String, String>, timeout: Duration = Duration.ofSeconds(30)): JsonObject {
+        val query = (mapOf("project" to PROJECT_NAME) + params + identity)
             .entries.joinToString("&") { (key, value) -> "$key=${URLEncoder.encode(value, StandardCharsets.UTF_8)}" }
-        val request = HttpRequest.newBuilder(URI("$apiBase/comment_wait?$query")).timeout(Duration.ofSeconds(timeoutSeconds + 30L)).GET().build()
-        return parsed(http.send(request, HttpResponse.BodyHandlers.ofString()), "comment_wait")
+        val request = HttpRequest.newBuilder(URI("$apiBase/$route?$query")).timeout(timeout).GET().build()
+        return parsed(http.send(request, HttpResponse.BodyHandlers.ofString()), route)
     }
+
+    /** Blocks like an agent's `comment_wait` from now on; returns the wake or the timeout. */
+    fun agentWaits(timeoutSeconds: Int): JsonObject =
+        apiGet(
+            "comment_wait",
+            mapOf("since" to since.format(Instant.now()), "timeout" to timeoutSeconds.toString()),
+            Duration.ofSeconds(timeoutSeconds + 30L),
+        )
 
     private fun parsed(response: HttpResponse<String>, route: String): JsonObject {
         check(response.statusCode() < 400) { "$route answered ${response.statusCode()}: ${response.body()}" }

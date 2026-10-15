@@ -65,7 +65,8 @@ abstract class SandboxScenario(private val scenario: String) {
 
     protected fun shot(name: String) = SandboxUi.screenshotFrame(shots.resolve("$name.png"))
 
-    private fun report(line: String) {
+    /** A line that is not a check, e.g. `INFO  ...`, logged like one. */
+    protected fun report(line: String) {
         println(line)
         Files.writeString(log, line + System.lineSeparator(), CREATE, APPEND)
     }

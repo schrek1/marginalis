@@ -139,6 +139,122 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
         """,
     )
 
+    /** Makes files written from outside visible to the IDE; a synchronous refresh on the EDT would need a write-intent lock. */
+    fun refreshProjectFiles() {
+        Sandbox.robot.callJs(
+            PRELUDE + """
+            com.intellij.openapi.vfs.VfsUtil['markDirtyAndRefresh(boolean,boolean,boolean,com.intellij.openapi.vfs.VirtualFile[])'](
+                false, true, true, [project.getBaseDir()]);
+            String(true)
+            """,
+            edt = false,
+        )
+    }
+
+    /** Puts the caret of the file's open editor on a 1-based line, as a click there would. */
+    fun moveCaret(file: String, line: Int) {
+        js(
+            EDITORS + """
+            var editor = textEditorOf('$file');
+            editor.getCaretModel().moveToLogicalPosition(new com.intellij.openapi.editor.LogicalPosition(${line - 1}, 0));
+            String(true)
+            """,
+        )
+    }
+
+    /**
+     * A diff shaped like a PR review: the right side is a copy of `after` that only names `file` as its highlight file.
+     * `added` shows a file the change adds (no left side, a one-sided viewer).
+     */
+    fun openReviewDiff(file: String, before: String, after: String, added: Boolean = false) {
+        val left = if (added) "factory.createEmpty()" else "factory.create(project, ${lit(before)}, projectFile(${lit(file)}))"
+        js(
+            EDITORS + """
+            var factory = com.intellij.diff.DiffContentFactory.getInstance();
+            var left = $left;
+            var right = factory.create(project, ${lit(after)}, projectFile(${lit(file)}));
+            var request = new com.intellij.diff.requests.SimpleDiffRequest('Sandbox review diff', left, right, 'base', 'PR');
+            com.intellij.diff.DiffManager.getInstance().showDiff(project, request);
+            String(true)
+            """,
+        )
+    }
+
+    /** A diff whose right side is the file's own document (a checked-out branch), against `other` on the left. */
+    fun openLocalDiff(file: String, other: String) {
+        js(
+            EDITORS + """
+            var factory = com.intellij.diff.DiffContentFactory.getInstance();
+            var left = factory.create(project, ${lit(other)}, projectFile(${lit(file)}));
+            var right = factory.create(project, projectFile(${lit(file)}));
+            var request = new com.intellij.diff.requests.SimpleDiffRequest('Sandbox local diff', left, right, 'other', 'local');
+            com.intellij.diff.DiffManager.getInstance().showDiff(project, request);
+            String(true)
+            """,
+        )
+    }
+
+    /** 0-based lines of the thread gutter icons in the diff editor showing `after`. */
+    fun diffIconLines(after: String): List<Int> =
+        JsonParser.parseString(
+            js(
+                EDITORS + """
+                var editor = diffEditorShowing(${lit(after)});
+                if (editor == null) throw 'no diff editor shows that text';
+                var lines = [];
+                var highlighters = editor.getMarkupModel().getAllHighlighters();
+                for (var i = 0; i < highlighters.length; i++) {
+                    var renderer = highlighters[i].getGutterIconRenderer();
+                    if (renderer != null && renderer.getClass().getSimpleName() == 'ThreadGutterIconRenderer') {
+                        lines.push(editor.getDocument().getLineNumber(highlighters[i].getStartOffset()));
+                    }
+                }
+                lines.sort(function (a, b) { return a - b; });
+                String(JSON.stringify(lines))
+                """,
+            ),
+        ).asJsonArray.map { it.asInt }
+
+    /** Puts 0-based `topLine` at the top of the file's editor, without animation. */
+    fun scrollEditorTo(file: String, topLine: Int) {
+        js(
+            EDITORS + """
+            var editor = textEditorOf('$file');
+            var scrolling = editor.getScrollingModel();
+            scrolling.disableAnimation();
+            scrolling.scrollVertically(editor.logicalPositionToXY(new com.intellij.openapi.editor.LogicalPosition($topLine, 0)).y);
+            scrolling.enableAnimation();
+            String(true)
+            """,
+        )
+    }
+
+    /** 0-based line shown at (x, y) of the editor's viewport. */
+    fun lineUnderPoint(file: String, x: Int, y: Int): Int = js(
+        EDITORS + """
+        var editor = textEditorOf('$file');
+        var area = editor.getScrollingModel().getVisibleArea();
+        String(editor.xyToLogicalPosition(new java.awt.Point(area.x + $x, area.y + $y)).line)
+        """,
+    ).toInt()
+
+    /** Ctrl+mouse wheel over (x, y) of the editor's viewport, as one event dispatched in the IDE (negative = zoom in). */
+    fun ctrlWheelZoom(file: String, x: Int, y: Int, notches: Int = -2) {
+        js(
+            EDITORS + """
+            com.intellij.openapi.editor.ex.EditorSettingsExternalizable.getInstance().setWheelFontChangeEnabled(true);
+            var pane = textEditorOf('$file').getScrollPane();
+            var point = javax.swing.SwingUtilities.convertPoint(pane.getViewport(), $x, $y, pane);
+            pane.dispatchEvent(new java.awt.event.MouseWheelEvent(pane, java.awt.event.MouseEvent.MOUSE_WHEEL,
+                java.lang.System.currentTimeMillis(), java.awt.event.InputEvent.CTRL_DOWN_MASK, point.x, point.y, 0, false,
+                java.awt.event.MouseWheelEvent.WHEEL_UNIT_SCROLL, 1, $notches));
+            String(true)
+            """,
+        )
+    }
+
+    fun editorFontSize(file: String): Float = js(EDITORS + "String(textEditorOf('$file').getColorsScheme().getEditorFontSize2D())").toFloat()
+
     fun threadIdsOpenInDiff(after: String): List<String> = stringList(
         js(
             EDITORS + FIND + """
@@ -176,6 +292,90 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
             threadPanel(threadId),
         )
     }
+
+    /** Presses the thread header's own ⚡ ("Live: …" when on, "Go Live: …" when off) with its Swing `click()`. */
+    fun toggleThreadLive(threadId: String) {
+        js(
+            FIND + """
+            var button = find(component, function (c) {
+                if (!(c instanceof com.intellij.openapi.actionSystem.impl.ActionButton)) return false;
+                var text = c.getPresentation().getText();
+                return text != null && (text.startsWith('Live:') || text.startsWith('Go Live:'));
+            });
+            button.click();
+            String(true)
+            """,
+            threadPanel(threadId),
+        )
+    }
+
+    fun liveByDefault(): Boolean = js("String(store.getLiveByDefault())") == "true"
+
+    fun isLive(threadId: String): Boolean = js("String(store.isLive(store.getThreads().byId('$threadId')))") == "true"
+
+    /**
+     * Marks the whole thread read, as its panel does once on screen. The panel only marks read while the IDE is the
+     * active app, which the sandbox window on another desktop is not.
+     */
+    fun userReads(threadId: String) {
+        js(
+            """
+            var thread = store.getThreads().byId('$threadId');
+            thread.markReadByUser(thread.getMessages());
+            store.getThreads().notifyChanged(thread);
+            String(true)
+            """,
+        )
+    }
+
+    data class MessagePane(
+        val table: Boolean,
+        val strike: Boolean,
+        val width: Int,
+        val viewportWidth: Int,
+        val horizontalPolicy: Int,
+        val horizontalBarVisible: Boolean,
+    )
+
+    /** Every rendered message pane in the thread's panel: what its HTML holds and how it sits in a scroll pane. */
+    fun messagePanes(threadId: String): List<MessagePane> =
+        JsonParser.parseString(
+            js(
+                """
+                var panes = [];
+                function collect(c) {
+                    if (c instanceof javax.swing.JEditorPane) {
+                        var html = String(c.getText());
+                        var viewport = javax.swing.SwingUtilities.getAncestorOfClass(javax.swing.JViewport, c);
+                        var scroll = javax.swing.SwingUtilities.getAncestorOfClass(javax.swing.JScrollPane, c);
+                        panes.push({
+                            table: html.indexOf('<table') >= 0,
+                            strike: html.indexOf('<s>') >= 0,
+                            width: c.getWidth(),
+                            viewportWidth: viewport == null ? -1 : viewport.getExtentSize().width,
+                            horizontalPolicy: scroll == null ? -1 : scroll.getHorizontalScrollBarPolicy(),
+                            horizontalBarVisible: scroll != null && scroll.getHorizontalScrollBar().isVisible()
+                        });
+                    }
+                    var children = c.getComponents ? c.getComponents() : [];
+                    for (var i = 0; i < children.length; i++) collect(children[i]);
+                }
+                collect(component);
+                String(JSON.stringify(panes))
+                """,
+                threadPanel(threadId),
+            ),
+        ).asJsonArray.map { element ->
+            val pane = element.asJsonObject
+            MessagePane(
+                table = pane.get("table").asBoolean,
+                strike = pane.get("strike").asBoolean,
+                width = pane.get("width").asInt,
+                viewportWidth = pane.get("viewportWidth").asInt,
+                horizontalPolicy = pane.get("horizontalPolicy").asInt,
+                horizontalBarVisible = pane.get("horizontalBarVisible").asBoolean,
+            )
+        }
 
     /** Opens the composer with the real "Reply…" link, types the body into it and presses the send button. */
     fun userReplies(threadId: String, body: String) {
