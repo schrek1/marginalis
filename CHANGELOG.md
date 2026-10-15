@@ -17,6 +17,44 @@ History before 0.1.19 lives in git tags.
   between paragraphs stays an empty line instead of collapsing.
 - Paragraphs and lists in a message get a small gap between them, so a
   long reply no longer reads as one dense block.
+- Find any thread in the Marginalis tool window in one click: "Select in
+  Marginalis" in the thread's header opens the tool window on it, and
+  "Select Opened Thread" in the tool window picks the thread on the line
+  your caret is on, or the file when that line has none.
+
+### Changed
+
+- The Margin tab now reads top to bottom, oldest thread first, the same
+  way messages read inside a thread. A reply no longer makes a thread
+  jump, and a walkthrough's steps read 1, 2, 3.
+  - A Sort menu in the tab switches to newest first or to the previous
+    most-recent-activity order. Each project remembers its choice.
+  - A new thread you start, and threads that arrive while the list holds
+    still, appear on the side the chosen order puts new threads.
+- Long threads stay readable. You see the opening message, the last two
+  and anything you haven't read yet; the read middle hides behind one line
+  that shows the full history with a click, and Shorten History in the
+  thread header hides it again.
+- The ✉ envelope now shows only while a thread has a message you have
+  not read. Once you read a reply, its envelope goes away in the
+  Marginalis tool window, on its stripe button and in the Margin tab,
+  so ✉ points at what is new. A thread you read but did not answer
+  stays in "Awaiting You" and keeps its badge on the file's editor tab.
+
+### Fixed
+
+- "Select Opened Thread" in the Marginalis tool window works with a
+  pull or merge request review diff in front too, instead of staying
+  greyed out: it picks the thread on your caret's line in the diff, or
+  the diff's file. While you are writing a reply, it picks the thread
+  you are replying to, in an editor, a diff or the Margin tab.
+- Stepping through the Marginalis tool window with Next and Previous no
+  longer loses its place: the selection survives the tree refreshing,
+  so the next press continues from the step you are on instead of the
+  first one.
+- In a Guided section, First, Previous, Next and Last Step in the tool
+  window follow the step numbers, as the arrows in a thread's header do,
+  instead of the folder-and-file order the tree shows them in.
 - Thread icons now show in the gutter of a pull or merge request review
   diff too, and in any other diff that shows a file from a commit. Click
   one to open the thread right there in the diff.
@@ -45,28 +83,6 @@ History before 0.1.19 lives in git tags.
   Project node. The Guided Layout menu in the tool window header
   switches to the folder tree as before, or to one node per file, and
   each project remembers its choice.
-
-### Changed
-
-- The Margin tab now reads top to bottom, oldest thread first, the same
-  way messages read inside a thread. A reply no longer makes a thread
-  jump, and a walkthrough's steps read 1, 2, 3.
-  - A Sort menu in the tab switches to newest first or to the previous
-    most-recent-activity order. Each project remembers its choice.
-  - A new thread you start, and threads that arrive while the list holds
-    still, appear on the side the chosen order puts new threads.
-- Long threads stay readable. You see the opening message, the last two
-  and anything you haven't read yet; the read middle hides behind one line
-  that shows the full history with a click, and Shorten History in the
-  thread header hides it again.
-- The ✉ envelope now shows only while a thread has a message you have
-  not read. Once you read a reply, its envelope goes away in the
-  Marginalis tool window, on its stripe button and in the Margin tab,
-  so ✉ points at what is new. A thread you read but did not answer
-  stays in "Awaiting You" and keeps its badge on the file's editor tab.
-
-### Fixed
-
 - Marginalis now runs on 2025.2 versions of JetBrains IDEs. Until now those versions couldn't load
   it, even though the Marketplace listed them as supported.
 - Walking through steps in the same file keeps you in the editor you are reading, a pull request's
