@@ -1,5 +1,5 @@
-"""Guided layout (fork MARG-10): the tool window lays a walkthrough out by step number (default; consecutive steps
-in one file fold under it), by folder or by file, remembers the choice per project, and the step arrows follow step
+"""Guided layout (fork MARG-10, MARG-47): the tool window lays a walkthrough out by step number (default; consecutive
+steps in one file fold under it, consecutive project-level steps under a project node), by folder or by file, remembers the choice per project, and the step arrows follow step
 numbers in every layout.
 
     py sandbox/scenarios/guided_layout.py [--feature-dir <checkout>]
@@ -25,6 +25,29 @@ OPEN_STEPS = sorted(order for order, _, _ in fixture.steps() if order not in fix
 HOPPING = f"Guided {hopping.LABEL}"
 # The hopping walk by step number: runs of consecutive steps in one file fold, a lone step stays a row.
 HOPPING_BY_STEP = [[2, 3], [4, 5], [6], [7], [8], [9], [10], [11], [12, 13], [14], [15, 16], [17], [18]]
+# A walkthrough that opens with project-level steps (no file) and comes back to them after file steps; its label sorts
+# after the other two, so the plain "Guided" prefix still finds the 33-step walk.
+PROJECT_FIRST_LABEL = "SHOP-90"
+PROJECT_FIRST = f"Guided {PROJECT_FIRST_LABEL}"
+PROJECT_FIRST_STEPS: list[tuple[int, str | None, int | None]] = [
+    (1, None, None),
+    (2, None, None),
+    (3, None, None),
+    (4, hopping.CONTROLLER, 12),
+    (5, None, None),
+    (6, hopping.SERVICE_TEST, 14),
+    (7, hopping.SERVICE_TEST, 36),
+    (8, None, None),
+    (9, None, None),
+]
+# By step number: a run of two or more project-level steps folds under a project node, a lone one stays a row.
+PROJECT_FIRST_BY_STEP = [
+    ("ProjectNode", [1, 2, 3]),
+    ("ThreadNode", [4]),
+    ("ThreadNode", [5]),
+    ("FileNode", [6, 7]),
+    ("ProjectNode", [8, 9]),
+]
 
 
 def top_level_steps(shape: list[dict]) -> list[int]:
@@ -72,6 +95,12 @@ class Scenarios:
                        for order, path, line in hopping.steps()}
         for order in hopping.RESOLVED:
             ui.resolve_thread(hopping_ids[order])
+        for order, path, line in PROJECT_FIRST_STEPS:
+            body = f"Step {order}: {'overview' if path is None else 'review note'}"
+            if path is None:
+                ui.agent_adds_project_step(body, order, PROJECT_FIRST_LABEL)
+            else:
+                ui.agent_adds_step(path, line, body, order, PROJECT_FIRST_LABEL)
         time.sleep(3)
 
     def default_is_the_step_number_list(self) -> None:
@@ -111,6 +140,26 @@ class Scenarios:
                    [c["steps"] for c in shape if c["name"] == service] == [[2, 3]]
                    and [6] in [c["steps"] for c in shape] and [9] in [c["steps"] for c in shape],
                    [(c["name"], c["steps"]) for c in shape])
+
+    def by_step_number_folds_project_level_runs(self) -> None:
+        shape = ui.guided_shape(PROJECT_FIRST)
+        self.shot("3b-by-step-number-project-first")
+        self.check("consecutive project-level steps fold under a project node and a lone one stays a row",
+                   [(c["kind"], c["steps"]) for c in shape] == PROJECT_FIRST_BY_STEP,
+                   [(c["kind"], c["steps"]) for c in shape])
+        self.check("a project-level run after file steps folds under a project node of its own",
+                   [c["steps"] for c in shape if c["kind"] == "ProjectNode"] == [[1, 2, 3], [8, 9]],
+                   [(c["kind"], c["steps"]) for c in shape])
+        ui.select_step(1, PROJECT_FIRST)
+        time.sleep(PAUSE_S)
+        seen = [ui.selected_step()["order"]]
+        for _ in range(len(PROJECT_FIRST_STEPS) - 1):
+            press("Next Step", "Next Occurrence")
+            time.sleep(PAUSE_S)
+            seen.append(ui.selected_step()["order"])
+        expected = [order for order, _, _ in PROJECT_FIRST_STEPS]
+        self.check("Next walks into, through and out of the project runs in step order", seen == expected,
+                   f"{seen} vs {expected}")
 
     def by_file_has_one_node_per_file(self) -> None:
         ui.choose_guided_layout("By file")
@@ -155,6 +204,7 @@ class Scenarios:
             self.by_folder_groups_under_folders,
             self.by_step_number_lists_steps_in_order,
             self.by_step_number_folds_runs_in_one_file,
+            self.by_step_number_folds_project_level_runs,
             self.by_file_has_one_node_per_file,
             self.arrows_follow_step_numbers_by_file,
             self.choice_survives_a_restart,
