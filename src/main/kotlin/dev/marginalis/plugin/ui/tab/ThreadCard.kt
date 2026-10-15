@@ -9,6 +9,7 @@ import dev.marginalis.core.CommentThread
 import dev.marginalis.core.People
 import dev.marginalis.core.ThreadStatus
 import dev.marginalis.core.Turn
+import dev.marginalis.core.TurnSignal
 import dev.marginalis.plugin.ui.MarginalisIcons
 import dev.marginalis.plugin.ui.MarginalisPalette
 import dev.marginalis.plugin.ui.MarkdownRenderer
@@ -100,7 +101,7 @@ internal class ThreadCard(
             dimmed = dimmed,
             updatedAt = thread.updatedAt,
             status = thread.status,
-            turn = thread.turn(),
+            turn = TurnSignal.of(thread),
             unread = thread.unreadByUserCount(),
             messages = thread.messages.size,
             lastSpeaker = thread.messages.lastOrNull()?.speaker(people),
