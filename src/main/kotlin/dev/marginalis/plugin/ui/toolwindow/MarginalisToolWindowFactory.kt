@@ -14,6 +14,8 @@ import com.intellij.openapi.actionSystem.ToggleAction
 import com.intellij.openapi.actionSystem.UiDataProvider
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileTypes.FileTypeManager
@@ -61,7 +63,9 @@ import dev.marginalis.plugin.ui.ParticipantStackIcon
 import dev.marginalis.plugin.ui.RELAYED_STAYS_DELETED
 import dev.marginalis.plugin.ui.StopAgentsGroup
 import dev.marginalis.plugin.ui.SubmitRoundAction
+import dev.marginalis.plugin.ui.ThreadInlayManager
 import dev.marginalis.plugin.ui.WalkthroughNavigator
+import dev.marginalis.plugin.ui.diff.ReviewDiffMarkers
 import dev.marginalis.plugin.ui.tab.ProjectTab
 import java.awt.BorderLayout
 import java.awt.Color
@@ -72,6 +76,7 @@ import javax.swing.JMenuItem
 import javax.swing.JPanel
 import javax.swing.JPopupMenu
 import javax.swing.JTree
+import javax.swing.SwingUtilities
 import javax.swing.tree.DefaultMutableTreeNode
 import javax.swing.tree.DefaultTreeModel
 import javax.swing.tree.TreeCellRenderer
@@ -195,20 +200,38 @@ private class SelectOpenedThreadAction(private val panel: MarginalisToolWindowPa
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
 
     override fun update(e: AnActionEvent) {
-        e.presentation.isEnabled = e.project?.let { FileEditorManager.getInstance(it).selectedTextEditor } != null
+        e.presentation.isEnabled = e.project?.let(::editorInFront) != null
     }
 
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
-        val editor = FileEditorManager.getInstance(project).selectedTextEditor ?: return
-        val vFile = FileDocumentManager.getInstance().getFile(editor.document) ?: return
-        val file = project.guessProjectDir()?.let { VfsUtilCore.getRelativePath(vFile, it) } ?: return
-        val line = editor.caretModel.logicalPosition.line
+        val editor = editorInFront(project) ?: return
+        val file = projectPathOf(project, editor) ?: return
+        val caretLine = editor.caretModel.logicalPosition.line
         val store = MarginalisStore.getInstance(project)
         store.syncLines()
-        val onLine = store.threads.all().filter { it.file == file && it.line == line }
+        val lineOf = editor.getUserData(ThreadInlayManager.THREAD_LINE) ?: { thread: CommentThread -> thread.line }
+        val onLine = store.threads.all().filter { it.file == file && lineOf(it) == caretLine }
         val thread = onLine.firstOrNull { it.status is ThreadStatus.Open } ?: onLine.firstOrNull()
         if (thread != null) panel.reveal(thread) else panel.selectFile(file)
+    }
+
+    // A diff in an editor tab is no text editor to the file editor manager, so look for its side showing a project file.
+    private fun editorInFront(project: Project): Editor? {
+        val manager = FileEditorManager.getInstance(project)
+        manager.selectedTextEditor?.let { return it }
+        val front = manager.selectedEditor?.component ?: return null
+        val sides = EditorFactory.getInstance().allEditors.filter { editor ->
+            SwingUtilities.isDescendingFrom(editor.component, front) && projectPathOf(project, editor) != null
+        }
+        return sides.firstOrNull { it.contentComponent.hasFocus() } ?: sides.firstOrNull()
+    }
+
+    // A review diff's editor holds a revision's copy of the file, so only its tag names the file it shows.
+    private fun projectPathOf(project: Project, editor: Editor): String? {
+        editor.getUserData(ReviewDiffMarkers.PROJECT_PATH)?.let { return it }
+        val vFile = FileDocumentManager.getInstance().getFile(editor.document) ?: return null
+        return project.guessProjectDir()?.let { VfsUtilCore.getRelativePath(vFile, it) }
     }
 }
 
