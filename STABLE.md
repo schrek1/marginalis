@@ -25,3 +25,4 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-29 | Sandbox harness in the repo, with one runbook per feature | `chore/MARG-29-sandbox-in-repo` | schrek1/marginalis#40 | — | `ba2ef0a` |
 | MARG-28 | Runbooks and scenarios for the features already in schreko_stable | `docs/MARG-28-runbooks` | — | — | `a90290b` |
 | MARG-17 | Walkthrough steps in other files of a review diff open in that diff | `feat/MARG-17-steps-open-in-review-diff` | schrek1/marginalis#52 | — | `ebbe7f7` |
+| MARG-45 | The reply you are typing in the Margin tab stays put while other threads change | `fix/MARG-45-margin-tab-keeps-reply-in-place` | schrek1/marginalis#58 | — | `02b80a1` |

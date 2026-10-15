@@ -29,6 +29,7 @@ import dev.marginalis.core.ProjectTabLayout
 import dev.marginalis.core.ProjectTabLayout.Entry
 import dev.marginalis.core.ProjectTabOrder
 import dev.marginalis.core.ProjectTabTally
+import dev.marginalis.core.ScrollAnchor
 import dev.marginalis.core.ThreadText
 import dev.marginalis.plugin.settings.MarginalisSettings
 import dev.marginalis.plugin.store.MarginalisStore
@@ -43,6 +44,7 @@ import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
 import java.awt.KeyboardFocusManager
+import java.awt.Point
 import java.awt.Rectangle
 import java.awt.Window
 import java.awt.event.ComponentAdapter
@@ -81,6 +83,7 @@ class ProjectTabPanel(private val project: Project) : Disposable {
     private val conversations = HashMap<String, ConversationCard>()
     private var draftShown: DraftShown? = null
     private var focusOnceShown: String? = null
+    private var clickedCard: String? = null
 
     private val counts = JBLabel()
     private val newCount = JBLabel().apply { foreground = MarginalisPalette.ACCENT }
@@ -106,6 +109,14 @@ class ProjectTabPanel(private val project: Project) : Disposable {
         override fun getScrollableTracksViewportWidth(): Boolean = true
 
         override fun getScrollableTracksViewportHeight(): Boolean = false
+
+        // A thread panel re-renders itself when its thread changes, so the anchor is kept around every layout,
+        // not only around refresh(): before it the cards still sit where the user sees them.
+        override fun validateTree() {
+            val anchor = anchorBeforeLayout()
+            super.validateTree()
+            anchor?.let(::keepInPlace)
+        }
     }.apply {
         layout = BoxLayout(this, BoxLayout.Y_AXIS)
         border = JBUI.Borders.empty(8, 12, 12, 12)
@@ -272,8 +283,9 @@ class ProjectTabPanel(private val project: Project) : Disposable {
         }
     }
 
-    private fun refresh() {
+    private fun refresh(anchorOn: String? = null) {
         if (disposed) return
+        anchorOn?.let { clickedCard = it }
         val prefs = settings.projectTabPrefs
         val order = sort.order
         val people = settings.people
@@ -309,6 +321,40 @@ class ProjectTabPanel(private val project: Project) : Disposable {
         forgetCardsNotIn(shownEntries, resolvedThreads)
         focusFirstSentThread()
     }
+
+    private fun anchorBeforeLayout(): ScrollAnchor.Anchor? {
+        val clicked = clickedCard.also { clickedCard = null }
+        val view = scroll.viewport.viewRect
+        if (view.height <= 0 || scroll.verticalScrollBar.valueIsAdjusting) return null
+        val boxes = anchorTargets().map { (key, component) ->
+            val top = topInStack(component)
+            ScrollAnchor.Box(key, top, top + component.height)
+        }
+        return ScrollAnchor.pick(boxes, view.y, view.height, preferred = listOf(clicked, writingIn()))
+    }
+
+    private fun keepInPlace(anchor: ScrollAnchor.Anchor) {
+        val component = anchorTargets()[anchor.key] ?: return
+        val viewport = scroll.viewport
+        val viewTop = ScrollAnchor.viewTopKeeping(anchor, topInStack(component), stack.height, viewport.extentSize.height)
+        if (viewTop != viewport.viewPosition.y) viewport.viewPosition = Point(viewport.viewPosition.x, viewTop)
+    }
+
+    private fun writingIn(): String? {
+        val focused = ownWindow()?.mostRecentFocusOwner ?: return null
+        return anchorTargets().entries.firstOrNull { (_, component) -> SwingUtilities.isDescendingFrom(focused, component) }?.key
+    }
+
+    // Thread cards precede conversations, so the innermost card holding the focus is found first.
+    private fun anchorTargets(): Map<String, JComponent> {
+        val targets = LinkedHashMap<String, JComponent>()
+        draftShown?.let { targets[it.threadId] = it.panel }
+        targets.putAll(cards)
+        targets.putAll(conversations)
+        return targets.filterValues { it.height > 0 && SwingUtilities.isDescendingFrom(it, stack) }
+    }
+
+    private fun topInStack(component: JComponent): Int = SwingUtilities.convertPoint(component, 0, 0, stack).y
 
     private fun focusFirstSentThread() {
         val sent = focusOnceShown ?: return
@@ -415,7 +461,7 @@ class ProjectTabPanel(private val project: Project) : Disposable {
         } else {
             expansion.toggle(id)
         }
-        refresh()
+        refresh(anchorOn = id)
         val opened = card.panel
         if (opened != null) opened.markRead() else newTags.endLook(id)
     }
@@ -429,7 +475,7 @@ class ProjectTabPanel(private val project: Project) : Disposable {
 
     private fun toggleConversation(key: String) {
         expansion.toggle(key)
-        refresh()
+        refresh(anchorOn = key)
     }
 
     private fun forgetCardsNotIn(entries: List<Entry>, resolved: List<CommentThread>) {

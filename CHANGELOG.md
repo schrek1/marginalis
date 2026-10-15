@@ -90,6 +90,12 @@ History before 0.1.19 lives in git tags.
   and anything you haven't read yet; the read middle hides behind one line
   that shows the full history with a click, and Shorten History in the
   thread header hides it again.
+### Fixed
+
+- The reply you are typing in the Margin tab stays where it is when an
+  agent posts into another thread above it, and keeps your cursor. The
+  same goes for a new project thread you are writing. Reading without
+  a draft, the card at the top of your view stays put too.
 
 ## [0.2.2] - 2026-10-04
 
