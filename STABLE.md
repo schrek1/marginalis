@@ -27,3 +27,4 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-17 | Walkthrough steps in other files of a review diff open in that diff | `feat/MARG-17-steps-open-in-review-diff` | schrek1/marginalis#52 | — | `ebbe7f7` |
 | MARG-50 | An open thread shows the agent's reply that arrived while its tab was in the background | `fix/MARG-50-api-reply-shows-inline` | schrek1/marginalis#54 | — | `dfe48c5` |
 | MARG-36 | The ✉ envelope shows only while something in the thread is unread | `feat/MARG-36-envelope-only-while-unread` | schrek1/marginalis#57 | — | `50f05dc` |
+| MARG-48 | The Margin tab shows only when there is something in it | `fix/MARG-48-no-empty-margin-tab` | schrek1/marginalis#55 | — | `6a0ebec` |
