@@ -90,6 +90,12 @@ History before 0.1.19 lives in git tags.
   and anything you haven't read yet; the read middle hides behind one line
   that shows the full history with a click, and Shorten History in the
   thread header hides it again.
+### Fixed
+
+- A thread you left open shows the agent's reply when you come back to
+  it. A reply that arrived while its file, or the Margin tab, was in a
+  background tab used to stay hidden until something else changed on
+  the thread.
 
 ## [0.2.2] - 2026-10-04
 
