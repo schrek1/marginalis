@@ -1,0 +1,33 @@
+// Applied with `--init-script`: adds `runIdeForUiTests` to a Marginalis checkout without touching its build.
+// The sandbox IDE gets the plugin built from that checkout plus Remote Robot's server, and opens the test project.
+// Closures are given explicit parameters because Groovy's SAM coercion to Action sets no delegate.
+
+def runtime = System.getenv('MARGINALIS_SANDBOX_RUNTIME') ?: 'D:/OSOBNI/programming/marginalis-sandbox-runtime'
+def robotPort = System.getenv('MARGINALIS_ROBOT_PORT') ?: '8082'
+def robotVersion = '0.11.23'
+
+gradle.rootProject { project ->
+    project.pluginManager.withPlugin('org.jetbrains.intellij.platform') {
+        def testing = project.extensions.getByName('intellijPlatformTesting')
+        testing.runIde.register('runIdeForUiTests') { params ->
+            // Shared across worktrees, so first-run state (license, trust) is paid once per machine.
+            params.sandboxDirectory.set(project.file("$runtime/ide"))
+            params.plugins { plugins -> plugins.robotServerPlugin(robotVersion) }
+            params.task { task ->
+                task.jvmArgumentProviders.add({
+                    [
+                        "-Drobot-server.port=$robotPort".toString(),
+                        '-Didea.trust.all.projects=true',
+                        '-Djb.privacy.policy.text=<!--999.999-->',
+                        '-Djb.consents.confirmation.enabled=false',
+                        '-Dide.show.tips.on.startup.default.value=false',
+                        '-Didea.initially.ask.config=never',
+                        '-Dide.mac.message.dialogs.as.sheets=false',
+                    ]
+                } as org.gradle.process.CommandLineArgumentProvider)
+                // No splash: it would be one more window flashing on Ondra's desktop before the move.
+                task.args('nosplash', project.file("$runtime/project").absolutePath)
+            }
+        }
+    }
+}
