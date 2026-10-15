@@ -80,6 +80,9 @@
              an IDE restart. -->
         <listener class="dev.marginalis.plugin.MarginalisUnloadListener"
                   topic="com.intellij.ide.plugins.DynamicPluginListener"/>
+        <!-- The Margin tab is reopened by Marginalis, not by the platform's editor restore. -->
+        <listener class="dev.marginalis.plugin.ui.tab.ParkMarginTabOnClose"
+                  topic="com.intellij.openapi.project.ProjectCloseListener"/>
     </applicationListeners>
 
     <extensions defaultExtensionNs="com.intellij">
@@ -95,7 +98,6 @@
         <!-- At-a-glance: the turn signal badges the file's own icon — editor tabs and the Project view alike. -->
         <fileIconPatcher implementation="dev.marginalis.plugin.ui.TurnSignalIconPatcher"/>
         <!-- The project tab: project-level threads in an editor tab of their own. -->
-        <virtualFileSystem key="marginalis" implementationClass="dev.marginalis.plugin.ui.tab.MarginFileSystem"/>
         <fileEditorProvider implementation="dev.marginalis.plugin.ui.tab.MarginEditorProvider"/>
         <editorTabTitleProvider implementation="dev.marginalis.plugin.ui.tab.MarginTabTitleProvider" order="first"/>
         <fileIconProvider implementation="dev.marginalis.plugin.ui.tab.MarginTabIconProvider"/>

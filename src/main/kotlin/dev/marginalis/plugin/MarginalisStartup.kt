@@ -33,9 +33,6 @@ class MarginalisStartup : ProjectActivity {
             store.scheduleSave()
         }
         refreshTabOnChange(project, store)
-        ApplicationManager.getApplication().invokeLater {
-            if (!project.isDisposed) ProjectTab.openOnStartup(project)
-        }
 
         val loaded = MarginalisPersistence.load(project)
         store.handBack.restore(loaded.handedBackAt)
@@ -55,6 +52,10 @@ class MarginalisStartup : ProjectActivity {
                 // One notification after the silent bulk load refreshes every UI surface.
                 persisted.lastOrNull()?.let { store.threads.notifyChanged(it) }
             }
+        }
+        // Queued behind the persisted threads: whether the tab opens depends on them.
+        ApplicationManager.getApplication().invokeLater {
+            if (!project.isDisposed) ProjectTab.openOnStartup(project)
         }
     }
 

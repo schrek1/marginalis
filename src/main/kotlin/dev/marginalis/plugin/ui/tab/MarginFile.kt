@@ -1,21 +1,13 @@
 package dev.marginalis.plugin.ui.tab
 
-import com.intellij.openapi.vfs.VirtualFileSystem
 import com.intellij.openapi.vfs.VirtualFileWithoutContent
 import com.intellij.testFramework.LightVirtualFile
 
-// VirtualFileWithoutContent: editor restore skips preloading content, and no
-// Document is ever created for it.
+// VirtualFileWithoutContent: no Document is ever created for it.
+// No file system of its own: the platform can't find it by URL, so it never restores the tab (see ProjectTab.park).
 object MarginFile : LightVirtualFile("Margin"), VirtualFileWithoutContent {
-    const val PATH = "margin"
 
     init {
         isWritable = false
     }
-
-    override fun getFileSystem(): VirtualFileSystem = detachedFileSystem
-
-    override fun getPath(): String = PATH
 }
-
-private val detachedFileSystem = MarginFileSystem()
