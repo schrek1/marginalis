@@ -84,7 +84,9 @@ object Sandbox {
             val port = if (robotUp()) findMarginalisPort() else null
             if (port != null && (mover == null || !mover.isAlive)) {
                 cachedPort = port
-                println("sandbox up: robot http://127.0.0.1:$robotPort, marginalis http://127.0.0.1:$port${windowNote(mover)}")
+                val frame = sizeTheFrame()
+                awaitProjectStartup()
+                println("sandbox up: robot http://127.0.0.1:$robotPort, marginalis http://127.0.0.1:$port, frame $frame${windowNote(mover)}")
                 return
             }
             Thread.sleep(1_000)
@@ -129,6 +131,41 @@ object Sandbox {
     fun restart(fresh: Boolean) {
         stop()
         start(fresh)
+    }
+
+    // With the screen asleep or its layout changed, Windows opens new windows tiny (620x392 seen): the editor is then a
+    // few pixels wide, inlaid thread panels get zero width, and the robot finds no panel at all.
+    private fun sizeTheFrame(): String = robot.callJs(
+        """
+        var frame = com.intellij.openapi.wm.WindowManager.getInstance().getFrame(
+            com.intellij.openapi.project.ProjectManager.getInstance().getOpenProjects()[0]);
+        frame.setExtendedState(java.awt.Frame.NORMAL);
+        frame.setBounds(0, 0, 1600, 1000);
+        frame.validate();
+        String(frame.getWidth() + 'x' + frame.getHeight())
+        """,
+        edt = true,
+    )
+
+    // The IDE restores its tool window layout during the project's startup; the Project view it shows then takes the
+    // left side from a Marginalis tool window a scenario has just shown. Smart mode flickers on right after startup.
+    private fun awaitProjectStartup() {
+        val deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos()
+        var settledPolls = 0
+        while (settledPolls < 3 && System.nanoTime() < deadline) {
+            val settled = runCatching {
+                robot.callJs(
+                    """
+                    var projects = com.intellij.openapi.project.ProjectManager.getInstance().getOpenProjects();
+                    String(projects.length > 0
+                        && com.intellij.openapi.startup.StartupManager.getInstance(projects[0]).postStartupActivityPassed()
+                        && !com.intellij.openapi.project.DumbService.isDumb(projects[0]))
+                    """,
+                ) == "true"
+            }.getOrDefault(false)
+            settledPolls = if (settled) settledPolls + 1 else 0
+            Thread.sleep(1_000)
+        }
     }
 
     @OptIn(ExperimentalPathApi::class)
