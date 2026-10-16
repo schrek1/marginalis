@@ -264,6 +264,17 @@ val sandboxRunLocked by tasks.registering {
         }
         // A build stopped halfway lets go of the lock too.
         Runtime.getRuntime().addShutdownHook(Thread { releaseSandboxRunLock() })
+        // Under the lock no other Kotlin run is alive, so a container on a Kotlin sandbox port is an orphan: on Windows
+        // a cancelled run's test JVM is terminated without its shutdown hook.
+        if (sandboxInDocker) {
+            val listing = ProcessBuilder("docker", "ps", "-a", "--format", "{{.Names}}").redirectErrorStream(true).start()
+            val orphans = listing.inputStream.bufferedReader().readLines().filter { Regex("marginalis-sandbox-81\\d\\d").matches(it) }
+            listing.waitFor()
+            if (orphans.isNotEmpty()) {
+                logger.lifecycle("removing sandbox containers an earlier run left behind: ${orphans.joinToString()}")
+                ProcessBuilder(listOf("docker", "rm", "-f") + orphans).redirectErrorStream(true).start().waitFor()
+            }
+        }
     }
 }
 
