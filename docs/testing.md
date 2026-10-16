@@ -7,7 +7,7 @@ is ready for review when the layers it touches pass, and the whole sandbox set p
 |---|---|---|---|
 | Core | model, lifecycle, walks, anchoring, codec (`core/`, pure Kotlin) | `./gradlew :core:test` | seconds |
 | Platform (headless) | plugin code against a real in-memory IDE: store, transport, tool window models, actions | `./gradlew test` | about a minute |
-| Sandbox scenarios | the real IDE, driven through its Swing components and the agent API | `python sandbox/run_all.py --jobs 6` (Docker) | about 3 min |
+| Sandbox scenarios | the real IDE, driven through its Swing components and the agent API | `python sandbox/run_all.py --jobs 6` (Docker), or the Kotlin suite `./gradlew uiSandboxTest` | about 4 min |
 
 Run the platform tests against the build's own IDE (IntelliJ Community 2025.2, the platform floor). Do not pass
 `-Pmarginalis.localIde` for them: a local Ultimate ships obfuscated classes and every test fails.
@@ -47,7 +47,26 @@ CI, whatever the monitor does, and nothing appears on your desktop. The IDE insi
   `marginalis-sandbox-runs/.lock` and the next one waits, because two runs side by side overload the machine and
   both fail at random. Each run picks free ports and its own folder. Never create or delete the lock by hand: a
   one-off experiment with a sandbox runs as `py sandbox/run_all.py --locked <command...>`, which waits for the lock,
-  holds it for the command and releases only its own.
+  holds it for the command and releases only its own. A lock whose owner process is gone (a run killed hard) is
+  taken over by the next run at once; the Kotlin suite also removes the sandbox containers such a run left behind.
+
+### The Kotlin suite
+
+The same scenarios also exist as a JUnit suite on Remote-Robot in `src/uiTest/kotlin/.../sandbox/`, run by Gradle.
+It will replace the Python scripts once the stable gate runs it; until then a scenario changes in both.
+
+- **The whole set:** `./gradlew uiSandboxTest` (Docker, 6 sandboxes; `-Pmarginalis.sandbox.jobs=N` changes that).
+  It takes the same machine lock, builds the checkout once (`sandboxPrebuilt`) and runs the classes longest first.
+  About 4 min, the same as the Python set.
+- **One scenario:** add `--tests '*EnvelopeOnlyWhileUnreadTest'`.
+- **Where things land:** `marginalis-sandbox-runtime/` next to the checkout (`MARGINALIS_SANDBOX_RUNTIME` moves
+  it). Per scenario, `<scenario>/run.log` holds the IDE's log, `shots/<scenario>/` the shots, and on a timeout
+  `<scenario>/diagnostics/` gets a frame shot while the thread dump goes into `run.log`. The failure message names
+  both.
+- **Waiting:** a wait for a condition goes through `Waits.kt` (`waitUntil`, `awaitUntil`, `awaitValue`): bounded,
+  and a timeout records the diagnostics. Prefer one over a fixed sleep, and never fall back to a weaker read when
+  the real one fails: the step fails instead.
+- **Known gaps** (checks that pin an open defect) run only with `MARGINALIS_SANDBOX_KNOWN_GAPS=true`.
 
 ### Measured settings
 

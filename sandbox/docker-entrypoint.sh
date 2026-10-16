@@ -29,7 +29,7 @@ if [ "$mode" != prebuilt ]; then
   # Gradle builds off a copy: on a host bind mount it is slow, and the copy keeps its build output between starts.
   rsync -a --delete \
     --exclude /.git --exclude /build --exclude /core/build --exclude /.gradle --exclude /.kotlin \
-    --exclude /.intellijPlatform --exclude /.idea --exclude __pycache__ \
+    --exclude /.intellijPlatform --exclude /.idea --exclude /out --exclude __pycache__ \
     /src/ /work/src/
   find /work/src/gradlew /work/src/sandbox -maxdepth 1 \( -name gradlew -o -name '*.sh' \) -exec sed -i 's/\r$//' {} +
 fi
@@ -76,6 +76,9 @@ EOF
 } > /tmp/idea.vmoptions
 
 display="${MARGINALIS_DISPLAY:-99}"
+# A container started again keeps its /tmp; an Xvfb killed with it leaves its lock there, and the next one refuses
+# the display.
+rm -f "/tmp/.X$display-lock" "/tmp/.X11-unix/X$display"
 Xvfb ":$display" -screen 0 2560x1440x24 -nolisten tcp >/dev/null 2>&1 &
 export DISPLAY=":$display" IDEA_PROPERTIES=/tmp/idea.properties IDEA_VM_OPTIONS=/tmp/idea.vmoptions
 exec "$ide/bin/idea.sh" nosplash /work/runtime/project

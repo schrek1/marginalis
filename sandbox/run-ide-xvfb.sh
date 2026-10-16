@@ -6,6 +6,8 @@ set -euo pipefail
 
 display="${MARGINALIS_DISPLAY:-99}"
 pkill -f "Xvfb :$display " || true
+# A killed Xvfb leaves its lock behind, and the next one refuses the display.
+rm -f "/tmp/.X$display-lock" "/tmp/.X11-unix/X$display"
 Xvfb ":$display" -screen 0 2560x1440x24 -nolisten tcp >/dev/null 2>&1 &
 xvfb=$!
 trap 'kill "$xvfb" 2>/dev/null || true' EXIT

@@ -79,6 +79,10 @@ def get_json(url: str, timeout: float = 2) -> dict | None:
 
 
 def robot_up() -> bool:
+    # Docker Desktop's port proxy accepts connections with nothing listening behind it, so in Docker mode a connect
+    # alone proves nothing.
+    if DOCKER and not container_running():
+        return False
     try:
         with socket.create_connection(("127.0.0.1", ROBOT_PORT), timeout=2):
             return True
@@ -220,8 +224,10 @@ def wait_until_settled() -> None:
         var started = com.intellij.ide.startup.StartupManagerEx.getInstanceEx(project).postStartupActivityPassed();
         var quiet = !com.intellij.openapi.application.ApplicationManager.getApplication().isWriteActionPending();
         // The global workspace model is first read from a cache and reloaded from disk seconds later, in a background
-        // write (seen 4 s after the IDE answered). Without that private flag (another platform version), go on.
+        // write (seen 4 s after the IDE answered). Without that private flag (another platform version), go on, and
+        // say so: the wait then misses the write that stalls an editor opening.
         var globalModel = true;
+        var globalModelCheck = 'ok';
         try {
             var app = com.intellij.openapi.application.ApplicationManager.getApplication();
             var type = java.lang.Class.forName('com.intellij.workspaceModel.ide.JpsGlobalModelSynchronizer', true,
@@ -230,14 +236,21 @@ def wait_until_settled() -> None:
             var field = sync.getClass().getDeclaredField('loadedFromDisk');
             field.setAccessible(true);
             globalModel = field.getBoolean(sync);
-        } catch (e) {}
-        String(smart && started && quiet && globalModel)
+        } catch (e) {
+            globalModelCheck = String(e);
+        }
+        String(JSON.stringify({ settled: smart && started && quiet && globalModel, globalModelCheck: globalModelCheck }))
     """
     deadline = time.monotonic() + SETTLE_TIMEOUT_S
     quiet_samples = 0
+    noted = False
     while time.monotonic() < deadline:
         try:
-            quiet_samples = quiet_samples + 1 if robot.call_js(probe) == "true" else 0
+            sample = json.loads(robot.call_js(probe))
+            quiet_samples = quiet_samples + 1 if sample["settled"] else 0
+            if sample["globalModelCheck"] != "ok" and not noted:
+                print(f"note  the start does not wait for the global workspace model: {sample['globalModelCheck']}")
+                noted = True
         except Exception:
             quiet_samples = 0
         if quiet_samples >= 3:

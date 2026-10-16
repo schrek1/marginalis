@@ -128,35 +128,39 @@ def stripe_badge() -> str:
     """)
 
 
+TAB_LABEL_WAIT_S = 10
+
+
 def margin_tab_title() -> str:
-    """The Margin tab's title as its editor tab shows it, or as the title provider computes it when the tab's
-    label cannot be read (printed, since that skips the refresh of the tab)."""
-    raw = ui.js(ui._MARGIN + """
-        var marginFile = pluginLoader.loadClass('dev.marginalis.plugin.ui.tab.MarginFile').getField('INSTANCE').get(null);
-        var title = null;
-        try {
-            var windows = com.intellij.openapi.fileEditor.ex.FileEditorManagerEx.getInstanceEx(project).getWindows();
-            for (var i = 0; i < windows.length && title == null; i++) {
-                var tabs = windows[i].getTabbedPane().getTabs().getTabs();
-                for (var j = 0; j < tabs.size(); j++) {
-                    var object = tabs.get(j).getObject();
-                    if (object === marginFile || (object != null && object.getFile && object.getFile() === marginFile)) {
-                        title = String(tabs.get(j).getText());
+    """The Margin tab's title as its editor tab shows it. The title provider is no stand-in: it skips the refresh
+    of the tab, so a label that never shows comes back as a reason, and the check on it fails."""
+    deadline = time.monotonic() + TAB_LABEL_WAIT_S
+    last_error = None
+    while True:
+        try:
+            title = json.loads(ui.js(ui._MARGIN + """
+                var marginFile = pluginLoader.loadClass('dev.marginalis.plugin.ui.tab.MarginFile').getField('INSTANCE').get(null);
+                var title = null;
+                var windows = com.intellij.openapi.fileEditor.ex.FileEditorManagerEx.getInstanceEx(project).getWindows();
+                for (var i = 0; i < windows.length && title == null; i++) {
+                    var tabs = windows[i].getTabbedPane().getTabs().getTabs();
+                    for (var j = 0; j < tabs.size(); j++) {
+                        var object = tabs.get(j).getObject();
+                        if (object === marginFile || (object != null && object.getFile && object.getFile() === marginFile)) {
+                            title = String(tabs.get(j).getText());
+                        }
                     }
                 }
-            }
-        } catch (ignored) {}
-        var source = 'tab';
-        if (title == null) {
-            source = 'provider';
-            title = String(com.intellij.openapi.fileEditor.impl.EditorTabPresentationUtil.getEditorTabTitle(project, marginFile));
-        }
-        String(JSON.stringify({ title: title, source: source }))
-    """)
-    shown = json.loads(raw)
-    if shown["source"] != "tab":
-        print(f"note  the Margin tab's label could not be read; its title provider says {shown['title']!r}")
-    return shown["title"]
+                String(JSON.stringify({ title: title }))
+            """))["title"]
+            if title is not None:
+                return title
+        except Exception as error:
+            last_error = error
+        if time.monotonic() >= deadline:
+            return (f"<no Margin tab label within {TAB_LABEL_WAIT_S} s"
+                    f"{f'; last {type(last_error).__name__}: {last_error}' if last_error else ''}>")
+        time.sleep(0.5)
 
 
 def margin_card_signals() -> dict:
