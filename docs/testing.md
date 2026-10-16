@@ -45,7 +45,9 @@ CI, whatever the monitor does, and nothing appears on your desktop. The IDE insi
   scenario, `shots/`), and the summary lists every failing check.
 - **Several checkouts at once** (parallel feature work) queue up: a multi-sandbox run takes the machine-wide lock
   `marginalis-sandbox-runs/.lock` and the next one waits, because two runs side by side overload the machine and
-  both fail at random. Each run picks free ports and its own folder.
+  both fail at random. Each run picks free ports and its own folder. Never create or delete the lock by hand: a
+  one-off experiment with a sandbox runs as `py sandbox/run_all.py --locked <command...>`, which waits for the lock,
+  holds it for the command and releases only its own.
 
 ### Measured settings
 
