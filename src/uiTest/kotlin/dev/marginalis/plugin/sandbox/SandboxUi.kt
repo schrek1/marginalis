@@ -30,10 +30,16 @@ function threadOf(panel) {
     field.setAccessible(true);
     return field.get(panel);
 }
-// The IDE dispatches an action, and moves a caret, under the write-intent lock, which 2025.2 does not give the robot's
-// EDT calls. Only around those calls: a lock around a whole script deadlocks an editor opening on background reads.
-function asDispatched(run) {
+// A caret move needs the write-intent lock, which 2025.2 does not give the robot's EDT calls. Only around that call: a
+// lock around a whole script deadlocks an editor opening on background reads.
+function asUser(run) {
     return com.intellij.openapi.application.WriteIntentReadAction.compute(new com.intellij.openapi.util.ThrowableComputable({ compute: run }));
+}
+// An action runs as its own EDT event, with the locks a click gives it; later robot scripts queue behind it, so they
+// see its outcome.
+function performLater(action, event) {
+    com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater(
+        new java.lang.Runnable({ run: function () { action.actionPerformed(event); } }));
 }
 """
 
@@ -167,7 +173,7 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
         js(
             EDITORS + """
             var editor = textEditorOf('$file');
-            asDispatched(function () { editor.getCaretModel().moveToLogicalPosition(new com.intellij.openapi.editor.LogicalPosition(${line - 1}, 0)); });
+            asUser(function () { editor.getCaretModel().moveToLogicalPosition(new com.intellij.openapi.editor.LogicalPosition(${line - 1}, 0)); });
             String(true)
             """,
         )
@@ -299,7 +305,7 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
             var event = com.intellij.openapi.actionSystem.AnActionEvent.createEvent(
                 action, com.intellij.ide.DataManager.getInstance().getDataContext(button), button.getPresentation().clone(),
                 'MarginalisSandbox', com.intellij.openapi.actionSystem.ActionUiKind.NONE, null);
-            asDispatched(function () { action.actionPerformed(event); });
+            performLater(action, event);
             String(true)
             """,
             threadPanel(threadId),

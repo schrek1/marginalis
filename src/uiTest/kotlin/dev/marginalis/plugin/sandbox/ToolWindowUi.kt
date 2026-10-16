@@ -39,6 +39,8 @@ function sectionTitle(node) { return String(node.getUserObject().getTitle()); }
 
     private const val HEADER = """
 var window = com.intellij.openapi.wm.ToolWindowManager.getInstance(project).getToolWindow('Marginalis');
+// A restart can restore the tool window hidden; its header is built only once it shows.
+if (!window.isVisible()) window.show(null);
 var root = window.getComponent();
 while (root.getParent() != null && root.getClass().getName().indexOf('InternalDecorator') < 0) root = root.getParent();
 """
@@ -69,7 +71,7 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
                 var event = com.intellij.openapi.actionSystem.AnActionEvent.createEvent(
                     action, com.intellij.ide.DataManager.getInstance().getDataContext(button), button.getPresentation().clone(),
                     'MarginalisSandbox', com.intellij.openapi.actionSystem.ActionUiKind.NONE, null);
-                asDispatched(function () { action.actionPerformed(event); });
+                performLater(action, event);
                 String(true)
                 """,
             )
