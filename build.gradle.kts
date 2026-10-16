@@ -200,8 +200,8 @@ val sandboxPrebuiltDir = layout.buildDirectory.dir("sandbox-prebuilt")
 val sandboxJobs = if (System.getenv("MARGINALIS_ROBOT_PORT") != null) 1
     else providers.gradleProperty("marginalis.sandbox.jobs").orElse("6").get().toInt()
 
-// One multi-sandbox run at a time on the machine, sandbox/run_all.py --jobs included: two runs side by side saturate
-// the CPU and their scenarios time out. The lock holds the owner's pid and start time; one older than 2 h whose pid
+// One sandbox run at a time on the machine, sandbox/run_all.py --jobs included: two runs side by side saturate the
+// CPU and their scenarios time out, and every Docker run builds in the same build container. The lock holds the owner's pid and start time; one older than 2 h whose pid
 // is gone is stale.
 val sandboxRunLock: java.nio.file.Path = layout.projectDirectory.asFile.toPath().parent.resolve("marginalis-sandbox-runs").resolve(".lock")
 val sandboxRunLockOwner = ProcessHandle.current().pid()
@@ -234,7 +234,8 @@ val sandboxRunUnlock by tasks.registering {
 val sandboxRunLocked by tasks.registering {
     description = "Waits for the machine-wide sandbox run lock and takes it."
     group = "verification"
-    onlyIf("several sandboxes run at once") { sandboxJobs > 1 }
+    // A single Docker sandbox shares the build container's volumes with every run (sandboxPrebuilt).
+    onlyIf("the run builds in Docker or runs several sandboxes") { sandboxInDocker || sandboxJobs > 1 }
     finalizedBy(sandboxRunUnlock)
     doLast {
         Files.createDirectories(sandboxRunLock.parent)
