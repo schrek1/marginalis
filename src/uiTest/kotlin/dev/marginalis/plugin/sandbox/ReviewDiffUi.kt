@@ -122,7 +122,7 @@ String(true)
         EDITORS + """
         var editor = diffEditorShowing(${lit(after)});
         if (editor == null) throw 'no diff editor shows that text';
-        String(editor.getCaretModel().getLogicalPosition().line)
+        String(read(function () { return editor.getCaretModel().getLogicalPosition().line; }) | 0)
         """,
     ).toInt()
 

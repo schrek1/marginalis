@@ -125,10 +125,11 @@ object Sandbox {
             "-p", "127.0.0.1:$robotPort:$CONTAINER_ROBOT_PORT", "-p", "127.0.0.1:$dockerRestPort:$CONTAINER_REST_PORT",
             "--mount", "type=bind,source=$featureDir,target=/src,readonly",
             "--mount", "type=bind,source=$project,target=/work/runtime/project",
-            // Build output and the IDE's config live in the container's volume between starts, the Gradle cache in one
-            // volume for every sandbox.
+            // Build output, the IDE's config and the Gradle cache live in the sandbox's own volumes between starts. A
+            // cache shared with another running sandbox stalls the build: the Gradle that runs that IDE holds the cache's
+            // journal lock, and Gradle's lock handoff cannot reach a process in another container.
             "--mount", "type=volume,source=$container-work,target=/work",
-            "--mount", "type=volume,source=marginalis-gradle,target=/root/.gradle",
+            "--mount", "type=volume,source=$container-gradle,target=/root/.gradle",
             IMAGE,
             check = true,
         )

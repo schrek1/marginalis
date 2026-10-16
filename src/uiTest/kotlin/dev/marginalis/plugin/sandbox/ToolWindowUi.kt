@@ -66,9 +66,10 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
                 }
                 if (button == null) throw '$NO_HEADER_BUTTON ' + names.join(' / ');
                 var action = button.getAction();
-                action.actionPerformed(com.intellij.openapi.actionSystem.AnActionEvent.createEvent(
+                var event = com.intellij.openapi.actionSystem.AnActionEvent.createEvent(
                     action, com.intellij.ide.DataManager.getInstance().getDataContext(button), button.getPresentation().clone(),
-                    'MarginalisSandbox', com.intellij.openapi.actionSystem.ActionUiKind.NONE, null));
+                    'MarginalisSandbox', com.intellij.openapi.actionSystem.ActionUiKind.NONE, null);
+                asDispatched(function () { action.actionPerformed(event); });
                 String(true)
                 """,
             )

@@ -30,12 +30,18 @@ function threadOf(panel) {
     field.setAccessible(true);
     return field.get(panel);
 }
+// The IDE dispatches an action, and moves a caret, under the write-intent lock, which 2025.2 does not give the robot's
+// EDT calls. Only around those calls: a lock around a whole script deadlocks an editor opening on background reads.
+function asDispatched(run) {
+    return com.intellij.openapi.application.WriteIntentReadAction.compute(new com.intellij.openapi.util.ThrowableComputable({ compute: run }));
+}
 """
 
     const val EDITORS = """
 function projectFile(path) { return project.getBaseDir().findFileByRelativePath(path); }
-// The robot's EDT scripts hold no lock, and 2025.2 refuses a document lookup outside a read action. A lock around
-// whole scripts is no way out: opening an editor under it waits for background reads that the lock holds back.
+// The robot's EDT scripts hold no lock, and 2025.2 refuses document and caret reads outside a read action. A lock
+// around whole scripts is no way out: opening an editor under it waits for background reads that the lock holds back.
+// An int computed in it comes back as a JS double, so callers take `| 0`.
 function read(compute) {
     return com.intellij.openapi.application.ReadAction.compute(new com.intellij.openapi.util.ThrowableComputable({ compute: compute }));
 }
@@ -161,7 +167,7 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
         js(
             EDITORS + """
             var editor = textEditorOf('$file');
-            editor.getCaretModel().moveToLogicalPosition(new com.intellij.openapi.editor.LogicalPosition(${line - 1}, 0));
+            asDispatched(function () { editor.getCaretModel().moveToLogicalPosition(new com.intellij.openapi.editor.LogicalPosition(${line - 1}, 0)); });
             String(true)
             """,
         )
@@ -211,7 +217,8 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
                 for (var i = 0; i < highlighters.length; i++) {
                     var renderer = highlighters[i].getGutterIconRenderer();
                     if (renderer != null && renderer.getClass().getSimpleName() == 'ThreadGutterIconRenderer') {
-                        lines.push(editor.getDocument().getLineNumber(highlighters[i].getStartOffset()));
+                        var offset = highlighters[i].getStartOffset();
+                        lines.push(read(function () { return editor.getDocument().getLineNumber(offset); }) | 0);
                     }
                 }
                 lines.sort(function (a, b) { return a - b; });
@@ -289,9 +296,10 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
             });
             if (button == null) throw 'no panel button ' + $escaped;
             var action = button.getAction();
-            action.actionPerformed(com.intellij.openapi.actionSystem.AnActionEvent.createEvent(
+            var event = com.intellij.openapi.actionSystem.AnActionEvent.createEvent(
                 action, com.intellij.ide.DataManager.getInstance().getDataContext(button), button.getPresentation().clone(),
-                'MarginalisSandbox', com.intellij.openapi.actionSystem.ActionUiKind.NONE, null));
+                'MarginalisSandbox', com.intellij.openapi.actionSystem.ActionUiKind.NONE, null);
+            asDispatched(function () { action.actionPerformed(event); });
             String(true)
             """,
             threadPanel(threadId),
