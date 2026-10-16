@@ -201,8 +201,9 @@ val sandboxJobs = if (System.getenv("MARGINALIS_ROBOT_PORT") != null) 1
     else providers.gradleProperty("marginalis.sandbox.jobs").orElse("6").get().toInt()
 
 // One sandbox run at a time on the machine, sandbox/run_all.py --jobs included: two runs side by side saturate the
-// CPU and their scenarios time out, and every Docker run builds in the same build container. The lock holds the owner's pid and start time; one older than 2 h whose pid
-// is gone is stale.
+// CPU and their scenarios time out, and every Docker run builds in the same build container. The lock holds the
+// owner's pid and start time (the format run_all.py writes too). It is stale once that pid is gone, or, when the
+// owner cannot be read, after 2 h.
 val sandboxRunLock: java.nio.file.Path = layout.projectDirectory.asFile.toPath().parent.resolve("marginalis-sandbox-runs").resolve(".lock")
 val sandboxRunLockOwner = ProcessHandle.current().pid()
 
@@ -212,7 +213,7 @@ fun sandboxRunLockIsStale(lockText: String): Boolean {
     val owner = lockText.lineSequence().firstOrNull { it.startsWith("pid=") }?.removePrefix("pid=")?.trim()?.toLongOrNull()
     val age = runCatching { Duration.between(Files.getLastModifiedTime(sandboxRunLock).toInstant(), Instant.now()) }.getOrNull() ?: return false
     val alive = owner?.let { pid -> ProcessHandle.of(pid).map { it.isAlive }.orElse(false) } ?: false
-    return age > Duration.ofHours(2) && !alive
+    return !alive && (owner != null || age > Duration.ofHours(2))
 }
 
 // Another waiter may have replaced the judged lock with its own meanwhile; that one stays.

@@ -69,10 +69,39 @@ def run_one(name: str, feature_dir: Path, log_dir: Path,
 # project, a log or a build.
 RUNS = sandbox.RUNTIME.parent / "marginalis-sandbox-runs"
 DURATIONS = RUNS / "durations.json"
-# One multi-sandbox run per machine at a time, whichever harness starts it (the Kotlin suite takes the same file):
-# two runs side by side overload the machine, and both fail at random.
+# One multi-sandbox run per machine at a time, whichever harness starts it (the Kotlin suite takes the same file, in
+# the same pid=/started= format): two runs side by side overload the machine, and both fail at random. A lock is stale
+# once its owner's pid is gone, or, when the owner cannot be read, after 2 h.
 MACHINE_LOCK = RUNS / ".lock"
 STALE_LOCK_S = 2 * 3600
+
+
+def pid_alive(pid: int) -> bool:
+    if os.name == "nt":
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return False
+        try:
+            code = ctypes.c_ulong()
+            return bool(kernel32.GetExitCodeProcess(handle, ctypes.byref(code))) and code.value == 259  # STILL_ACTIVE
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def lock_is_stale(text: str, age_s: float) -> bool:
+    owner = next((line[4:].strip() for line in text.splitlines() if line.startswith("pid=")), None)
+    if owner is not None and owner.isdigit():
+        return not pid_alive(int(owner))
+    return age_s > STALE_LOCK_S
 
 
 @contextlib.contextmanager
@@ -86,7 +115,8 @@ def machine_lock():
         except FileExistsError:
             try:
                 judged = MACHINE_LOCK.read_text(encoding="utf-8", errors="replace")
-                if time.time() - MACHINE_LOCK.stat().st_mtime > STALE_LOCK_S:
+                if lock_is_stale(judged, time.time() - MACHINE_LOCK.stat().st_mtime):
+                    print(f"taking the stale sandbox run lock {MACHINE_LOCK} ({' '.join(judged.split())})", flush=True)
                     # Another waiter may have replaced the stale lock with its own since: keep that one.
                     if MACHINE_LOCK.read_text(encoding="utf-8", errors="replace") == judged:
                         MACHINE_LOCK.unlink(missing_ok=True)
@@ -94,11 +124,11 @@ def machine_lock():
             except FileNotFoundError:
                 continue
             if not waited:
-                holder = MACHINE_LOCK.read_text(encoding="utf-8", errors="replace").strip()
+                holder = " ".join(MACHINE_LOCK.read_text(encoding="utf-8", errors="replace").split())
                 print(f"waiting: another sandbox run holds {MACHINE_LOCK} ({holder})", flush=True)
                 waited = True
             time.sleep(15)
-    owner = f"run_all pid {os.getpid()} since {time.strftime('%H:%M:%S')}\n"
+    owner = f"pid={os.getpid()}\nstarted={time.strftime('%Y-%m-%dT%H:%M:%S%z')}\nby=run_all\n"
     with os.fdopen(handle, "w", encoding="utf-8") as out:
         out.write(owner)
     try:
