@@ -35,8 +35,9 @@ ROBOT_PORT = int(os.environ.get("MARGINALIS_ROBOT_PORT", "8082"))
 DOCKER = os.environ.get("MARGINALIS_SANDBOX_DOCKER") == "1"
 CONTAINER = f"marginalis-sandbox-{ROBOT_PORT}"
 IMAGE = "marginalis-sandbox"
-# Published next to the host's JetBrains IDEs, which hold 63342 and up.
-BUILTIN_PORT = 63390 + ROBOT_PORT - 8082 if DOCKER else None
+# Clear of the host's JetBrains IDEs (63342 and up) and of Windows' dynamic port range (49152 and up), where
+# services hold ports at random.
+BUILTIN_PORT = ROBOT_PORT + 10000 if DOCKER else None
 # Next to the checkout, so every worktree of one clone shares one sandbox.
 RUNTIME = Path(os.environ.get("MARGINALIS_SANDBOX_RUNTIME",
                               REPO.parent / (CONTAINER if DOCKER else "marginalis-sandbox-runtime")))

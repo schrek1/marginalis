@@ -55,7 +55,7 @@ with the floor IDE (IntelliJ Community from the build) as CI uses it.
 
 - **Any OS with Docker:** `MARGINALIS_SANDBOX_DOCKER=1 python sandbox.py start` builds the image from
   `Dockerfile` (Xvfb, JDK 25) and runs container `marginalis-sandbox-<robot port>` with the checkout mounted
-  read-only. The robot port is published as is, the IDE's REST port as `63390 + (robot port - 8082)`, clear of
+  read-only. The robot port is published as is, the IDE's REST port as `robot port + 10000`, clear of
   the host's IDEs on 63342+. Build output, IDE config and the Gradle home stay in per-container Docker volumes
   (a new Gradle home starts as a copy of volume `marginalis-gradle`); the test project stays on the host in
   `marginalis-sandbox-<robot port>/project`. Containers on different robot ports run side by side.
