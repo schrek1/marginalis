@@ -5,6 +5,7 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.intellij.remoterobot.fixtures.ComponentFixture
 import java.nio.file.Path
+import java.time.Duration
 
 /**
  * The user's side of a sandbox scenario, through the real Swing components (a port of `sandbox/sandbox_ui.py`, same
@@ -506,7 +507,31 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
     // --- Margin (project) tab -----------------------------------------------------------------------------------
 
     fun openMarginTab(threadId: String) {
+        // A project thread the agent just posted opens the tab behind the file in front, which comes back to the front
+        // a moment later; a reveal inside that moment loses to it. A person never clicks that fast, so wait it out.
+        settleEditorSelection()
         js(MARGIN + "projectTab().reveal(project, store.getThreads().byId('$threadId'), null); String(true)")
+    }
+
+    /** Waits until the editor in front has not changed for `quiet`, at most `limit`. */
+    fun settleEditorSelection(quiet: Duration = Duration.ofMillis(500), limit: Duration = Duration.ofSeconds(5)) {
+        fun selected() = js(
+            """
+            var files = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).getSelectedFiles();
+            String(files.length ? files[0].getUrl() : '')
+            """,
+        )
+        val deadline = System.nanoTime() + limit.toNanos()
+        var last = selected()
+        var since = System.nanoTime()
+        while (System.nanoTime() < deadline && System.nanoTime() - since < quiet.toNanos()) {
+            Thread.sleep(100)
+            val now = selected()
+            if (now != last) {
+                last = now
+                since = System.nanoTime()
+            }
+        }
     }
 
     /** The "+ New project thread" link: opens an empty draft in the Margin tab. */
