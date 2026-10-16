@@ -353,12 +353,13 @@ object Sandbox {
 
         // The IDE restores its tool window layout during the project's startup; the Project view it shows then takes
         // the left side from a Marginalis tool window a scenario has just shown. And while the platform's own startup
-        // write (the JPS model sync) waits for the lock, a file opened on the EDT blocks the editor providers' reads
-        // until their 30 s timeout. Smart mode flickers on right after startup, so it must hold three samples in a row.
+        // write (the JPS global model reloaded from disk, about 4 s after the IDE answers) waits for the lock, a file
+        // opened on the EDT blocks the editor providers' reads until their 30 s timeout. Smart mode flickers on right
+        // after startup, so it must hold three samples in a row.
         private fun awaitProjectStartup() {
             var settledPolls = 0
             awaitUntil(
-                "the project has started up, is out of dumb mode and has no write action pending, 3 s in a row",
+                "the project has started up, is out of dumb mode, has its global model from disk and no write pending, 3 s in a row",
                 Duration.ofSeconds(180), Duration.ofSeconds(1),
             ) {
                 // A read that fails counts as unsettled too.
@@ -367,10 +368,23 @@ object Sandbox {
                 val settled = robot.callJs(
                     """
                     var projects = com.intellij.openapi.project.ProjectManager.getInstance().getOpenProjects();
+                    // The global workspace model is read from a cache first and reloaded from disk seconds later, in a
+                    // background write. Without that private flag (another platform version) the condition is skipped.
+                    var globalModel = true;
+                    try {
+                        var app = com.intellij.openapi.application.ApplicationManager.getApplication();
+                        var type = java.lang.Class.forName('com.intellij.workspaceModel.ide.JpsGlobalModelSynchronizer', true,
+                            app.getClass().getClassLoader());
+                        var sync = app.getService(type);
+                        var field = sync.getClass().getDeclaredField('loadedFromDisk');
+                        field.setAccessible(true);
+                        globalModel = field.getBoolean(sync);
+                    } catch (e) {}
                     String(projects.length > 0
                         && com.intellij.ide.startup.StartupManagerEx.getInstanceEx(projects[0]).postStartupActivityPassed()
                         && !com.intellij.openapi.project.DumbService.isDumb(projects[0])
-                        && !com.intellij.openapi.application.ApplicationManager.getApplication().isWriteActionPending())
+                        && !com.intellij.openapi.application.ApplicationManager.getApplication().isWriteActionPending()
+                        && globalModel)
                     """,
                 ) == "true"
                 settledPolls = if (settled) before + 1 else 0
