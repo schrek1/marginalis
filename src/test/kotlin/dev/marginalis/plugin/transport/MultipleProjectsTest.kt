@@ -1,11 +1,13 @@
 package dev.marginalis.plugin.transport
 
+import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.testFramework.PlatformTestUtil
 import dev.marginalis.core.ThreadStatus
 import dev.marginalis.plugin.store.MarginalisStore
 import dev.marginalis.plugin.testing.Agent
 import dev.marginalis.plugin.testing.Relays
 import dev.marginalis.plugin.testing.SecondProject
+import dev.marginalis.plugin.ui.tab.MarginFile
 import java.nio.file.Files
 
 class MultipleProjectsTest : HttpContractTestCase() {
@@ -15,9 +17,19 @@ class MultipleProjectsTest : HttpContractTestCase() {
     private fun twin(projectPath: String = "twin", extra: Map<String, String> = emptyMap()) =
         SecondProject.open(projectPath, mapOf("$projectPath/$SAMPLE" to sampleText) + extra)
 
-    // FixMe: Known issue - #59 opening a second project logs an IDE error: the Margin tab is one light file shared by every project
-    fun testOpeningASecondProjectLogsASharedMarginTabError() {
-        twin().use { second -> assertFalse(second.sharedMarginTabErrors.isEmpty()) }
+    fun testOpeningASecondProjectWithoutProjectThreadsLogsNoSharedMarginTabError() {
+        twin().use { second -> assertEquals(emptyList<String>(), second.sharedMarginTabErrors) }
+    }
+
+    // FixMe: Known issue - #59 a Margin tab open in a second project logs an IDE error: the Margin tab is one light file shared by every project
+    fun testAProjectThreadInASecondProjectLogsASharedMarginTabError() {
+        FileEditorManager.getInstance(project).openFile(MarginFile, false)
+        twin().use { second ->
+            agent.add("body" to "Build is slow", "project" to second.name)
+            PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+
+            assertFalse(second.sharedMarginTabErrors.isEmpty())
+        }
     }
 
     fun testPingListsEveryOpenProjectWithItsBranch() {

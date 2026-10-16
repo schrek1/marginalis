@@ -107,6 +107,8 @@ class ThreadPanel(
     private val onDraftPresenceChanged: () -> Unit = {},
 ) : JPanel(BorderLayout()) {
 
+    val threadId: String get() = thread.id
+
     private val messagesBox = Box.createVerticalBox()
     private val messageComponents = mutableMapOf<String, JComponent>()
     private val statusLabel = JBLabel()

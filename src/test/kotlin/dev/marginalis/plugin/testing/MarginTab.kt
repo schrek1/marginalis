@@ -68,6 +68,10 @@ class MarginTab(private val project: Project, private val disposable: Disposable
         override fun isShowing(): Boolean = true
 
         override fun getGraphics(): Graphics = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB).createGraphics()
+
+        // Windows clamps the size of a native frame that is never shown, and the frame's own layout would then
+        // squeeze the root pane to it; the root pane keeps the bounds the test gives it instead.
+        override fun doLayout() {}
     }
 
     val editors: FileEditorManagerImpl

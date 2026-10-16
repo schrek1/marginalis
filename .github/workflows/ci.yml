@@ -40,6 +40,19 @@ jobs:
         # Margin tab tests that need an active IDE window skip themselves
         # without a display.
         run: sudo apt-get install -y xvfb
+      - name: Index the IDE's bundled plugins
+        # The Gradle plugin indexes the cold IDE with a race that sometimes
+        # drops com.intellij.java (ClosedFileSystemException,
+        # JetBrains/intellij-platform-gradle-plugin#2192); the tests then run
+        # without Java and its code-fence tests fail. The index persists under
+        # .intellijPlatform/, so the build below reuses one proven complete.
+        run: |
+          for attempt in 1 2 3; do
+            ./gradlew printBundledPlugins --console=plain -q | grep -q '^com.intellij.java ' && exit 0
+            echo "Bundled plugin index lacks com.intellij.java (attempt $attempt), rebuilding it"
+            rm -f .intellijPlatform/layoutIndex/*.json
+          done
+          exit 1
       - name: Build plugin
         # `build` alone runs checks but does not produce the distributable
         # zip — `buildPlugin` does.

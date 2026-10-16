@@ -70,10 +70,9 @@ class TheTabItselfTest : MarginTabTestCase() {
         assertSame(MarginFile, opened.single().file)
     }
 
-    fun testTheTabIsFoundAgainByItsAddressAfterARestart() {
-        assertSame(MarginFile, VirtualFileManager.getInstance().findFileByUrl("marginalis://margin"))
-        assertNull(VirtualFileManager.getInstance().findFileByUrl("marginalis://elsewhere"))
-        assertSame(MarginFile, VirtualFileManager.getInstance().getFileSystem("marginalis").refreshAndFindFileByPath("margin"))
+    fun testThePlatformCannotFindTheTabByItsAddressSoNeverRestoresItOnItsOwn() {
+        assertNull(VirtualFileManager.getInstance().findFileByUrl(MarginFile.url))
+        assertNull(VirtualFileManager.getInstance().getFileSystem("marginalis"))
     }
 
     fun testHalfWrittenRepliesAreStillThereWhenTheTabOpensAgain() {

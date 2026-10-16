@@ -64,7 +64,22 @@ def run_js(script: str, edt: bool = False, component_id: str | None = None) -> N
 
 def call_js(script: str, edt: bool = False, component_id: str | None = None) -> str:
     prefix = f"{component_id}/" if component_id else ""
-    return _java_string(_post(f"{prefix}js/retrieveAny", {"script": script, "runInEdt": edt})["bytes"])
+    try:
+        return _java_string(_post(f"{prefix}js/retrieveAny", {"script": script, "runInEdt": edt})["bytes"])
+    except RobotError as error:
+        raise RobotError(f"{error}{_failing_line(script, str(error))}") from None
+
+
+def _failing_line(script: str, message: str) -> str:
+    """The script lines up to the one Rhino names as `(js#N)`, where the failing statement ends; scripts are assembled
+    from preludes, so the number alone says little."""
+    import re
+    match = re.search(r"\(js#(\d+)\)", message)
+    lines = script.splitlines()
+    if not match or not 0 < int(match.group(1)) <= len(lines):
+        return ""
+    end = int(match.group(1))
+    return "\n    at js lines:\n" + "\n".join(f"      {line.strip()}" for line in lines[max(0, end - 5):end])
 
 
 def find_all(xpath: str) -> list[dict]:

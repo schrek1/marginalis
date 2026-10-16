@@ -22,7 +22,9 @@ function collaborationLoader() {
     var modules = com.intellij.ide.plugins.PluginManagerCore.getPluginSet().getUnsortedEnabledModules().iterator();
     while (modules.hasNext()) {
         var module = modules.next();
-        if (String(module.moduleId.getName()) == 'intellij.platform.collaborationTools') return module.getPluginClassLoader();
+        // 2025.2 (the floor) names a content module by the moduleName field, later platforms by moduleId.
+        var name = module.moduleId ? module.moduleId.getName() : module.moduleName;
+        if (String(name) == 'intellij.platform.collaborationTools') return module.getPluginClassLoader();
     }
     throw 'the intellij.platform.collaborationTools module is not loaded';
 }
@@ -122,7 +124,7 @@ def diff_caret_line(after: str) -> int:
     return int(ui.js(ui._EDITORS + f"""
         var editor = diffEditorShowing({json.dumps(after)});
         if (editor == null) throw 'no diff editor shows that text';
-        String(editor.getCaretModel().getLogicalPosition().line)
+        String(read(function () {{ return editor.getCaretModel().getLogicalPosition().line; }}) | 0)
     """))
 
 

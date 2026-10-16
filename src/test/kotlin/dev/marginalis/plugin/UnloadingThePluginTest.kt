@@ -3,9 +3,9 @@ package dev.marginalis.plugin
 import com.intellij.icons.AllIcons
 import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.openapi.project.guessProjectDir
-import com.intellij.openapi.vfs.VirtualFileManager
 import dev.marginalis.plugin.testing.PluginUnload
 import dev.marginalis.plugin.ui.TurnSignalIconPatcher
+import dev.marginalis.plugin.ui.tab.MarginFile
 import dev.marginalis.plugin.ui.tab.MarginTabTestCase
 
 class UnloadingThePluginTest : MarginTabTestCase() {
@@ -28,16 +28,16 @@ class UnloadingThePluginTest : MarginTabTestCase() {
         assertEquals(1, user.panels().size)
         assertNotSame(base, badge())
         var badgeWhileUnloading: Any? = null
-        var tabAddressWhileUnloading: Any? = Unit
+        var tabValidWhileUnloading = true
 
         val failure = tab.unloadPluginForUpdate {
             badgeWhileUnloading = badge()
-            tabAddressWhileUnloading = VirtualFileManager.getInstance().findFileByUrl("marginalis://margin")
+            tabValidWhileUnloading = MarginFile.isValid
         }
 
         assertNull(failure)
         assertSame(base, badgeWhileUnloading)
-        assertNull(tabAddressWhileUnloading)
+        assertFalse(tabValidWhileUnloading)
         assertFalse(tab.isOpen)
         assertEquals(emptyList<Any>(), user.gutterIconsOnLine(SAMPLE, 5))
         assertEquals(emptyList<Any>(), user.gutterIconsOnLine(SAMPLE, 1))
