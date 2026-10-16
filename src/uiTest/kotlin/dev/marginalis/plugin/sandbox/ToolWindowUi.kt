@@ -429,20 +429,11 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
     fun screenshotToolWindow(target: Path) {
         val xpath = "//div[@class='MarginalisToolWindowPanel' or @javaclass='dev.marginalis.plugin.ui.toolwindow.MarginalisToolWindowPanel']"
         // The robot's hierarchy misses the panel for a moment while the tool window relays out; on the floor IDE in a
-        // container that moment ran past 5 s.
-        var found = 0
-        repeat(20) {
-            val panels = Sandbox.robot.findAll(xpath)
-            if (panels.size == 1) {
-                Sandbox.robot.screenshot(target, panels.single())
-                return
-            }
-            found = panels.size
-            Thread.sleep(1_000)
+        // container that moment ran past 5 s. Longer, the tool window is off screen, which the user would notice.
+        val panel = awaitValue("one Marginalis tool window panel on screen", Duration.ofSeconds(20), Duration.ofSeconds(1)) {
+            Sandbox.robot.findAll(xpath).singleOrNull()
         }
-        // A shot documents the run, it checks nothing: the whole frame stands in rather than failing the scenario.
-        println("WARN  the robot finds $found tool window panels; ${target.fileName} shows the whole frame")
-        SandboxUi.screenshotFrame(target)
+        Sandbox.robot.screenshot(target, panel)
     }
 
     private fun intList(raw: String): List<Int> = JsonParser.parseString(raw).asJsonArray.map { it.asInt }
