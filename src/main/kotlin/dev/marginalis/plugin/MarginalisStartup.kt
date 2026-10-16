@@ -1,6 +1,7 @@
 package dev.marginalis.plugin
 
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.readAction
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.impl.DocumentMarkupModel
 import com.intellij.openapi.fileEditor.FileDocumentManager
@@ -39,10 +40,13 @@ class MarginalisStartup : ProjectActivity {
         store.threads.restoreDeletedRelays(loaded.deletedRelays)
         val persisted = loaded.threads
         if (persisted.isNotEmpty()) {
+            // Finding and loading the files touches the disk: on the EDT that froze a slow file system for seconds, and
+            // a VFS event it raised then held the Margin tab's opening for 30 s.
+            val sources = readAction { persisted.map { sourceOf(project, it) } }
             ApplicationManager.getApplication().invokeLater {
                 if (project.isDisposed) return@invokeLater
-                for (thread in persisted) {
-                    rehydrate(project, thread)
+                for ((thread, source) in persisted.zip(sources)) {
+                    rehydrate(project, thread, source)
                     store.threads.addSilently(thread)
                 }
                 // Attach assigns solo icons; group shared lines per file.
@@ -64,24 +68,32 @@ class MarginalisStartup : ProjectActivity {
         store.threads.addListener { refresh.request() }
     }
 
+    private class Source(val file: VirtualFile?, val document: Document?)
+
+    // Read action. Only an open line thread needs its document.
+    private fun sourceOf(project: Project, thread: CommentThread): Source? {
+        val path = thread.file ?: return null
+        val vFile = project.guessProjectDir()?.findFileByRelativePath(path)
+        val needsDocument = !thread.isFileLevel && thread.status is ThreadStatus.Open
+        return Source(vFile, if (needsDocument) vFile?.let { FileDocumentManager.getInstance().getDocument(it) } else null)
+    }
+
     // EDT. An orphaned line thread stays orphaned: moving a line anchor is the
     // agent's call (comment_reanchor), not a guess made at startup.
-    private fun rehydrate(project: Project, thread: CommentThread) {
-        val path = thread.file ?: return
-        val vFile = project.guessProjectDir()?.findFileByRelativePath(path)
+    private fun rehydrate(project: Project, thread: CommentThread, source: Source?) {
+        if (source == null) return
         if (thread.isFileLevel) {
             when {
-                vFile == null -> thread.markOrphaned()
+                source.file == null -> thread.markOrphaned()
                 thread.status is ThreadStatus.Orphaned -> thread.reopen()
             }
             return
         }
         if (thread.status !is ThreadStatus.Open) return
-        reanchor(project, thread, vFile)
+        reanchor(project, thread, source.document)
     }
 
-    private fun reanchor(project: Project, thread: CommentThread, vFile: VirtualFile?) {
-        val document = vFile?.let { FileDocumentManager.getInstance().getDocument(it) }
+    private fun reanchor(project: Project, thread: CommentThread, document: Document?) {
         if (document == null) {
             thread.markOrphaned()
             return

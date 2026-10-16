@@ -43,6 +43,9 @@ History before 0.1.19 lives in git tags.
 
 ### Fixed
 
+- Opening a project no longer freezes the IDE while Marginalis finds the
+  files of its threads, which also held the Margin tab's opening for up
+  to half a minute on a slow disk.
 - When an agent starts a project thread, the IDE no longer freezes for
   up to half a minute while the Margin tab opens for it.
 - "Select Opened Thread" in the Marginalis tool window works with a
