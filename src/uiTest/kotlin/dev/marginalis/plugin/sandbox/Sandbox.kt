@@ -364,6 +364,7 @@ object Sandbox {
         // after startup, so it must hold three samples in a row.
         private fun awaitProjectStartup() {
             var settledPolls = 0
+            var noted = false
             awaitUntil(
                 "the project has started up, is out of dumb mode, has its global model from disk and no write pending, 3 s in a row",
                 Duration.ofSeconds(180), Duration.ofSeconds(1),
@@ -371,29 +372,42 @@ object Sandbox {
                 // A read that fails counts as unsettled too.
                 val before = settledPolls
                 settledPolls = 0
-                val settled = robot.callJs(
-                    """
-                    var projects = com.intellij.openapi.project.ProjectManager.getInstance().getOpenProjects();
-                    // The global workspace model is read from a cache first and reloaded from disk seconds later, in a
-                    // background write. Without that private flag (another platform version) the condition is skipped.
-                    var globalModel = true;
-                    try {
-                        var app = com.intellij.openapi.application.ApplicationManager.getApplication();
-                        var type = java.lang.Class.forName('com.intellij.workspaceModel.ide.JpsGlobalModelSynchronizer', true,
-                            app.getClass().getClassLoader());
-                        var sync = app.getService(type);
-                        var field = sync.getClass().getDeclaredField('loadedFromDisk');
-                        field.setAccessible(true);
-                        globalModel = field.getBoolean(sync);
-                    } catch (e) {}
-                    String(projects.length > 0
-                        && com.intellij.ide.startup.StartupManagerEx.getInstanceEx(projects[0]).postStartupActivityPassed()
-                        && !com.intellij.openapi.project.DumbService.isDumb(projects[0])
-                        && !com.intellij.openapi.application.ApplicationManager.getApplication().isWriteActionPending()
-                        && globalModel)
-                    """,
-                ) == "true"
-                settledPolls = if (settled) before + 1 else 0
+                val probe = JsonParser.parseString(
+                    robot.callJs(
+                        """
+                        var projects = com.intellij.openapi.project.ProjectManager.getInstance().getOpenProjects();
+                        // The global workspace model is read from a cache first and reloaded from disk seconds later,
+                        // in a background write. Without that private flag (another platform version) the condition is
+                        // skipped, and the reason reported.
+                        var globalModel = true;
+                        var globalModelUnavailable = null;
+                        try {
+                            var app = com.intellij.openapi.application.ApplicationManager.getApplication();
+                            var type = java.lang.Class.forName('com.intellij.workspaceModel.ide.JpsGlobalModelSynchronizer', true,
+                                app.getClass().getClassLoader());
+                            var sync = app.getService(type);
+                            var field = sync.getClass().getDeclaredField('loadedFromDisk');
+                            field.setAccessible(true);
+                            globalModel = field.getBoolean(sync);
+                        } catch (e) {
+                            globalModelUnavailable = String(e);
+                        }
+                        String(JSON.stringify({
+                            settled: projects.length > 0
+                                && com.intellij.ide.startup.StartupManagerEx.getInstanceEx(projects[0]).postStartupActivityPassed()
+                                && !com.intellij.openapi.project.DumbService.isDumb(projects[0])
+                                && !com.intellij.openapi.application.ApplicationManager.getApplication().isWriteActionPending()
+                                && globalModel,
+                            globalModelUnavailable: globalModelUnavailable
+                        }))
+                        """,
+                    ),
+                ).asJsonObject
+                probe.get("globalModelUnavailable")?.takeUnless { it.isJsonNull || noted }?.let { reason ->
+                    println("note  the start does not wait for the global workspace model loaded from disk: ${reason.asString}")
+                    noted = true
+                }
+                settledPolls = if (probe.get("settled").asBoolean) before + 1 else 0
                 settledPolls >= 3
             }
         }
