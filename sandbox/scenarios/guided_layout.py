@@ -186,7 +186,7 @@ class Scenarios:
         sandbox.start(self.feature_dir, fresh=False)
         ui.show_tool_window()
         self.check("the project's layout survives a restart", ui.guided_layout() == "BY_FILE", ui.guided_layout())
-        workspace = (sandbox.PROJECT / ".idea" / "workspace.xml").read_text(encoding="utf-8")
+        workspace = sandbox.project_text(".idea/workspace.xml") or ""
         self.check("the choice lives in workspace.xml", 'name="MarginalisGuidedLayout"' in workspace)
 
     def run(self) -> int:

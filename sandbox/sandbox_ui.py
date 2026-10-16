@@ -456,6 +456,7 @@ function sectionTitle(node) { return String(node.getUserObject().getTitle()); }
 def refresh_project_files() -> None:
     """Makes files written from outside visible to the IDE. A synchronous refresh runs off the EDT: on it, it would
     need a write-intent lock."""
+    sandbox.push_project()
     robot.call_js(_PRELUDE + """
         com.intellij.openapi.vfs.VfsUtil['markDirtyAndRefresh(boolean,boolean,boolean,com.intellij.openapi.vfs.VirtualFile[])'](
             false, true, true, [project.getBaseDir()]);

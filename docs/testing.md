@@ -86,6 +86,17 @@ clamps the window until thread panels get no width.
   for the header, not one per name.
 - **Screenshots** show the IDE frame painted inside the IDE (`robot.screenshot(..., component)`), never the desktop.
 - **A restart** can bring the tool window back hidden; the helpers show it first.
+- **The test project lives in the container** (Docker mode). The host folder `marginalis-sandbox-<port>/project` is the
+  copy the harness prepares before a start and reads back after a stop. While the IDE runs:
+  - read files the IDE writes (`.idea/workspace.xml`, `.idea/marginalis.json`) with `sandbox.project_text(path)`;
+  - after writing files into the host folder, call `ui.refresh_project_files()`, which copies them in
+    (`sandbox.push_project()`) and refreshes the IDE.
+
+  Never read the host folder for something the running IDE wrote.
+- **A start counts as up once the IDE has settled:** indexing over, startup activities passed, the global workspace
+  model reloaded from disk (the platform does it in a background write seconds after start), no write action
+  pending. Opening an editor while the platform's own startup writes are queued blocks the EDT for 30 s on a busy
+  machine.
 
 ## Troubleshooting
 
@@ -95,5 +106,8 @@ clamps the window until thread panels get no width.
   leftover takes CPU, memory and ports from the next run. `run_all --jobs` removes its own even when stopped.
 - **Ports:** robot 8082 and up, REST robot + 10000. Both stay below Windows' dynamic port range (49152 and up), where
   services take ports at random.
+- **Why the project is not a bind mount:** on Windows and macOS a host folder reaches the container through a slow
+  file share without file-change events. The IDE froze on file lookups and kept refreshing, and its background
+  writes then stalled editor opening for 30 s. On the container's own disk both go away, on every OS and in CI.
 - **Gradle in containers:** each container keeps its own Gradle home. A shared one deadlocks, because Gradle hands
   cache locks between processes over loopback, and each container has its own.

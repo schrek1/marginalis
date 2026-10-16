@@ -110,7 +110,7 @@ class Scenarios:
         ui.save_project_state()
         restart(self.feature_dir, fresh=False)
         self.check("the project's Sort choice survives a restart", ui.margin_sort() == "NEWEST_FIRST", ui.margin_sort())
-        workspace = (sandbox.PROJECT / ".idea" / "workspace.xml").read_text(encoding="utf-8")
+        workspace = sandbox.project_text(".idea/workspace.xml") or ""
         self.check("the choice lives in workspace.xml", 'name="MarginalisProjectTabSort"' in workspace)
 
     def guarded(self, scenario) -> None:

@@ -18,6 +18,13 @@ plugins=/work/runtime/ide/plugins_runIdeForUiTests
 rm -f /work/runtime/ide/config_runIdeForUiTests/.lock /work/runtime/ide/config_runIdeForUiTests/.port \
       /work/runtime/ide/system_runIdeForUiTests/.lock /work/runtime/ide/system_runIdeForUiTests/.port
 
+# The test project runs from the container's own disk: on the host folder (9p from Windows) file operations stalled
+# the IDE and it got no file-change events. The host folder is the copy the harness prepares and reads back.
+if [ -d /project-host ]; then
+  mkdir -p /work/runtime/project
+  rsync -a --delete /project-host/ /work/runtime/project/
+fi
+
 if [ "$mode" != prebuilt ]; then
   # Gradle builds off a copy: on a host bind mount it is slow, and the copy keeps its build output between starts.
   rsync -a --delete \

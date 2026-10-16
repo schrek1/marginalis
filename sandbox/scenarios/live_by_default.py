@@ -99,7 +99,7 @@ class Scenarios:
         restart(self.feature_dir, fresh=False)
         self.check("the project's own choice survives a restart", not ui.live_by_default())
 
-        workspace = (sandbox.PROJECT / ".idea" / "workspace.xml").read_text(encoding="utf-8")
+        workspace = sandbox.project_text(".idea/workspace.xml") or ""
         self.check("the choice lives in workspace.xml", 'name="MarginalisLiveDefault"' in workspace)
 
     def run(self) -> int:

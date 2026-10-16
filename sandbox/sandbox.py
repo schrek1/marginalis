@@ -152,7 +152,7 @@ def start_in_docker(feature_dir: Path) -> subprocess.Popen:
         "docker", "run", "-d", "--name", CONTAINER,
         "-p", f"127.0.0.1:{ROBOT_PORT}:8082", "-p", f"127.0.0.1:{BUILTIN_PORT}:63342",
         *source,
-        "--mount", f"type=bind,source={PROJECT.resolve()},target=/work/runtime/project",
+        "--mount", f"type=bind,source={PROJECT.resolve()},target=/project-host",
         *container_volumes(CONTAINER),
         IMAGE,
     ], check=True, stdout=subprocess.DEVNULL)
@@ -198,11 +198,52 @@ def wait_until_up(process: subprocess.Popen, mover: subprocess.Popen | None) -> 
         port = marginalis_port() if robot_up() else None
         if port and (mover is None or mover.poll() is not None):
             size_the_frame()
+            wait_until_settled()
             print(f"sandbox up: robot http://127.0.0.1:{ROBOT_PORT}, marginalis http://127.0.0.1:{port}"
                   f"{window_note(mover)}")
             return
         time.sleep(1)
     sys.exit(f"sandbox not up after {START_TIMEOUT_S}s; see {LOG_FILE}")
+
+
+SETTLE_TIMEOUT_S = 180
+
+
+def wait_until_settled() -> None:
+    """Waits until the IDE is done starting: indexing over, startup activities passed, the global workspace model
+    reloaded from disk, and no write action pending, in three samples in a row. Opening an editor in the first seconds after a start, while the platform's own background
+    writes (the JPS model sync) are queued, blocks the EDT for 30 s on a loaded machine."""
+    import robot
+    probe = """
+        var project = com.intellij.openapi.project.ProjectManager.getInstance().getOpenProjects()[0];
+        var smart = !com.intellij.openapi.project.DumbService.getInstance(project).isDumb();
+        var started = com.intellij.ide.startup.StartupManagerEx.getInstanceEx(project).postStartupActivityPassed();
+        var quiet = !com.intellij.openapi.application.ApplicationManager.getApplication().isWriteActionPending();
+        // The global workspace model is first read from a cache and reloaded from disk seconds later, in a background
+        // write (seen 4 s after the IDE answered). Without that private flag (another platform version), go on.
+        var globalModel = true;
+        try {
+            var app = com.intellij.openapi.application.ApplicationManager.getApplication();
+            var type = java.lang.Class.forName('com.intellij.workspaceModel.ide.JpsGlobalModelSynchronizer', true,
+                app.getClass().getClassLoader());
+            var sync = app.getService(type);
+            var field = sync.getClass().getDeclaredField('loadedFromDisk');
+            field.setAccessible(true);
+            globalModel = field.getBoolean(sync);
+        } catch (e) {}
+        String(smart && started && quiet && globalModel)
+    """
+    deadline = time.monotonic() + SETTLE_TIMEOUT_S
+    quiet_samples = 0
+    while time.monotonic() < deadline:
+        try:
+            quiet_samples = quiet_samples + 1 if robot.call_js(probe) == "true" else 0
+        except Exception:
+            quiet_samples = 0
+        if quiet_samples >= 3:
+            return
+        time.sleep(1)
+    sys.exit(f"the sandbox IDE did not settle within {SETTLE_TIMEOUT_S} s (indexing, startup activities or a pending write)")
 
 
 def size_the_frame() -> None:
@@ -242,6 +283,36 @@ def process_alive(pid: str) -> bool:
     return pid in listing
 
 
+def container_running() -> bool:
+    return DOCKER and subprocess.run(["docker", "inspect", "-f", "{{.State.Running}}", CONTAINER],
+                                     capture_output=True, text=True).stdout.strip() == "true"
+
+
+def project_text(relative: str) -> str | None:
+    """A file of the test project as the IDE has it now: in Docker mode the running IDE works on the container's
+    copy, which the host folder only catches up with at the next stop."""
+    if container_running():
+        shown = subprocess.run(["docker", "exec", CONTAINER, "cat", f"/work/runtime/project/{relative}"],
+                               capture_output=True)
+        return shown.stdout.decode("utf-8") if shown.returncode == 0 else None
+    path = PROJECT / relative
+    return path.read_text(encoding="utf-8") if path.exists() else None
+
+
+def push_project() -> None:
+    """Copies what the harness wrote into the host folder over to the running IDE's copy. `.idea` stays the IDE's."""
+    if container_running():
+        subprocess.run(["docker", "exec", CONTAINER, "rsync", "-a", "--exclude", "/.idea", "/project-host/",
+                        "/work/runtime/project/"], check=True, capture_output=True)
+
+
+def pull_project() -> None:
+    """Brings the IDE's copy back into the host folder, so the next start (and reads after the stop) see it."""
+    if container_running():
+        subprocess.run(["docker", "exec", CONTAINER, "rsync", "-a", "--delete", "/work/runtime/project/",
+                        "/project-host/"], capture_output=True)
+
+
 def stop() -> None:
     pid = PID_FILE.read_text().strip() if PID_FILE.exists() else None
     if robot_up():
@@ -258,6 +329,7 @@ def stop() -> None:
         except (OSError, robot.RobotError) as error:
             # A hung IDE never answers; the kill below still has to run.
             print(f"saving the sandbox's settings failed ({type(error).__name__}); killing it")
+        pull_project()
         try:
             robot.run_js("com.intellij.openapi.application.ApplicationManager.getApplication().exit(true, true, false)",
                          edt=True)
