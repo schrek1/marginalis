@@ -7,7 +7,8 @@ and opens RUNTIME/project, a copy of project-template/.
 Usage:  python sandbox.py start [--feature-dir PATH] [--fresh]
         python sandbox.py stop
         python sandbox.py status
-Env:    MARGINALIS_SANDBOX_RUNTIME (default marginalis-sandbox-runtime next to the checkout),
+        python sandbox.py locked <command...>   (runs the command under the machine-wide sandbox run lock)
+Env:   MARGINALIS_SANDBOX_RUNTIME (default marginalis-sandbox-runtime next to the checkout),
         MARGINALIS_ROBOT_PORT (default 8082), MARGINALIS_DIR (default feature dir: this checkout),
         MARGINALIS_SANDBOX_DESKTOP (0-based virtual desktop for the window, default 2; `none` = leave it),
         MARGINALIS_SANDBOX_DOCKER=1 (run the IDE in a container on a virtual screen instead, see README)
@@ -16,6 +17,7 @@ Needs PowerShell 7 (`pwsh`) and the VirtualDesktop module (`Install-Module Virtu
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -48,6 +50,11 @@ BUILTIN_PORT = ROBOT_PORT + 10000 if DOCKER else None
 # Next to the checkout, so every worktree of one clone shares one sandbox.
 RUNTIME = Path(os.environ.get("MARGINALIS_SANDBOX_RUNTIME",
                               REPO.parent / (CONTAINER if DOCKER else "marginalis-sandbox-runtime")))
+# One sandbox run per machine at a time, whichever harness starts it (`./gradlew uiSandboxTest` takes the same file, in
+# the same pid=/started= format): two runs side by side overload the machine, and both fail at random. A lock is stale
+# once its owner's pid is gone, or, when the owner cannot be read, after 2 h.
+MACHINE_LOCK = RUNTIME.parent / "marginalis-sandbox-runs" / ".lock"
+STALE_LOCK_S = 2 * 3600
 PROJECT = RUNTIME / "project"
 PROJECT_IN_IDE = "/work/runtime/project" if DOCKER else PROJECT.as_posix()
 PID_FILE = RUNTIME / "gradle.pid"
@@ -367,12 +374,94 @@ def status() -> None:
     print(f"robot {'up' if robot_up() else 'down'} on {ROBOT_PORT}; marginalis {f'on {port}' if port else 'not found'}")
 
 
+def pid_alive(pid: int) -> bool:
+    if os.name == "nt":
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return False
+        try:
+            code = ctypes.c_ulong()
+            return bool(kernel32.GetExitCodeProcess(handle, ctypes.byref(code))) and code.value == 259  # STILL_ACTIVE
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def lock_is_stale(text: str, age_s: float) -> bool:
+    owner = next((line[4:].strip() for line in text.splitlines() if line.startswith("pid=")), None)
+    if owner is not None and owner.isdigit():
+        return not pid_alive(int(owner))
+    return age_s > STALE_LOCK_S
+
+
+@contextlib.contextmanager
+def machine_lock():
+    MACHINE_LOCK.parent.mkdir(parents=True, exist_ok=True)
+    waited = False
+    while True:
+        try:
+            handle = os.open(MACHINE_LOCK, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            break
+        except FileExistsError:
+            try:
+                judged = MACHINE_LOCK.read_text(encoding="utf-8", errors="replace")
+                if lock_is_stale(judged, time.time() - MACHINE_LOCK.stat().st_mtime):
+                    print(f"taking the stale sandbox run lock {MACHINE_LOCK} ({' '.join(judged.split())})", flush=True)
+                    # Another waiter may have replaced the stale lock with its own since: keep that one.
+                    if MACHINE_LOCK.read_text(encoding="utf-8", errors="replace") == judged:
+                        MACHINE_LOCK.unlink(missing_ok=True)
+                    continue
+            except FileNotFoundError:
+                continue
+            if not waited:
+                holder = " ".join(MACHINE_LOCK.read_text(encoding="utf-8", errors="replace").split())
+                print(f"waiting: another sandbox run holds {MACHINE_LOCK} ({holder})", flush=True)
+                waited = True
+            time.sleep(15)
+    owner = f"pid={os.getpid()}\nstarted={time.strftime('%Y-%m-%dT%H:%M:%S%z')}\nby=sandbox.py\n"
+    with os.fdopen(handle, "w", encoding="utf-8") as out:
+        out.write(owner)
+    try:
+        yield
+    finally:
+        # Only our own lock: deleting another run's lock lets a third run start next to it.
+        with contextlib.suppress(FileNotFoundError):
+            if MACHINE_LOCK.read_text(encoding="utf-8", errors="replace") == owner:
+                MACHINE_LOCK.unlink()
+
+
+def locked(command: list[str]) -> int:
+    with machine_lock():
+        return subprocess.run(command).returncode
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["start", "stop", "status", "build"])
-    parser.add_argument("--feature-dir", type=Path, default=DEFAULT_FEATURE_DIR)
-    parser.add_argument("--fresh", action="store_true", help="recopy the test project from project-template")
+    # Subcommands, because in one flat parser the command line `locked` takes would swallow `start --fresh` too.
+    commands = parser.add_subparsers(dest="command", required=True)
+    start_command = commands.add_parser("start", help="build the checkout, start the IDE, wait until it answers")
+    start_command.add_argument("--feature-dir", type=Path, default=DEFAULT_FEATURE_DIR)
+    start_command.add_argument("--fresh", action="store_true", help="recopy the test project from project-template")
+    commands.add_parser("stop", help="graceful exit (flushes workspace.xml), then kill")
+    commands.add_parser("status")
+    build_command = commands.add_parser("build", help="build the checkout's plugins into MARGINALIS_SANDBOX_PREBUILT")
+    build_command.add_argument("--feature-dir", type=Path, default=DEFAULT_FEATURE_DIR)
+    locked_command = commands.add_parser("locked", help="run COMMAND under the machine-wide sandbox run lock, for a "
+                                                        "one-off experiment")
+    locked_command.add_argument("experiment", nargs=argparse.REMAINDER, metavar="COMMAND")
     args = parser.parse_args()
+    if args.command == "locked":
+        if not args.experiment:
+            locked_command.error("name the command to run under the lock")
+        sys.exit(locked(args.experiment))
     if args.command == "start":
         start(args.feature_dir.resolve(), args.fresh)
     elif args.command == "stop":
