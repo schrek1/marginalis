@@ -66,9 +66,10 @@ def wait_until(condition, what: str) -> None:
 
 
 def persisted_status(thread_id: str) -> str | None:
-    if not THREADS_FILE.exists():
+    text = sandbox.project_text(".idea/marginalis.json")
+    if text is None:
         return None
-    threads = json.loads(THREADS_FILE.read_text(encoding="utf-8")).get("threads", [])
+    threads = json.loads(text).get("threads", [])
     return next((thread["status"] for thread in threads if thread["id"] == thread_id), None)
 
 
@@ -125,7 +126,7 @@ class Scenarios:
     def open_thread_opens_the_tab_unpinned(self) -> None:
         thread = ui.agent_starts_project_thread("An open project thread before the project is opened again.")
         wait_until(lambda: persisted_status(thread) == "OPEN", "the open thread on disk")
-        threads_on_disk = THREADS_FILE.read_text(encoding="utf-8")
+        threads_on_disk = sandbox.project_text(".idea/marginalis.json")
         sandbox.stop()
         # A first open of a project that already has project threads, as after installing or updating the plugin.
         sandbox.fresh_project()

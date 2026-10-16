@@ -6,11 +6,13 @@ tagged smoke. `--jobs N` (Docker mode only) builds the checkout once and runs N 
 taking the next scenario from one queue, longest first; see docs/testing.md.
 
     py sandbox/run_all.py [--feature-dir <checkout>] [--summary gate.md] [--only a,b | --tag smoke] [--jobs N]
+    py sandbox/run_all.py --locked <command...>
 """
 from __future__ import annotations
 
 import argparse
 import collections
+import contextlib
 import json
 import os
 import re
@@ -67,6 +69,42 @@ def run_one(name: str, feature_dir: Path, log_dir: Path,
 # project, a log or a build.
 RUNS = sandbox.RUNTIME.parent / "marginalis-sandbox-runs"
 DURATIONS = RUNS / "durations.json"
+# One multi-sandbox run per machine at a time, whichever harness starts it (the Kotlin suite takes the same file):
+# two runs side by side overload the machine, and both fail at random.
+MACHINE_LOCK = RUNS / ".lock"
+STALE_LOCK_S = 2 * 3600
+
+
+@contextlib.contextmanager
+def machine_lock():
+    RUNS.mkdir(parents=True, exist_ok=True)
+    waited = False
+    while True:
+        try:
+            handle = os.open(MACHINE_LOCK, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            break
+        except FileExistsError:
+            try:
+                if time.time() - MACHINE_LOCK.stat().st_mtime > STALE_LOCK_S:
+                    MACHINE_LOCK.unlink(missing_ok=True)
+                    continue
+            except FileNotFoundError:
+                continue
+            if not waited:
+                holder = MACHINE_LOCK.read_text(encoding="utf-8", errors="replace").strip()
+                print(f"waiting: another sandbox run holds {MACHINE_LOCK} ({holder})", flush=True)
+                waited = True
+            time.sleep(15)
+    owner = f"run_all pid {os.getpid()} since {time.strftime('%H:%M:%S')}\n"
+    with os.fdopen(handle, "w", encoding="utf-8") as out:
+        out.write(owner)
+    try:
+        yield
+    finally:
+        # Only our own lock: deleting another run's lock lets a third run start next to it.
+        with contextlib.suppress(FileNotFoundError):
+            if MACHINE_LOCK.read_text(encoding="utf-8", errors="replace") == owner:
+                MACHINE_LOCK.unlink()
 
 
 def free_robot_ports(count: int) -> list[int]:
@@ -93,6 +131,11 @@ def run_parallel(names: list[str], feature_dir: Path, jobs: int) -> tuple[list[s
     """One build, then `jobs` sandboxes that each take the next scenario from a queue, longest first."""
     if not sandbox.DOCKER:
         sys.exit("--jobs needs MARGINALIS_SANDBOX_DOCKER=1: several sandbox IDEs need a screen each")
+    with machine_lock():
+        return run_parallel_locked(names, feature_dir, jobs)
+
+
+def run_parallel_locked(names: list[str], feature_dir: Path, jobs: int) -> tuple[list[str], list[str]]:
     run = RUNS / f"{time.strftime('%Y%m%d-%H%M%S')}-{os.getpid()}"
     prebuilt = run / "prebuilt"
     sandbox.build_in_docker(feature_dir, prebuilt)
@@ -149,7 +192,12 @@ def main() -> None:
     selection.add_argument("--tag", help="the scenarios of the runbooks carrying this tag, e.g. smoke")
     parser.add_argument("--jobs", type=int, default=6 if sandbox.DOCKER else 1,
                         help="sandboxes side by side, Docker mode only (default 6, measured in docs/testing.md)")
+    parser.add_argument("--locked", nargs=argparse.REMAINDER, metavar="COMMAND",
+                        help="run COMMAND under the machine lock instead of the scenarios, for a one-off experiment")
     args = parser.parse_args()
+    if args.locked:
+        with machine_lock():
+            sys.exit(subprocess.run(args.locked).returncode)
     feature_dir = args.feature_dir.resolve()
     if args.only:
         names = args.only.split(",")

@@ -33,3 +33,4 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-81 | Sandbox scenarios in Docker, in parallel from one build, with a testing guide | `chore/sandbox-header-press` | — | — | `da69c29` |
 | MARG-86 | A new project thread no longer stalls the IDE while its REST call opens the Margin tab | `fix/MARG-86-tab-open-after-rest` | — | — | `9ba1083` |
 | MARG-63 | Headless tests for the sandbox checks: 68 move out of the UI suite, plus twins of the UI-only ones (part 1) | `feat/MARG-63-headless` | — | — | `65c8920` |
+| MARG-90 | Sandbox scenarios pass reliably side by side: the test project lives on the container's disk, starts wait until the IDE settles, one run per machine | `chore/MARG-90-suite-stability` | — | — | `ccaf1c7` |
