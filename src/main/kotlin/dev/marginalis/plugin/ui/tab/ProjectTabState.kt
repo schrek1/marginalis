@@ -4,6 +4,7 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import dev.marginalis.core.CommentThread
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 @Service(Service.Level.PROJECT)
@@ -14,6 +15,14 @@ class ProjectTabState {
     fun request(request: TabRequest) = pending.set(request)
 
     fun takeRequest(): TabRequest? = pending.getAndSet(null)
+
+    private val openBehindQueued = AtomicBoolean()
+
+    fun queueOpenBehind() = openBehindQueued.set(true)
+
+    fun cancelOpenBehind() = openBehindQueued.set(false)
+
+    fun takeOpenBehind(): Boolean = openBehindQueued.getAndSet(false)
 
     var draft: CommentThread? = null
         private set

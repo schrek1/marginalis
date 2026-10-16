@@ -326,7 +326,8 @@ class MarginalisRestService : RestService() {
             val message = Message(agentAuthor(json), body, to = to, relayed = relayed)
             created.addMessage(message)
             MarginalisStore.getInstance(project).threads.add(created)
-            if (created.isProjectLevel) ProjectTab.showBehindSelection(project)
+            // Opening an editor inside this block stalled it for 30 s, and the agent's call with it.
+            if (created.isProjectLevel) ProjectTab.showBehindSelectionLater(project)
             maybeNotify(project, created, message)
             thread = created
         }

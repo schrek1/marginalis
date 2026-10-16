@@ -1,6 +1,7 @@
 package dev.marginalis.plugin.ui.tab
 
 import com.intellij.ide.util.PropertiesComponent
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.ex.FileEditorManagerEx
 import com.intellij.openapi.fileEditor.impl.EditorHistoryManager
@@ -80,6 +81,19 @@ object ProjectTab {
         if (!FileEditorManager.getInstance(project).isFileOpen(MarginFile)) openBehindSelection(project, pin = false)
     }
 
+    /**
+     * [showBehindSelection] as an EDT event of its own, for callers that hold a lock: opening an editor under one
+     * waits on background reads it keeps out. A reveal of the tab before the event runs cancels it, so the user's
+     * own choice is never pushed behind the file again.
+     */
+    fun showBehindSelectionLater(project: Project) {
+        val state = ProjectTabState.getInstance(project)
+        state.queueOpenBehind()
+        ApplicationManager.getApplication().invokeLater {
+            if (!project.isDisposed && state.takeOpenBehind()) showBehindSelection(project)
+        }
+    }
+
     private fun openBehindSelection(project: Project, pin: Boolean) {
         val editors = FileEditorManager.getInstance(project)
         val selected = editors.selectedFiles.firstOrNull()
@@ -98,6 +112,7 @@ object ProjectTab {
 
     private fun deliver(project: Project, request: TabRequest) {
         val state = ProjectTabState.getInstance(project)
+        state.cancelOpenBehind()
         state.request(request)
         val shown = FileEditorManager.getInstance(project).openFile(MarginFile, true, true).filterIsInstance<MarginEditor>()
         val pending = state.takeRequest() ?: return
