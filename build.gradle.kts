@@ -244,6 +244,13 @@ val sandboxRunLocked by tasks.registering {
                 break
             } catch (taken: FileAlreadyExistsException) {
                 val judgedText = sandboxRunLockText() ?: continue
+                // A daemon runs one build at a time, so a lock under its own pid is a cancelled earlier build's, whose
+                // unlock finalizer never ran.
+                if (judgedText.lineSequence().any { it == "pid=$sandboxRunLockOwner" }) {
+                    logger.lifecycle("taking over the sandbox run lock $sandboxRunLock left by an earlier build of this Gradle daemon (pid $sandboxRunLockOwner)")
+                    deleteSandboxRunLockIfStill(judgedText)
+                    continue
+                }
                 if (sandboxRunLockIsStale(judgedText)) {
                     logger.lifecycle("taking the stale sandbox run lock $sandboxRunLock")
                     deleteSandboxRunLockIfStill(judgedText)
