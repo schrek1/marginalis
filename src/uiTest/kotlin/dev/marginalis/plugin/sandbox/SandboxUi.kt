@@ -598,7 +598,7 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
         )
     }
 
-    fun marginSort(): String = marginJs("String(service('dev.marginalis.plugin.ui.tab.ProjectTabSort').getOrder().getStored())")
+    fun marginSort(): String = js("String(service('dev.marginalis.plugin.ui.tab.ProjectTabSort').getOrder().getStored())")
 
     /** Forced save of the project's workspace.xml, off the EDT: non-forced saves skip recently loaded components. */
     fun saveProjectState() {
