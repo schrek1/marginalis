@@ -43,6 +43,8 @@ History before 0.1.19 lives in git tags.
 
 ### Fixed
 
+- When an agent starts a project thread, the IDE no longer freezes for
+  up to half a minute while the Margin tab opens for it.
 - "Select Opened Thread" in the Marginalis tool window works with a
   pull or merge request review diff in front too, instead of staying
   greyed out: it picks the thread on your caret's line in the diff, or
