@@ -10,6 +10,7 @@ import java.nio.file.Path
 import java.nio.file.StandardOpenOption.APPEND
 import java.nio.file.StandardOpenOption.CREATE
 import java.time.Duration
+import java.time.LocalTime
 import java.util.Locale
 
 /**
@@ -35,6 +36,7 @@ abstract class SandboxScenario(private val scenario: String) {
         Files.createDirectories(log.parent)
         Files.deleteIfExists(log)
         started = System.nanoTime()
+        report("INFO  $scenario starts on test fork ${System.getProperty("org.gradle.test.worker") ?: "-"} at ${LocalTime.now().withNano(0)}")
         Sandbox.restart(fresh = true)
     }
 
@@ -42,6 +44,7 @@ abstract class SandboxScenario(private val scenario: String) {
     fun stopSandbox() {
         Sandbox.stop()
         val minutes = Duration.ofNanos(System.nanoTime() - started).toMillis() / 60_000.0
+        report("INFO  $scenario ends at ${LocalTime.now().withNano(0)}")
         report("== $scenario: $passes pass, ${failures.size} fail, ${"%.1f".format(Locale.ROOT, minutes)} min")
     }
 
