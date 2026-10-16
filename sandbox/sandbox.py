@@ -79,6 +79,10 @@ def get_json(url: str, timeout: float = 2) -> dict | None:
 
 
 def robot_up() -> bool:
+    # Docker Desktop's port proxy accepts connections with nothing listening behind it, so in Docker mode a connect
+    # alone proves nothing.
+    if DOCKER and not container_running():
+        return False
     try:
         with socket.create_connection(("127.0.0.1", ROBOT_PORT), timeout=2):
             return True
