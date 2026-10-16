@@ -4,6 +4,7 @@ import dev.marginalis.plugin.sandbox.Agent
 import dev.marginalis.plugin.sandbox.SandboxScenario
 import dev.marginalis.plugin.sandbox.SandboxUi
 import dev.marginalis.plugin.sandbox.ToolWindowUi
+import dev.marginalis.plugin.sandbox.awaitValue
 import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
 
@@ -223,39 +224,30 @@ class EnvelopeOnlyWhileUnreadTest : SandboxScenario("envelope_only_while_unread"
     )
 
     /**
-     * The Margin tab's title as its editor tab shows it, or as the title provider computes it when the tab's label
-     * cannot be read (noted, since that skips the refresh of the tab).
+     * The Margin tab's title as its editor tab shows it. The title provider is no stand-in: it skips the refresh of
+     * the tab, so a label that never shows fails the step.
      */
-    private fun marginTabTitle(): String {
+    private fun marginTabTitle(): String = awaitValue("the Margin tab's label") {
         val shown = SandboxUi.obj(
             SandboxUi.marginJs(
                 """
                 var marginFile = pluginLoader.loadClass('dev.marginalis.plugin.ui.tab.MarginFile').getField('INSTANCE').get(null);
                 var title = null;
-                try {
-                    var windows = com.intellij.openapi.fileEditor.ex.FileEditorManagerEx.getInstanceEx(project).getWindows();
-                    for (var i = 0; i < windows.length && title == null; i++) {
-                        var tabs = windows[i].getTabbedPane().getTabs().getTabs();
-                        for (var j = 0; j < tabs.size(); j++) {
-                            var object = tabs.get(j).getObject();
-                            if (object === marginFile || (object != null && object.getFile && object.getFile() === marginFile)) {
-                                title = String(tabs.get(j).getText());
-                            }
+                var windows = com.intellij.openapi.fileEditor.ex.FileEditorManagerEx.getInstanceEx(project).getWindows();
+                for (var i = 0; i < windows.length && title == null; i++) {
+                    var tabs = windows[i].getTabbedPane().getTabs().getTabs();
+                    for (var j = 0; j < tabs.size(); j++) {
+                        var object = tabs.get(j).getObject();
+                        if (object === marginFile || (object != null && object.getFile && object.getFile() === marginFile)) {
+                            title = String(tabs.get(j).getText());
                         }
                     }
-                } catch (ignored) {}
-                var source = 'tab';
-                if (title == null) {
-                    source = 'provider';
-                    title = String(com.intellij.openapi.fileEditor.impl.EditorTabPresentationUtil.getEditorTabTitle(project, marginFile));
                 }
-                String(JSON.stringify({ title: title, source: source }))
+                String(JSON.stringify({ title: title }))
                 """,
             ),
         )
-        val title = shown.get("title").asString
-        if (shown.get("source").asString != "tab") report("note  the Margin tab's label could not be read; its title provider says '$title'")
-        return title
+        shown.get("title").takeUnless { it.isJsonNull }?.asString
     }
 
     /** Per thread id, the turn signal after the mark on its Margin tab card. */
