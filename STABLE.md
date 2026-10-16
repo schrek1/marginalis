@@ -34,3 +34,4 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-86 | A new project thread no longer stalls the IDE while its REST call opens the Margin tab | `fix/MARG-86-tab-open-after-rest` | — | — | `9ba1083` |
 | MARG-63 | Headless tests for the sandbox checks: 68 move out of the UI suite, plus twins of the UI-only ones (part 1) | `feat/MARG-63-headless` | — | — | `65c8920` |
 | MARG-90 | Sandbox scenarios pass reliably side by side: the test project lives on the container's disk, starts wait until the IDE settles, one run per machine | `chore/MARG-90-suite-stability` | — | — | `ccaf1c7` |
+| MARG-63 | The sandbox scenarios as a Kotlin suite run by Gradle, as stable as the Python one, which it will replace (part 2) | `feat/MARG-63-kotlin-suites` | — | — | `8117435` |
