@@ -12,7 +12,6 @@ import dev.marginalis.plugin.sandbox.fixtures.postWalkthrough
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
-import kotlin.io.path.readText
 
 /**
  * Guided layout (fork MARG-10, MARG-47): the tool window lays a walkthrough out by step number (the default;
@@ -155,7 +154,7 @@ class GuidedLayoutTest : SandboxScenario("guided_layout") {
         Sandbox.restart(fresh = false)
         SandboxUi.showToolWindow()
         check("the project's layout survives a restart", ToolWindowUi.guidedLayout() == "BY_FILE", ToolWindowUi.guidedLayout())
-        val workspace = Sandbox.project.resolve(".idea").resolve("workspace.xml").readText()
+        val workspace = Sandbox.projectText(".idea/workspace.xml").orEmpty()
         check("the choice lives in workspace.xml", "name=\"MarginalisGuidedLayout\"" in workspace)
     }
 

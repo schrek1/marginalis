@@ -162,6 +162,7 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
 
     /** Makes files written from outside visible to the IDE; a synchronous refresh on the EDT would need a write-intent lock. */
     fun refreshProjectFiles() {
+        Sandbox.pushProject()
         Sandbox.robot.callJs(
             PRELUDE + """
             com.intellij.openapi.vfs.VfsUtil['markDirtyAndRefresh(boolean,boolean,boolean,com.intellij.openapi.vfs.VirtualFile[])'](

@@ -10,8 +10,6 @@ import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
 import java.nio.file.Files
 import java.time.Duration
-import kotlin.io.path.exists
-import kotlin.io.path.readText
 import kotlin.io.path.writeText
 
 /**
@@ -63,11 +61,12 @@ class NoEmptyMarginTabTest : SandboxScenario("no_empty_margin_tab") {
     fun openThreadOpensTheTabUnpinned() = case("open_thread_opens_the_tab_unpinned") {
         val thread = Agent.agentStartsProjectThread("An open project thread before the project is opened again.")
         awaitOrFail("the open thread on disk") { persistedStatus(thread) == "OPEN" }
-        val threadsOnDisk = threadsFile().readText()
+        val threadsOnDisk = Sandbox.projectText(THREADS_FILE) ?: error("no $THREADS_FILE in the project")
         // A first open of a project that already has project threads, as after installing or updating the plugin.
         Sandbox.restart(fresh = true) {
-            Files.createDirectories(threadsFile().parent)
-            threadsFile().writeText(threadsOnDisk)
+            val threadsFile = Sandbox.project.resolve(THREADS_FILE)
+            Files.createDirectories(threadsFile.parent)
+            threadsFile.writeText(threadsOnDisk)
         }
         settleAfterStart(threads = 2)
         shot("4-first-open-with-a-project-thread")
@@ -107,15 +106,15 @@ class NoEmptyMarginTabTest : SandboxScenario("no_empty_margin_tab") {
 
     private fun awaitOrFail(what: String, condition: () -> Boolean) = awaitUntil(what, Duration.ofSeconds(60), condition = condition)
 
-    private fun threadsFile() = Sandbox.project.resolve(".idea").resolve("marginalis.json")
-
     private fun persistedStatus(threadId: String): String? {
-        if (!threadsFile().exists()) return null
-        val threads = JsonParser.parseString(threadsFile().readText()).asJsonObject.getAsJsonArray("threads") ?: return null
+        val text = Sandbox.projectText(THREADS_FILE) ?: return null
+        val threads = JsonParser.parseString(text).asJsonObject.getAsJsonArray("threads") ?: return null
         return threads.map { it.asJsonObject }.firstOrNull { it.get("id").asString == threadId }?.get("status")?.asString
     }
 
     private companion object {
+        const val THREADS_FILE = ".idea/marginalis.json"
+
         fun settle() = Thread.sleep(3_000)
     }
 }

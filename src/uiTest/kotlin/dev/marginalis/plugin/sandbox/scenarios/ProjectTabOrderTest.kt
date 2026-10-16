@@ -6,7 +6,6 @@ import dev.marginalis.plugin.sandbox.SandboxScenario
 import dev.marginalis.plugin.sandbox.SandboxUi
 import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
-import kotlin.io.path.readText
 
 /**
  * Margin tab order: oldest first by default, walkthrough steps in step order, the Sort menu, the new-thread draft on
@@ -87,7 +86,7 @@ class ProjectTabOrderTest : SandboxScenario("project_tab_order") {
         SandboxUi.saveProjectState()
         Sandbox.restart(fresh = false)
         check("the project's Sort choice survives a restart", SandboxUi.marginSort() == "NEWEST_FIRST", SandboxUi.marginSort())
-        val workspace = Sandbox.project.resolve(".idea").resolve("workspace.xml").readText()
+        val workspace = Sandbox.projectText(".idea/workspace.xml").orEmpty()
         check("the choice lives in workspace.xml", "name=\"MarginalisProjectTabSort\"" in workspace)
     }
 

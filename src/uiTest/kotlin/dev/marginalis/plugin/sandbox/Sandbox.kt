@@ -18,6 +18,7 @@ import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.copyToRecursively
 import kotlin.io.path.deleteRecursively
 import kotlin.io.path.exists
+import kotlin.io.path.readText
 
 /**
  * A sandbox IntelliJ running Marginalis built straight from a checkout, on a virtual 2560x1440 screen, opening
@@ -42,6 +43,7 @@ object Sandbox {
     private const val GRADLE_SEED = "marginalis-sandbox-build-gradle"
     private const val CONTAINER_ROBOT_PORT = 8082
     private const val CONTAINER_REST_PORT = 63342
+    private const val CONTAINER_PROJECT = "/work/runtime/project"
 
     // Below 8100 the Python harness runs its gates; the claim stops at the first port docker can create and start.
     private val claimablePorts = 8100..8199
@@ -96,6 +98,15 @@ object Sandbox {
 
     /** Stops the sandbox and, in Docker, removes its container and with it the claim on its port. */
     fun stop() = sandbox.stop(release = true)
+
+    /**
+     * A file of the test project as the IDE has it now, or null when it does not exist. A Docker sandbox's IDE works on
+     * the container's own copy, which the host folder catches up with only when the sandbox stops.
+     */
+    fun projectText(relative: String): String? = sandbox.projectText(relative)
+
+    /** Hands what the harness wrote into [project] to the running IDE's copy; `.idea` stays the IDE's. */
+    fun pushProject() = sandbox.pushProject()
 
     /** Records what the calling thread's sandbox is doing: a thread dump in its IDE log and a shot of its frame. */
     fun recordDiagnostics(what: String): String = current.get()?.recordDiagnostics(what) ?: "no sandbox on this thread to diagnose"
@@ -171,6 +182,7 @@ object Sandbox {
                         """,
                     )
                 }.onFailure { println("saving the sandbox's settings failed: $it") }
+                pullProject()
                 // The IDE closes the connection before answering.
                 runCatching { robot.runJs("com.intellij.openapi.application.ApplicationManager.getApplication().exit(true, true, false)", edt = true) }
             }
@@ -237,7 +249,9 @@ object Sandbox {
                     "create", "--name", name,
                     "-p", "127.0.0.1:$port:$CONTAINER_ROBOT_PORT", "-p", "127.0.0.1:${port + 10000}:$CONTAINER_REST_PORT",
                 ) + source + listOf(
-                    "--mount", "type=bind,source=$project,target=/work/runtime/project",
+                    // The entrypoint copies it onto the container's own disk, where the IDE gets file events and
+                    // no 9p stalls; the stop copies the IDE's state back.
+                    "--mount", "type=bind,source=$project,target=/project-host",
                     // The IDE's config, its build output and the Gradle cache live in the sandbox's own volumes between
                     // starts. A cache shared with another running sandbox stalls the build: Gradle hands its cache
                     // locks over loopback, which each container has to itself. A new sandbox's cache starts as a copy
@@ -272,6 +286,31 @@ object Sandbox {
             val frame = sizeTheFrame()
             awaitProjectStartup()
             println("sandbox up: robot http://127.0.0.1:$robotPort, marginalis http://127.0.0.1:$port, frame $frame")
+        }
+
+        private fun containerRunning(): Boolean = container?.let { name ->
+            dockerOutput("inspect", "-f", "{{.State.Running}}", name)?.trim() == "true"
+        } ?: false
+
+        fun projectText(relative: String): String? {
+            if (launch == Launch.DOCKER && containerRunning()) {
+                return dockerOutput("exec", container!!, "cat", "$CONTAINER_PROJECT/$relative")
+            }
+            val file = project.resolve(relative)
+            return if (file.exists()) file.readText() else null
+        }
+
+        fun pushProject() {
+            if (launch == Launch.DOCKER && containerRunning()) {
+                docker("exec", container!!, "rsync", "-a", "--exclude", "/.idea", "/project-host/", "$CONTAINER_PROJECT/", check = true)
+            }
+        }
+
+        private fun pullProject() {
+            if (launch == Launch.DOCKER && containerRunning()) {
+                val pulled = docker("exec", container!!, "rsync", "-a", "--delete", "$CONTAINER_PROJECT/", "/project-host/")
+                if (pulled != 0) println("copying the IDE's project back to the host failed ($pulled)")
+            }
         }
 
         /** A thread dump in the IDE log and a shot of the frame, for a wait that timed out. */
@@ -366,6 +405,13 @@ object Sandbox {
         val exit = process.waitFor()
         check(!check || exit == 0) { "docker ${args.first()} exited with $exit: $output" }
         return exit
+    }
+
+    /** What a docker command printed, or null when it failed. */
+    private fun dockerOutput(vararg args: String): String? {
+        val process = ProcessBuilder("docker", *args).redirectError(ProcessBuilder.Redirect.DISCARD).start()
+        val output = process.inputStream.readBytes().toString(Charsets.UTF_8)
+        return output.takeIf { process.waitFor() == 0 }
     }
 
     private fun getJson(url: String) = runCatching {

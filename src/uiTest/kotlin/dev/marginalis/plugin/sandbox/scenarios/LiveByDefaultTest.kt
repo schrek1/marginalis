@@ -11,7 +11,6 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
 import kotlin.concurrent.thread
-import kotlin.io.path.readText
 
 /**
  * Live by default: the tool window toggle, a thread's own switch, and the Settings default; a port of
@@ -78,7 +77,7 @@ class LiveByDefaultTest : SandboxScenario("live_by_default") {
         restart(fresh = false)
         check("the project's own choice survives a restart", !SandboxUi.liveByDefault())
 
-        val workspace = Sandbox.project.resolve(".idea").resolve("workspace.xml").readText()
+        val workspace = Sandbox.projectText(".idea/workspace.xml").orEmpty()
         check("the choice lives in workspace.xml", "name=\"MarginalisLiveDefault\"" in workspace)
     }
 
