@@ -187,9 +187,47 @@ tasks.register<Test>("uiTest") {
     installedIde?.let { systemProperty("marginalis.uiTestIde", it) }
 }
 
-tasks.register<Test>("uiSandboxTest") {
-    description = "Runs the sandbox scenarios against a sandbox IDE built from this checkout (see sandbox/README.md)."
+// The sandbox scenarios' IDE runs in Docker (sandbox/Dockerfile) unless MARGINALIS_SANDBOX_LAUNCH says otherwise.
+val sandboxInDocker = providers.environmentVariable("MARGINALIS_SANDBOX_LAUNCH").orElse("docker").get() == "docker"
+val sandboxPrebuiltDir = layout.buildDirectory.dir("sandbox-prebuilt")
+
+val sandboxImage by tasks.registering(Exec::class) {
+    description = "Builds the sandbox IDE's Docker image (a no-op once Docker has it cached)."
     group = "verification"
+    commandLine("docker", "build", "-q", "-t", "marginalis-sandbox", layout.projectDirectory.dir("sandbox").asFile.absolutePath)
+}
+
+val sandboxPrebuilt by tasks.registering(Exec::class) {
+    description = "Builds this checkout's plugins once in the sandbox image, for sandboxes that start straight from them."
+    group = "verification"
+    dependsOn(sandboxImage)
+    // The container's own Gradle build decides what is up to date.
+    outputs.upToDateWhen { false }
+    val output = sandboxPrebuiltDir.get().asFile
+    doFirst { output.mkdirs() }
+    commandLine(
+        "docker", "run", "--rm", "-e", "MARGINALIS_SANDBOX_MODE=build",
+        "--mount", "type=bind,source=${layout.projectDirectory.asFile.absolutePath},target=/src,readonly",
+        "--mount", "type=bind,source=${output.absolutePath},target=/prebuilt",
+        // The volumes sandbox.py's build container uses: its Gradle home seeds every sandbox's own.
+        "--mount", "type=volume,source=marginalis-sandbox-build-work,target=/work",
+        "--mount", "type=volume,source=marginalis-sandbox-build-gradle,target=/root/.gradle",
+        "--mount", "type=volume,source=marginalis-sandbox-build-gradle,target=/gradle-seed,readonly",
+        "marginalis-sandbox",
+    )
+}
+
+tasks.register<Test>("uiSandboxTest") {
+    description = "Runs the sandbox scenarios against sandbox IDEs built from this checkout (see sandbox/README.md)."
+    group = "verification"
+    if (sandboxInDocker) {
+        dependsOn(sandboxPrebuilt)
+        systemProperty("marginalis.sandbox.prebuilt", sandboxPrebuiltDir.get().asFile.absolutePath)
+    }
+    // Every fork drives a sandbox of its own and takes the next scenario class when it is free. A fixed robot port
+    // fits one sandbox only.
+    maxParallelForks = if (System.getenv("MARGINALIS_ROBOT_PORT") != null) 1
+        else providers.gradleProperty("marginalis.sandbox.jobs").orElse("6").get().toInt()
     val uiTestSourceSet = sourceSets["uiTest"]
     testClassesDirs = uiTestSourceSet.output.classesDirs
     classpath = uiTestSourceSet.runtimeClasspath

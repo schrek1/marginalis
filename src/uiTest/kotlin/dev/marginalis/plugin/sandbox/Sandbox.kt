@@ -10,54 +10,70 @@ import java.net.http.HttpResponse
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
+import java.util.concurrent.TimeUnit
 import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.copyToRecursively
 import kotlin.io.path.deleteRecursively
 import kotlin.io.path.exists
 
 /**
- * A sandbox IntelliJ running Marginalis built straight from a checkout, on a virtual 2560x1440 screen: the checkout's
- * `runIdeForUiTests` (from `sandbox/init.gradle`) under `sandbox/run-ide-xvfb.sh`, opening [project], a copy of
- * `sandbox/project-template`. `MARGINALIS_SANDBOX_LAUNCH` picks how it starts:
+ * A sandbox IntelliJ running Marginalis built straight from a checkout, on a virtual 2560x1440 screen, opening
+ * [project], a copy of `sandbox/project-template`. `MARGINALIS_SANDBOX_LAUNCH` picks how it starts:
  *
- * - `docker` (default): the image from `sandbox/Dockerfile`, as `sandbox.py` runs it with `MARGINALIS_SANDBOX_DOCKER=1`
- *   (container `marginalis-sandbox-<robot port>`, the checkout mounted read-only, the project from the host);
- * - `xvfb`: `run-ide-xvfb.sh` on this machine (Linux with Xvfb and JDK 25, e.g. CI);
- * - `attach`: an IDE already answering on the robot port; it is neither started nor stopped, so a fresh project and
- *   restarts are not available.
+ * - `docker` (default): a container of the image from `sandbox/Dockerfile`, as `sandbox.py` runs it with
+ *   `MARGINALIS_SANDBOX_DOCKER=1`. With the plugins from `./gradlew sandboxPrebuilt` (system property
+ *   `marginalis.sandbox.prebuilt`) the IDE starts straight from them, otherwise the container builds the checkout.
+ *   Each start claims robot port 8100 or the next free one (REST at the robot port + 10000), unless
+ *   `MARGINALIS_ROBOT_PORT` fixes it, so the forks of one test run each drive a sandbox of their own;
+ * - `xvfb`: `sandbox/run-ide-xvfb.sh` on this machine (Linux with Xvfb and JDK 25), on `MARGINALIS_ROBOT_PORT`;
+ * - `attach`: an IDE already answering on `MARGINALIS_ROBOT_PORT`; it is neither started nor stopped, so a fresh
+ *   project and restarts are not available.
  */
 object Sandbox {
 
     private enum class Launch { DOCKER, XVFB, ATTACH }
-
-    private val launch = Launch.valueOf((System.getenv("MARGINALIS_SANDBOX_LAUNCH") ?: "docker").uppercase())
-
-    val robotPort: Int = (System.getenv("MARGINALIS_ROBOT_PORT") ?: "8082").toInt()
-    val featureDir: Path = Path.of(System.getProperty("marginalis.sandbox.featureDir") ?: ".").toAbsolutePath().normalize()
-    val harness: Path = featureDir.resolve("sandbox")
-    private val container = "marginalis-sandbox-$robotPort"
-    val runtime: Path = Path.of(
-        System.getenv("MARGINALIS_SANDBOX_RUNTIME")
-            ?: featureDir.parent.resolve(if (launch == Launch.DOCKER) container else "marginalis-sandbox-runtime").toString(),
-    ).toAbsolutePath()
-    val project: Path = runtime.resolve("project")
-    val robot = Robot(robotPort)
 
     private const val IMAGE = "marginalis-sandbox"
     private const val GRADLE_SEED = "marginalis-sandbox-build-gradle"
     private const val CONTAINER_ROBOT_PORT = 8082
     private const val CONTAINER_REST_PORT = 63342
 
-    // Clear of the host's JetBrains IDEs (63342 and up) and of Windows' dynamic port range.
-    private val dockerRestPort = robotPort + 10000
-    private val projectInIde: String = if (launch == Launch.DOCKER) "/work/runtime/project" else project.toString().replace('\\', '/')
-    private val idePorts = if (launch == Launch.DOCKER) listOf(dockerRestPort) else (63342..63361).toList()
-    private val logFile = runtime.resolve("run.log")
+    // Below 8100 the Python harness runs its gates; the claim stops at the first port docker can create and start.
+    private val claimablePorts = 8100..8199
+
+    private val launch = Launch.valueOf((System.getenv("MARGINALIS_SANDBOX_LAUNCH") ?: "docker").uppercase())
+    private val fixedRobotPort: Int? = System.getenv("MARGINALIS_ROBOT_PORT")?.toInt()
+
+    var robotPort: Int = fixedRobotPort ?: claimablePorts.first
+        private set
+    var robot = Robot(robotPort)
+        private set
+
+    val featureDir: Path = Path.of(System.getProperty("marginalis.sandbox.featureDir") ?: ".").toAbsolutePath().normalize()
+    val harness: Path = featureDir.resolve("sandbox")
+    val runtime: Path = Path.of(System.getenv("MARGINALIS_SANDBOX_RUNTIME") ?: featureDir.parent.resolve("marginalis-sandbox-runtime").toString())
+        .toAbsolutePath()
+
+    // A Gradle test fork drives one sandbox at a time; its project and IDE log are its own.
+    private val forkDir: Path = runtime.resolve("fork-" + (System.getProperty("org.gradle.test.worker") ?: "0"))
+    val project: Path = forkDir.resolve("project")
+    private val logFile = forkDir.resolve("run.log")
+    private val prebuilt: Path? = System.getProperty("marginalis.sandbox.prebuilt")?.let(Path::of)?.takeIf { it.resolve("plugins").exists() }
+
+    private val projectInIde: String get() = if (launch == Launch.DOCKER) "/work/runtime/project" else project.toString().replace('\\', '/')
+    private val idePorts: List<Int> get() = if (launch == Launch.DOCKER) listOf(robotPort + 10000) else (63342..63361).toList()
     private val startTimeout = Duration.ofSeconds(900)
     private val http = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).connectTimeout(Duration.ofSeconds(1)).build()
 
+    /** The claimed container: created by the first start of a scenario, kept over its restarts, removed by [stop]. */
+    private var container: String? = null
     private var ide: Process? = null
     private var cachedPort: Int? = null
+
+    init {
+        // A run stopped halfway leaves no container behind.
+        Runtime.getRuntime().addShutdownHook(Thread { container?.let { docker("rm", "-f", it) } })
+    }
 
     /** The built-in server port of the IDE that has the sandbox project open. */
     val marginalisPort: Int
@@ -65,20 +81,41 @@ object Sandbox {
 
     fun robotUp(): Boolean = runCatching { Socket().use { it.connect(InetSocketAddress("127.0.0.1", robotPort), 2_000) } }.isSuccess
 
-    fun start(fresh: Boolean) {
+    /** Starts the sandbox; `prepare` runs once the project is in place, before the IDE opens it. */
+    fun start(fresh: Boolean, prepare: () -> Unit = {}) {
         cachedPort = null
         if (launch == Launch.ATTACH) return awaitUp(process = null)
-        check(!robotUp()) { "a sandbox already answers on robot port $robotPort; stop it first" }
-        Files.createDirectories(runtime)
+        Files.createDirectories(forkDir)
         if (fresh || !project.exists()) freshProject()
-        val process = if (launch == Launch.DOCKER) startContainer() else startOnXvfb()
+        prepare()
+        val process = when (launch) {
+            Launch.DOCKER -> startContainer()
+            else -> {
+                check(!robotUp()) { "a sandbox already answers on robot port $robotPort; stop it first" }
+                startOnXvfb()
+            }
+        }
         ide = process
-        println("sandbox starting ($launch), log $logFile")
+        println("sandbox starting ($launch${if (launch == Launch.DOCKER) ", ${if (prebuilt != null) "prebuilt" else "built in the container"}" else ""}), log $logFile")
         awaitUp(process)
     }
 
-    fun stop() {
-        if (launch == Launch.ATTACH) return
+    /** Stops the sandbox and, in Docker, removes its container and with it the claim on its port. */
+    fun stop() = stop(release = true)
+
+    /** Restarts the sandbox; a Docker sandbox keeps its container, so its port, IDE config and caches stay. */
+    fun restart(fresh: Boolean, prepare: () -> Unit = {}) {
+        stop(release = false)
+        start(fresh, prepare)
+    }
+
+    private fun stop(release: Boolean) {
+        val started = when (launch) {
+            Launch.DOCKER -> container != null
+            Launch.XVFB -> ide != null
+            Launch.ATTACH -> false
+        }
+        if (!started) return
         if (robotUp()) {
             // Settings are saved explicitly first: the robot server goes down early in the shutdown, and a kill after
             // that loses whatever the exit had not flushed yet (workspace.xml, app options).
@@ -97,46 +134,75 @@ object Sandbox {
             runCatching { robot.runJs("com.intellij.openapi.application.ApplicationManager.getApplication().exit(true, true, false)", edt = true) }
         }
         when (launch) {
-            Launch.DOCKER -> docker("rm", "-f", container)
-            Launch.XVFB -> ide?.let { process ->
+            Launch.DOCKER -> container?.let { name ->
                 // The shutdown often hangs after the robot server is gone (a leak it reports); everything is saved by
                 // now, so a short grace period and a kill are safe.
-                process.waitFor(20, java.util.concurrent.TimeUnit.SECONDS)
+                if (release) {
+                    docker("rm", "-f", name)
+                    container = null
+                } else {
+                    docker("stop", "-t", "20", name)
+                }
+            }
+            Launch.XVFB -> ide?.let { process ->
+                process.waitFor(20, TimeUnit.SECONDS)
                 process.descendants().forEach { it.destroyForcibly() }
                 process.destroyForcibly()
             }
             Launch.ATTACH -> Unit
         }
+        ide?.destroy()
         ide = null
         cachedPort = null
         println("sandbox stopped")
     }
 
-    fun restart(fresh: Boolean) {
-        stop()
-        start(fresh)
-    }
-
-    /** Builds the image (a no-op once cached) and runs the container; the returned process follows its log. */
+    /** Starts the claimed container again, or claims one; the returned process follows its log. */
     private fun startContainer(): Process {
         docker("build", "-q", "-t", IMAGE, harness.toString(), check = true)
-        docker("rm", "-f", container)
-        docker(
-            "run", "-d", "--name", container,
-            "-p", "127.0.0.1:$robotPort:$CONTAINER_ROBOT_PORT", "-p", "127.0.0.1:$dockerRestPort:$CONTAINER_REST_PORT",
-            "--mount", "type=bind,source=$featureDir,target=/src,readonly",
-            "--mount", "type=bind,source=$project,target=/work/runtime/project",
-            // Build output, the IDE's config and the Gradle cache live in the sandbox's own volumes between starts. A
-            // cache shared with another running sandbox stalls the build: the Gradle that runs that IDE holds the cache's
-            // journal lock, and Gradle's lock handoff cannot reach a process in another container. A new sandbox's cache
-            // starts as a copy of the shared seed (docker-entrypoint.sh).
-            "--mount", "type=volume,source=$container-work,target=/work",
-            "--mount", "type=volume,source=$container-gradle,target=/root/.gradle",
-            "--mount", "type=volume,source=$GRADLE_SEED,target=/gradle-seed,readonly",
-            IMAGE,
-            check = true,
-        )
-        return ProcessBuilder("docker", "logs", "-f", container).redirectErrorStream(true).redirectOutput(logFile.toFile()).start()
+        val name = container?.also { docker("start", it, check = true) } ?: claimContainer()
+        return ProcessBuilder("docker", "logs", "-f", name).redirectErrorStream(true).redirectOutput(logFile.toFile()).start()
+    }
+
+    // Creating the container is the claim: `docker create` refuses a name that exists, and `docker start` a port that
+    // something else holds.
+    private fun claimContainer(): String {
+        for (port in fixedRobotPort?.let { listOf(it) } ?: claimablePorts.toList()) {
+            val name = "marginalis-sandbox-$port"
+            if (fixedRobotPort != null) docker("rm", "-f", name)
+            if (docker(*createArgs(name, port)) != 0) continue
+            if (docker("start", name) != 0) {
+                docker("rm", "-f", name)
+                continue
+            }
+            container = name
+            robotPort = port
+            robot = Robot(port)
+            return name
+        }
+        error("no robot port free for a sandbox in ${fixedRobotPort ?: claimablePorts}")
+    }
+
+    private fun createArgs(name: String, port: Int): Array<String> {
+        val source = prebuilt
+            ?.let { listOf("-e", "MARGINALIS_SANDBOX_MODE=prebuilt", "--mount", "type=bind,source=$it,target=/prebuilt,readonly") }
+            ?: listOf("--mount", "type=bind,source=$featureDir,target=/src,readonly")
+        return (
+            listOf(
+                "create", "--name", name,
+                "-p", "127.0.0.1:$port:$CONTAINER_ROBOT_PORT", "-p", "127.0.0.1:${port + 10000}:$CONTAINER_REST_PORT",
+            ) + source + listOf(
+                "--mount", "type=bind,source=$project,target=/work/runtime/project",
+                // The IDE's config, its build output and the Gradle cache live in the sandbox's own volumes between
+                // starts. A cache shared with another running sandbox stalls the build: Gradle hands its cache locks
+                // over loopback, which each container has to itself. A new sandbox's cache starts as a copy of the
+                // build container's, which holds the downloaded IDE (docker-entrypoint.sh).
+                "--mount", "type=volume,source=$name-work,target=/work",
+                "--mount", "type=volume,source=$name-gradle,target=/root/.gradle",
+                "--mount", "type=volume,source=$GRADLE_SEED,target=/gradle-seed,readonly",
+                IMAGE,
+            )
+            ).toTypedArray()
     }
 
     private fun startOnXvfb(): Process =
@@ -145,7 +211,7 @@ object Sandbox {
             .redirectErrorStream(true)
             .redirectOutput(logFile.toFile())
             .apply {
-                environment()["MARGINALIS_SANDBOX_RUNTIME"] = runtime.toString()
+                environment()["MARGINALIS_SANDBOX_RUNTIME"] = forkDir.toString()
                 environment()["MARGINALIS_ROBOT_PORT"] = robotPort.toString()
             }
             .start()
@@ -167,11 +233,12 @@ object Sandbox {
         error("sandbox not up after ${startTimeout.seconds}s; see $logFile")
     }
 
-    private fun docker(vararg args: String, check: Boolean = false) {
+    private fun docker(vararg args: String, check: Boolean = false): Int {
         val process = ProcessBuilder("docker", *args).redirectErrorStream(true).start()
         val output = process.inputStream.bufferedReader().readText()
         val exit = process.waitFor()
         check(!check || exit == 0) { "docker ${args.first()} exited with $exit: $output" }
+        return exit
     }
 
     // A frame sized like a real screen: a window manager or a sleeping monitor may open it tiny, and inlaid thread
