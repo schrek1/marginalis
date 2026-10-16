@@ -11,7 +11,6 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import robot
 import sandbox
 import sandbox_ui as ui
 from fixtures import deep_walkthrough as fixture
@@ -22,14 +21,7 @@ HUMAN_PAUSE_S = 1.5
 
 def press(*names: str) -> None:
     """The header buttons carry the occurrence actions' own names or the panel's step names."""
-    for name in names:
-        try:
-            ui.press_tool_window_action(name)
-            return
-        except robot.RobotError as error:
-            if "no tool window button" not in str(error):
-                raise
-    raise RuntimeError(f"none of {names} is in the tool window header")
+    ui.press_tool_window_action(*names)
 
 
 def build_walkthrough() -> None:
