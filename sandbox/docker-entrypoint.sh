@@ -29,7 +29,7 @@ if [ "$mode" != prebuilt ]; then
   # Gradle builds off a copy: on a host bind mount it is slow, and the copy keeps its build output between starts.
   rsync -a --delete \
     --exclude /.git --exclude /build --exclude /core/build --exclude /.gradle --exclude /.kotlin \
-    --exclude /.intellijPlatform --exclude /.idea --exclude __pycache__ \
+    --exclude /.intellijPlatform --exclude /.idea --exclude /out --exclude __pycache__ \
     /src/ /work/src/
   find /work/src/gradlew /work/src/sandbox -maxdepth 1 \( -name gradlew -o -name '*.sh' \) -exec sed -i 's/\r$//' {} +
 fi
