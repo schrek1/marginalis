@@ -77,6 +77,14 @@ out. Six is the default: under a 5-minute target with half the machine left. A s
 
 The Kotlin suite was measured at the default 6 sandboxes on 2026-10-16: about 4.2 min, 5 runs in a row green.
 
+### In CI
+
+Every pull request runs the suite in the `e2e` job of `.github/workflows/ci.yml`. It runs on GitHub's free
+`ubuntu-latest` runner (4 vCPU, 16 GB) with 4 sandboxes: about 15 min, of which the plugin build takes about 2.5 min
+and the scenarios about 10 min. The job keeps the JUnit results, each scenario's IDE log, the timeout diagnostics
+and the shots as the `e2e-reports` artifact. The runner is a Linux host, where files a container writes into a bind
+mount stay root's: the harness hands them back to the runner's user (`MARGINALIS_HOST_OWNER`, `rsync --chown`).
+
 ## Adding a scenario
 
 1. Write the feature's runbook (`sandbox/runbooks/README.md` has the format); its `Scenario` line names the class.
