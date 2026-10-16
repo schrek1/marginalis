@@ -37,7 +37,6 @@ object Sandbox {
 
     private enum class Launch { DOCKER, XVFB, ATTACH }
 
-    private const val IMAGE = "marginalis-sandbox"
     private const val GRADLE_SEED = "marginalis-sandbox-build-gradle"
     private const val CONTAINER_ROBOT_PORT = 8082
     private const val CONTAINER_REST_PORT = 63342
@@ -53,6 +52,9 @@ object Sandbox {
     val runtime: Path = Path.of(System.getenv("MARGINALIS_SANDBOX_RUNTIME") ?: featureDir.parent.resolve("marginalis-sandbox-runtime").toString())
         .toAbsolutePath()
     private val prebuilt: Path? = System.getProperty("marginalis.sandbox.prebuilt")?.let(Path::of)?.takeIf { it.resolve("plugins").exists() }
+
+    // `sandboxImage` tags the image by its Dockerfile and entrypoint (build.gradle.kts).
+    private val image: String = System.getProperty("marginalis.sandbox.image") ?: "marginalis-sandbox"
     private val startTimeout = Duration.ofSeconds(900)
     private val http = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).connectTimeout(Duration.ofSeconds(1)).build()
 
@@ -191,7 +193,7 @@ object Sandbox {
         /** Starts the claimed container again, or claims one; the returned process follows its log. */
         private fun startContainer(): Process {
             // `sandboxPrebuilt` built the image already.
-            if (prebuilt == null) docker("build", "-q", "-t", IMAGE, harness.toString(), check = true)
+            if (prebuilt == null) docker("build", "-q", "-t", image, harness.toString(), check = true)
             val name = container?.also { docker("start", it, check = true) } ?: claimContainer()
             return ProcessBuilder("docker", "logs", "-f", name).redirectErrorStream(true).redirectOutput(logFile.toFile()).start()
         }
@@ -234,7 +236,7 @@ object Sandbox {
                     "--mount", "type=volume,source=$name-work,target=/work",
                     "--mount", "type=volume,source=$name-gradle,target=/root/.gradle",
                     "--mount", "type=volume,source=$GRADLE_SEED,target=/gradle-seed,readonly",
-                    IMAGE,
+                    image,
                 )
                 ).toTypedArray()
         }

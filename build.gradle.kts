@@ -1,5 +1,6 @@
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.security.MessageDigest
 
 plugins {
     // Kotlin 2.3.x: first line with official Gradle 9 support (we run Gradle 9.1
@@ -191,10 +192,20 @@ tasks.register<Test>("uiTest") {
 val sandboxInDocker = providers.environmentVariable("MARGINALIS_SANDBOX_LAUNCH").orElse("docker").get() == "docker"
 val sandboxPrebuiltDir = layout.buildDirectory.dir("sandbox-prebuilt")
 
+// The image is tagged by what it is built from: sandboxes of another checkout (or the Python harness on another
+// branch) building a different entrypoint under one shared tag would swap the image under running scenarios.
+val sandboxImageTag: String = run {
+    val digest = MessageDigest.getInstance("SHA-256")
+    listOf("Dockerfile", "docker-entrypoint.sh").forEach { name ->
+        digest.update(layout.projectDirectory.file("sandbox/$name").asFile.readText().replace("\r\n", "\n").toByteArray())
+    }
+    "marginalis-sandbox:" + digest.digest().joinToString("") { "%02x".format(it) }.take(12)
+}
+
 val sandboxImage by tasks.registering(Exec::class) {
     description = "Builds the sandbox IDE's Docker image (a no-op once Docker has it cached)."
     group = "verification"
-    commandLine("docker", "build", "-q", "-t", "marginalis-sandbox", layout.projectDirectory.dir("sandbox").asFile.absolutePath)
+    commandLine("docker", "build", "-q", "-t", sandboxImageTag, layout.projectDirectory.dir("sandbox").asFile.absolutePath)
 }
 
 val sandboxPrebuilt by tasks.registering(Exec::class) {
@@ -213,7 +224,7 @@ val sandboxPrebuilt by tasks.registering(Exec::class) {
         "--mount", "type=volume,source=marginalis-sandbox-build-work,target=/work",
         "--mount", "type=volume,source=marginalis-sandbox-build-gradle,target=/root/.gradle",
         "--mount", "type=volume,source=marginalis-sandbox-build-gradle,target=/gradle-seed,readonly",
-        "marginalis-sandbox",
+        sandboxImageTag,
     )
 }
 
@@ -223,6 +234,7 @@ tasks.register<Test>("uiSandboxTest") {
     if (sandboxInDocker) {
         dependsOn(sandboxPrebuilt)
         systemProperty("marginalis.sandbox.prebuilt", sandboxPrebuiltDir.get().asFile.absolutePath)
+        systemProperty("marginalis.sandbox.image", sandboxImageTag)
     }
     // One JVM runs the scenario classes side by side, each with a sandbox of its own, the longest first (Gradle's
     // forks would take them in scan order). A fixed robot port fits one sandbox only.
