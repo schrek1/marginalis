@@ -103,7 +103,7 @@ def start_draft_in(key: str) -> str:
         area.setText({json.dumps(DRAFT_TEXT)});
         var editor = area.getEditor();
         if (editor == null) throw 'the reply box has no editor yet';
-        editor.getCaretModel().moveToOffset({DRAFT_CARET});
+        asUser(function () {{ editor.getCaretModel().moveToOffset({DRAFT_CARET}); }});
         String(JSON.stringify({{ focus: rememberFocus(editor.getContentComponent()) }}))
     """)["focus"]
 
@@ -137,7 +137,7 @@ def on_screen(key: str, grower: str) -> dict:
             viewTop: viewport.getViewPosition().y,
             focused: focused != null && javax.swing.SwingUtilities.isDescendingFrom(focused, host),
             text: area == null ? null : String(area.getText()),
-            caret: editor == null ? null : editor.getCaretModel().getOffset(),
+            caret: editor == null ? null : read(function () {{ return editor.getCaretModel().getOffset(); }}) | 0,
             grower: target({json.dumps(grower)}).getHeight()
         }}))
     """)

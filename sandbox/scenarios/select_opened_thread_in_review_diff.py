@@ -64,7 +64,7 @@ def put_caret_in_review(after: str, line: int) -> None:
     ui.js(ui._EDITORS + f"""
         var editor = diffEditorShowing({json.dumps(after)});
         if (editor == null) throw 'no diff editor shows that text';
-        editor.getCaretModel().moveToLogicalPosition(new com.intellij.openapi.editor.LogicalPosition({line}, 0));
+        asUser(function () {{ editor.getCaretModel().moveToLogicalPosition(new com.intellij.openapi.editor.LogicalPosition({line}, 0)); }});
         String(true)
     """)
 

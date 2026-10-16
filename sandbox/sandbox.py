@@ -118,7 +118,10 @@ def start_in_docker(feature_dir: Path) -> subprocess.Popen:
         "--mount", f"type=bind,source={feature_dir},target=/src,readonly",
         "--mount", f"type=bind,source={PROJECT.resolve()},target=/work/runtime/project",
         "--mount", f"type=volume,source={CONTAINER}-work,target=/work",
-        "--mount", "type=volume,source=marginalis-gradle,target=/root/.gradle",
+        # Gradle hands its cache locks between processes over loopback, which each container has to itself: one
+        # Gradle home per container, filled once from the shared one so the IDE is not downloaded again.
+        "--mount", f"type=volume,source={CONTAINER}-gradle,target=/root/.gradle",
+        "--mount", "type=volume,source=marginalis-gradle,target=/gradle-seed,readonly",
         IMAGE,
     ], check=True, stdout=subprocess.DEVNULL)
     log = LOG_FILE.open("w", encoding="utf-8")
@@ -204,16 +207,20 @@ def stop() -> None:
         import robot
         # Settings are saved explicitly first: the robot server goes down early in the shutdown, and a kill after
         # that loses whatever the exit had not flushed yet (workspace.xml, app options).
-        robot.run_js("""
-            var store = com.intellij.configurationStore.StoreUtil;
-            var projects = com.intellij.openapi.project.ProjectManager.getInstance().getOpenProjects();
-            for (var i = 0; i < projects.length; i++) store.saveSettings(projects[i], true);
-            store.saveSettings(com.intellij.openapi.application.ApplicationManager.getApplication(), true);
-        """)
+        try:
+            robot.run_js("""
+                var store = com.intellij.configurationStore.StoreUtil;
+                var projects = com.intellij.openapi.project.ProjectManager.getInstance().getOpenProjects();
+                for (var i = 0; i < projects.length; i++) store.saveSettings(projects[i], true);
+                store.saveSettings(com.intellij.openapi.application.ApplicationManager.getApplication(), true);
+            """)
+        except (OSError, robot.RobotError) as error:
+            # A hung IDE never answers; the kill below still has to run.
+            print(f"saving the sandbox's settings failed ({type(error).__name__}); killing it")
         try:
             robot.run_js("com.intellij.openapi.application.ApplicationManager.getApplication().exit(true, true, false)",
                          edt=True)
-        except (ConnectionError, OSError):
+        except (OSError, robot.RobotError):
             pass  # the IDE closes the connection before answering
     if pid:
         # The shutdown often hangs after the robot server is gone (a leak it reports); everything is saved by now,

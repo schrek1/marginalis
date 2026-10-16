@@ -32,15 +32,19 @@ function threadOf(panel) {
     field.setAccessible(true);
     return field.get(panel);
 }
+// The robot's EDT scripts hold no lock, and 2025.2 (the floor) then refuses model reads and caret moves. Take the
+// lock around just those calls: around a whole script, opening an editor waits on background reads it holds back.
+function read(compute) {
+    return com.intellij.openapi.application.ReadAction.compute(new com.intellij.openapi.util.ThrowableComputable({ compute: compute }));
+}
+function asUser(compute) {
+    return com.intellij.openapi.application.WriteIntentReadAction.compute(new com.intellij.openapi.util.ThrowableComputable({ compute: compute }));
+}
 """
 
 
 def js(script: str, component_id: str | None = None) -> str:
-    # The robot runs EDT scripts without the write-intent lock an ordinary EDT event holds; 2025.2 then refuses
-    # model reads (2026.2 grants the lock implicitly), so the script takes it as plugin code on the EDT has it.
-    locked = f"""String(com.intellij.openapi.application.WriteIntentReadAction.compute(
-        new com.intellij.openapi.util.ThrowableComputable({{ compute: function () {{ return eval({json.dumps(script)}); }} }})))"""
-    return robot.call_js(_PRELUDE + locked, edt=True, component_id=component_id)
+    return robot.call_js(_PRELUDE + script, edt=True, component_id=component_id)
 
 
 # --- agent side (REST) ---------------------------------------------------------------------------------------
@@ -121,20 +125,26 @@ def press_tool_window_action(text: str) -> None:
 def _press_tool_window_action(escaped: str) -> None:
     js(_FIND + f"""
         var window = com.intellij.openapi.wm.ToolWindowManager.getInstance(project).getToolWindow('Marginalis');
+        // A restart can restore the tool window hidden; its header is built only once it shows.
+        if (!window.isVisible()) window.show(null);
         var root = window.getComponent();
         while (root.getParent() != null && root.getClass().getName().indexOf('InternalDecorator') < 0) {{
             root = root.getParent();
         }}
+        var texts = [];
         var button = find(root, function (c) {{
-            return c instanceof com.intellij.openapi.actionSystem.impl.ActionButton
-                && c.getPresentation().getText() == {escaped};
+            if (!(c instanceof com.intellij.openapi.actionSystem.impl.ActionButton)) return false;
+            texts.push(String(c.getPresentation().getText()));
+            return c.getPresentation().getText() == {escaped};
         }});
-        if (button == null) throw 'no tool window button ' + {escaped};
+        if (button == null) throw 'no tool window button ' + {escaped} + ' among [' + texts.join(', ') + ']';
         var action = button.getAction();
         var event = com.intellij.openapi.actionSystem.AnActionEvent.createEvent(
             action, com.intellij.ide.DataManager.getInstance().getDataContext(button), button.getPresentation().clone(),
             'MarginalisSandbox', com.intellij.openapi.actionSystem.ActionUiKind.NONE, null);
-        action.actionPerformed(event);
+        // Its own EDT event, as in press_panel_action.
+        com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater(
+            new java.lang.Runnable({{ run: function () {{ action.actionPerformed(event); }} }}));
         String(true)
     """)
 
@@ -167,7 +177,7 @@ def thread_panel(thread_id: str) -> str:
 _EDITORS = """
 function projectFile(path) { return project.getBaseDir().findFileByRelativePath(path); }
 function textEditorOf(path) {
-    var document = com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().getDocument(projectFile(path));
+    var document = read(function () { return com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().getDocument(projectFile(path)); });
     var editors = com.intellij.openapi.editor.EditorFactory.getInstance().getEditors(document, project);
     for (var i = 0; i < editors.length; i++) {
         if (editors[i].getEditorKind() == com.intellij.openapi.editor.EditorKind.MAIN_EDITOR) return editors[i];
@@ -240,7 +250,8 @@ def diff_icon_lines(after: str) -> list[int]:
         for (var i = 0; i < highlighters.length; i++) {{
             var renderer = highlighters[i].getGutterIconRenderer();
             if (renderer != null && renderer.getClass().getSimpleName() == 'ThreadGutterIconRenderer') {{
-                lines.push(editor.getDocument().getLineNumber(highlighters[i].getStartOffset()));
+                var offset = highlighters[i].getStartOffset();
+                lines.push(read(function () {{ return editor.getDocument().getLineNumber(offset); }}) | 0);
             }}
         }}
         lines.sort(function (a, b) {{ return a - b; }});
@@ -369,9 +380,13 @@ def press_panel_action(thread_id: str, text: str) -> None:
         }});
         if (button == null) throw 'no panel button ' + {escaped};
         var action = button.getAction();
-        action.actionPerformed(com.intellij.openapi.actionSystem.AnActionEvent.createEvent(
+        var event = com.intellij.openapi.actionSystem.AnActionEvent.createEvent(
             action, com.intellij.ide.DataManager.getInstance().getDataContext(button), button.getPresentation().clone(),
-            'MarginalisSandbox', com.intellij.openapi.actionSystem.ActionUiKind.NONE, null));
+            'MarginalisSandbox', com.intellij.openapi.actionSystem.ActionUiKind.NONE, null);
+        // As its own EDT event, the action holds the locks a click gives it; inside the robot's script it holds none,
+        // and on 2025.2 its model reads fail. Later robot scripts queue behind it, so they see its outcome.
+        com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater(
+            new java.lang.Runnable({{ run: function () {{ action.actionPerformed(event); }} }}));
         String(true)
     """, component_id=thread_panel(thread_id))
 
@@ -640,14 +655,17 @@ def select_step(order: int, section_prefix: str = "Guided") -> None:
 
 def screenshot_tool_window(target) -> None:
     xpath = "//div[@class='MarginalisToolWindowPanel' or @javaclass='dev.marginalis.plugin.ui.toolwindow.MarginalisToolWindowPanel']"
-    # The robot's hierarchy misses the panel for a moment while the tool window relays out.
-    for attempt in range(5):
+    # The robot's hierarchy misses the panel for a moment while the tool window relays out; on the floor IDE in a
+    # container that moment ran past 5 s.
+    for attempt in range(20):
         found = robot.find_all(xpath)
         if len(found) == 1:
             robot.screenshot(target, found[0]["id"])
             return
         time.sleep(1)
-    robot.find_one(xpath)
+    # A shot documents the run, it checks nothing: the whole frame stands in rather than failing the scenario.
+    print(f"WARN  the robot finds {len(found)} tool window panels; {target.name} shows the whole frame")
+    robot.screenshot(target, robot.find_one("//div[@class='IdeFrameImpl']")["id"])
 
 
 def toggle_thread_live(thread_id: str) -> None:
@@ -847,13 +865,17 @@ def choose_guided_layout(label: str) -> None:
         try:
             js(_FIND + f"""
                 var window = com.intellij.openapi.wm.ToolWindowManager.getInstance(project).getToolWindow('Marginalis');
+                if (!window.isVisible()) window.show(null);
                 var root = window.getComponent();
                 while (root.getParent() != null && root.getClass().getName().indexOf('InternalDecorator') < 0) root = root.getParent();
+                var seen = [];
                 var button = find(root, function (c) {{
-                    return c instanceof com.intellij.openapi.actionSystem.impl.ActionButton
-                        && String(c.getAction().getClass().getSimpleName()) == 'GuidedLayoutMenuAction';
+                    if (!(c instanceof com.intellij.openapi.actionSystem.impl.ActionButton)) return false;
+                    seen.push(String(c.getAction().getClass().getSimpleName()));
+                    return String(c.getAction().getClass().getSimpleName()) == 'GuidedLayoutMenuAction';
                 }});
-                if (button == null) throw 'no tool window button Guided Layout';
+                if (button == null) throw 'no tool window button Guided Layout; root ' + root.getClass().getSimpleName()
+                    + ', visible ' + window.isVisible() + ', buttons [' + seen.join(', ') + ']';
                 var children = button.getAction().getChildActionsOrStubs();
                 var picked = null;
                 for (var i = 0; i < children.length; i++) if (children[i].getTemplatePresentation().getText() == {escaped}) picked = children[i];
@@ -909,6 +931,6 @@ def move_caret(file: str, line: int) -> None:
     """Puts the caret of the file's open editor on a 1-based line, as a click there would."""
     js(_EDITORS + f"""
         var editor = textEditorOf('{file}');
-        editor.getCaretModel().moveToLogicalPosition(new com.intellij.openapi.editor.LogicalPosition({line - 1}, 0));
+        asUser(function () {{ editor.getCaretModel().moveToLogicalPosition(new com.intellij.openapi.editor.LogicalPosition({line - 1}, 0)); }});
         String(true)
     """)

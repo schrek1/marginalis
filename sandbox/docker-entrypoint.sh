@@ -2,6 +2,11 @@
 # Container side of `sandbox.py start` with MARGINALIS_SANDBOX_DOCKER=1.
 set -euo pipefail
 
+if [ ! -d /root/.gradle/caches ] && [ -d /gradle-seed/caches ]; then
+  cp -a /gradle-seed/. /root/.gradle/
+  find /root/.gradle -name '*.lock' -delete
+fi
+
 # Gradle builds off a copy: on a host bind mount it is slow, and the copy keeps its build output between starts.
 rsync -a --delete \
   --exclude /.git --exclude /build --exclude /core/build --exclude /.gradle --exclude /.kotlin \

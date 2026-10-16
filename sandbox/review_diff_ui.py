@@ -124,7 +124,7 @@ def diff_caret_line(after: str) -> int:
     return int(ui.js(ui._EDITORS + f"""
         var editor = diffEditorShowing({json.dumps(after)});
         if (editor == null) throw 'no diff editor shows that text';
-        String(editor.getCaretModel().getLogicalPosition().line)
+        String(read(function () {{ return editor.getCaretModel().getLogicalPosition().line; }}) | 0)
     """))
 
 
