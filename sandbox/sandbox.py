@@ -124,11 +124,27 @@ def start(feature_dir: Path, fresh: bool) -> None:
             sys.exit(f"gradle exited with {process.returncode} before the IDE came up; see {LOG_FILE}")
         port = marginalis_port() if robot_up() else None
         if port and (mover is None or mover.poll() is not None):
+            size_the_frame()
             print(f"sandbox up: robot http://127.0.0.1:{ROBOT_PORT}, marginalis http://127.0.0.1:{port}"
                   f"{window_note(mover)}")
             return
         time.sleep(1)
     sys.exit(f"sandbox not up after {START_TIMEOUT_S}s; see {LOG_FILE}")
+
+
+def size_the_frame() -> None:
+    """Gives the IDE frame a fixed size. With the screen asleep or its layout changed, Windows opens new windows
+    tiny (620x392 seen): the editor is then a few pixels wide, inlaid thread panels get zero width, and the robot
+    finds no panel at all."""
+    import robot
+    robot.call_js("""
+        var frame = com.intellij.openapi.wm.WindowManager.getInstance().getFrame(
+            com.intellij.openapi.project.ProjectManager.getInstance().getOpenProjects()[0]);
+        frame.setExtendedState(java.awt.Frame.NORMAL);
+        frame.setBounds(0, 0, 1600, 1000);
+        frame.validate();
+        String(frame.getWidth() + 'x' + frame.getHeight())
+    """, edt=True)
 
 
 def window_note(mover: subprocess.Popen | None) -> str:
