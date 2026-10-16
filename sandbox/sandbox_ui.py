@@ -36,7 +36,11 @@ function threadOf(panel) {
 
 
 def js(script: str, component_id: str | None = None) -> str:
-    return robot.call_js(_PRELUDE + script, edt=True, component_id=component_id)
+    # The robot runs EDT scripts without the write-intent lock an ordinary EDT event holds; 2025.2 then refuses
+    # model reads (2026.2 grants the lock implicitly), so the script takes it as plugin code on the EDT has it.
+    locked = f"""String(com.intellij.openapi.application.WriteIntentReadAction.compute(
+        new com.intellij.openapi.util.ThrowableComputable({{ compute: function () {{ return eval({json.dumps(script)}); }} }})))"""
+    return robot.call_js(_PRELUDE + locked, edt=True, component_id=component_id)
 
 
 # --- agent side (REST) ---------------------------------------------------------------------------------------

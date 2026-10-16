@@ -9,7 +9,8 @@ Usage:  python sandbox.py start [--feature-dir PATH] [--fresh]
         python sandbox.py status
 Env:    MARGINALIS_SANDBOX_RUNTIME (default marginalis-sandbox-runtime next to the checkout),
         MARGINALIS_ROBOT_PORT (default 8082), MARGINALIS_DIR (default feature dir: this checkout),
-        MARGINALIS_SANDBOX_DESKTOP (0-based virtual desktop for the window, default 2; `none` = leave it)
+        MARGINALIS_SANDBOX_DESKTOP (0-based virtual desktop for the window, default 2; `none` = leave it),
+        MARGINALIS_SANDBOX_DOCKER=1 (run the IDE in a container on a virtual screen instead, see README)
 Needs PowerShell 7 (`pwsh`) and the VirtualDesktop module (`Install-Module VirtualDesktop -Scope CurrentUser`).
 """
 from __future__ import annotations
@@ -27,15 +28,25 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
+ROBOT_PORT = int(os.environ.get("MARGINALIS_ROBOT_PORT", "8082"))
+# MARGINALIS_SANDBOX_DOCKER=1 runs the sandbox in a container on a virtual 2560x1440 screen (Dockerfile): a fixed
+# window size whatever the monitor does (asleep it reports 640x480, which clamps every window), nothing on the
+# desktop, and the platform floor IDE (IntelliJ Community from the build) as CI runs it.
+DOCKER = os.environ.get("MARGINALIS_SANDBOX_DOCKER") == "1"
+CONTAINER = f"marginalis-sandbox-{ROBOT_PORT}"
+IMAGE = "marginalis-sandbox"
+# Published next to the host's JetBrains IDEs, which hold 63342 and up.
+BUILTIN_PORT = 63390 + ROBOT_PORT - 8082 if DOCKER else None
 # Next to the checkout, so every worktree of one clone shares one sandbox.
-RUNTIME = Path(os.environ.get("MARGINALIS_SANDBOX_RUNTIME", REPO.parent / "marginalis-sandbox-runtime"))
+RUNTIME = Path(os.environ.get("MARGINALIS_SANDBOX_RUNTIME",
+                              REPO.parent / (CONTAINER if DOCKER else "marginalis-sandbox-runtime")))
 PROJECT = RUNTIME / "project"
+PROJECT_IN_IDE = "/work/runtime/project" if DOCKER else PROJECT.as_posix()
 PID_FILE = RUNTIME / "gradle.pid"
 LOG_FILE = RUNTIME / "run.log"
-ROBOT_PORT = int(os.environ.get("MARGINALIS_ROBOT_PORT", "8082"))
 DEFAULT_FEATURE_DIR = Path(os.environ.get("MARGINALIS_DIR", REPO))
-LOCAL_IDE = Path(os.environ["LOCALAPPDATA"]) / "Programs" / "IntelliJ IDEA Ultimate"
-IDE_PORTS = range(63342, 63362)
+LOCAL_IDE = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "IntelliJ IDEA Ultimate"
+IDE_PORTS = [BUILTIN_PORT] if DOCKER else list(range(63342, 63362))
 # 0-based virtual desktop for the sandbox window (Ondra's 3rd, "diy"); MARGINALIS_SANDBOX_DESKTOP=none keeps it put.
 _desktop = os.environ.get("MARGINALIS_SANDBOX_DESKTOP", "2")
 DESKTOP = None if _desktop.lower() == "none" else int(_desktop)
@@ -69,7 +80,7 @@ def robot_up() -> bool:
 
 def marginalis_port() -> int | None:
     """The built-in server port of the IDE that has the sandbox project open."""
-    wanted = PROJECT.as_posix().lower()
+    wanted = PROJECT_IN_IDE.lower()
 
     def serves_sandbox(port: int) -> bool:
         ping = get_json(f"http://127.0.0.1:{port}/api/marginalis/ping", timeout=1)
@@ -79,7 +90,7 @@ def marginalis_port() -> int | None:
         if serves_sandbox(port):
             return port
     # With the usual range taken by other IDEs the platform falls back to a random port; the sandbox knows it.
-    if robot_up():
+    if robot_up() and not DOCKER:
         import robot
         try:
             port = int(robot.call_js("String(org.jetbrains.ide.BuiltInServerManager.getInstance().getPort())"))
@@ -96,12 +107,35 @@ def fresh_project() -> None:
     shutil.copytree(HERE / "project-template", PROJECT)
 
 
+def start_in_docker(feature_dir: Path) -> subprocess.Popen:
+    """Builds the image (a no-op once cached) and runs the container; the returned process follows its log and
+    ends with it. The build output, the sandbox IDE's config and the Gradle cache live in volumes between starts."""
+    subprocess.run(["docker", "build", "-q", "-t", IMAGE, str(HERE)], check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(["docker", "rm", "-f", CONTAINER], capture_output=True)
+    subprocess.run([
+        "docker", "run", "-d", "--name", CONTAINER,
+        "-p", f"127.0.0.1:{ROBOT_PORT}:8082", "-p", f"127.0.0.1:{BUILTIN_PORT}:63342",
+        "--mount", f"type=bind,source={feature_dir},target=/src,readonly",
+        "--mount", f"type=bind,source={PROJECT.resolve()},target=/work/runtime/project",
+        "--mount", f"type=volume,source={CONTAINER}-work,target=/work",
+        "--mount", "type=volume,source=marginalis-gradle,target=/root/.gradle",
+        IMAGE,
+    ], check=True, stdout=subprocess.DEVNULL)
+    log = LOG_FILE.open("w", encoding="utf-8")
+    return subprocess.Popen(["docker", "logs", "-f", CONTAINER], stdout=log, stderr=subprocess.STDOUT)
+
+
 def start(feature_dir: Path, fresh: bool) -> None:
     if robot_up():
         sys.exit(f"a sandbox already answers on robot port {ROBOT_PORT}; run `stop` first")
     RUNTIME.mkdir(parents=True, exist_ok=True)
     if fresh or not PROJECT.exists():
         fresh_project()
+    if DOCKER:
+        process = start_in_docker(feature_dir)
+        print(f"sandbox in container {CONTAINER} (Xvfb 2560x1440), log {LOG_FILE}")
+        wait_until_up(process, mover=None)
+        return
     env = dict(os.environ, JAVA_HOME=str(find_jdk21()), MARGINALIS_SANDBOX_RUNTIME=RUNTIME.as_posix(),
                MARGINALIS_ROBOT_PORT=str(ROBOT_PORT))
     log = LOG_FILE.open("w", encoding="utf-8")
@@ -118,10 +152,14 @@ def start(feature_dir: Path, fresh: bool) -> None:
          "-RuntimeMarker", RUNTIME.name, "-Desktop", str(DESKTOP)],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
+    wait_until_up(process, mover)
+
+
+def wait_until_up(process: subprocess.Popen, mover: subprocess.Popen | None) -> None:
     deadline = time.monotonic() + START_TIMEOUT_S
     while time.monotonic() < deadline:
         if process.poll() is not None:
-            sys.exit(f"gradle exited with {process.returncode} before the IDE came up; see {LOG_FILE}")
+            sys.exit(f"the IDE's build exited with {process.returncode} before the IDE came up; see {LOG_FILE}")
         port = marginalis_port() if robot_up() else None
         if port and (mover is None or mover.poll() is not None):
             size_the_frame()
@@ -186,6 +224,8 @@ def stop() -> None:
             time.sleep(1)
         subprocess.run(["taskkill", "/T", "/F", "/PID", pid], capture_output=True)
         PID_FILE.unlink()
+    if DOCKER:
+        subprocess.run(["docker", "rm", "-f", CONTAINER], capture_output=True)
     print("sandbox stopped")
 
 
