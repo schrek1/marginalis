@@ -730,7 +730,25 @@ def agent_replies(thread_id: str, body: str) -> None:
 
 
 def open_margin_tab(thread_id: str) -> None:
+    # A project thread the agent just posted opens the tab behind the file in front, which comes back to the front
+    # a moment later; a reveal inside that moment loses to it. A person never clicks that fast, so wait it out.
+    settle_editor_selection()
     js(_MARGIN + f"projectTab().reveal(project, store.getThreads().byId('{thread_id}'), null); String(true)")
+
+
+def settle_editor_selection(quiet_s: float = 0.5, limit_s: float = 5.0) -> None:
+    """Waits until the editor in front has not changed for `quiet_s`."""
+    selected = """
+        var files = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).getSelectedFiles();
+        String(files.length ? files[0].getUrl() : '')
+    """
+    deadline = time.monotonic() + limit_s
+    last, since = js(selected), time.monotonic()
+    while time.monotonic() < deadline and time.monotonic() - since < quiet_s:
+        time.sleep(0.1)
+        now = js(selected)
+        if now != last:
+            last, since = now, time.monotonic()
 
 
 def user_starts_new_project_thread() -> None:
