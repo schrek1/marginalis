@@ -1,6 +1,11 @@
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.nio.file.FileAlreadyExistsException
+import java.nio.file.Files
+import java.nio.file.StandardOpenOption
 import java.security.MessageDigest
+import java.time.Duration
+import java.time.Instant
 
 plugins {
     // Kotlin 2.3.x: first line with official Gradle 9 support (we run Gradle 9.1
@@ -191,6 +196,60 @@ tasks.register<Test>("uiTest") {
 // The sandbox scenarios' IDE runs in Docker (sandbox/Dockerfile) unless MARGINALIS_SANDBOX_LAUNCH says otherwise.
 val sandboxInDocker = providers.environmentVariable("MARGINALIS_SANDBOX_LAUNCH").orElse("docker").get() == "docker"
 val sandboxPrebuiltDir = layout.buildDirectory.dir("sandbox-prebuilt")
+// A fixed robot port fits one sandbox only.
+val sandboxJobs = if (System.getenv("MARGINALIS_ROBOT_PORT") != null) 1
+    else providers.gradleProperty("marginalis.sandbox.jobs").orElse("6").get().toInt()
+
+// One multi-sandbox run at a time on the machine, sandbox/run_all.py --jobs included: two runs side by side saturate
+// the CPU and their scenarios time out. The lock holds the owner's pid and start time; one older than 2 h whose pid
+// is gone is stale.
+val sandboxRunLock: java.nio.file.Path = layout.projectDirectory.asFile.toPath().parent.resolve("marginalis-sandbox-runs").resolve(".lock")
+val sandboxRunLockOwner = ProcessHandle.current().pid()
+
+fun sandboxRunLockIsStale(): Boolean {
+    val owner = runCatching { Files.readString(sandboxRunLock).lineSequence().first { it.startsWith("pid=") }.removePrefix("pid=").trim().toLong() }.getOrNull()
+    val age = runCatching { Duration.between(Files.getLastModifiedTime(sandboxRunLock).toInstant(), Instant.now()) }.getOrNull() ?: return false
+    val alive = owner?.let { pid -> ProcessHandle.of(pid).map { it.isAlive }.orElse(false) } ?: false
+    return age > Duration.ofHours(2) && !alive
+}
+
+fun releaseSandboxRunLock() {
+    val ours = runCatching { Files.readString(sandboxRunLock).contains("pid=$sandboxRunLockOwner\n") }.getOrDefault(false)
+    if (ours) Files.deleteIfExists(sandboxRunLock)
+}
+
+val sandboxRunUnlock by tasks.registering {
+    description = "Releases the machine-wide sandbox run lock this build holds."
+    group = "verification"
+    doLast { releaseSandboxRunLock() }
+}
+
+val sandboxRunLocked by tasks.registering {
+    description = "Waits for the machine-wide sandbox run lock and takes it."
+    group = "verification"
+    onlyIf("several sandboxes run at once") { sandboxJobs > 1 }
+    finalizedBy(sandboxRunUnlock)
+    doLast {
+        Files.createDirectories(sandboxRunLock.parent)
+        while (true) {
+            try {
+                Files.writeString(sandboxRunLock, "pid=$sandboxRunLockOwner\nstarted=${Instant.now()}\n", StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)
+                break
+            } catch (taken: FileAlreadyExistsException) {
+                if (sandboxRunLockIsStale()) {
+                    logger.lifecycle("taking the stale sandbox run lock $sandboxRunLock")
+                    Files.deleteIfExists(sandboxRunLock)
+                    continue
+                }
+                val holder = runCatching { Files.readString(sandboxRunLock).trim().replace('\n', ' ') }.getOrDefault("?")
+                logger.lifecycle("waiting for the sandbox run lock $sandboxRunLock ($holder)")
+                Thread.sleep(15_000)
+            }
+        }
+        // A build stopped halfway lets go of the lock too.
+        Runtime.getRuntime().addShutdownHook(Thread { releaseSandboxRunLock() })
+    }
+}
 
 // The image is tagged by what it is built from: sandboxes of another checkout (or the Python harness on another
 // branch) building a different entrypoint under one shared tag would swap the image under running scenarios.
@@ -211,7 +270,7 @@ val sandboxImage by tasks.registering(Exec::class) {
 val sandboxPrebuilt by tasks.registering(Exec::class) {
     description = "Builds this checkout's plugins once in the sandbox image, for sandboxes that start straight from them."
     group = "verification"
-    dependsOn(sandboxImage)
+    dependsOn(sandboxImage, sandboxRunLocked)
     // The container's own Gradle build decides what is up to date.
     outputs.upToDateWhen { false }
     val output = sandboxPrebuiltDir.get().asFile
@@ -231,15 +290,15 @@ val sandboxPrebuilt by tasks.registering(Exec::class) {
 tasks.register<Test>("uiSandboxTest") {
     description = "Runs the sandbox scenarios against sandbox IDEs built from this checkout (see sandbox/README.md)."
     group = "verification"
+    dependsOn(sandboxRunLocked)
     if (sandboxInDocker) {
         dependsOn(sandboxPrebuilt)
         systemProperty("marginalis.sandbox.prebuilt", sandboxPrebuiltDir.get().asFile.absolutePath)
         systemProperty("marginalis.sandbox.image", sandboxImageTag)
     }
     // One JVM runs the scenario classes side by side, each with a sandbox of its own, the longest first (Gradle's
-    // forks would take them in scan order). A fixed robot port fits one sandbox only.
-    val jobs = if (System.getenv("MARGINALIS_ROBOT_PORT") != null) 1
-        else providers.gradleProperty("marginalis.sandbox.jobs").orElse("6").get().toInt()
+    // forks would take them in scan order).
+    val jobs = sandboxJobs
     maxParallelForks = 1
     systemProperty("junit.jupiter.execution.parallel.enabled", "true")
     systemProperty("junit.jupiter.execution.parallel.mode.default", "same_thread")
@@ -318,3 +377,5 @@ tasks.named<info.solidsoft.gradle.pitest.PitestTask>("pitest") {
     additionalClasspath.from(test.classpath)
     childProcessJvmArgs = provider { test.allJvmArgs }
 }
+
+sandboxRunUnlock { mustRunAfter(sandboxPrebuilt, "uiSandboxTest") }
