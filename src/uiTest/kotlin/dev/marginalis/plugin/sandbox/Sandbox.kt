@@ -140,7 +140,7 @@ object Sandbox {
         var frame = com.intellij.openapi.wm.WindowManager.getInstance().getFrame(
             com.intellij.openapi.project.ProjectManager.getInstance().getOpenProjects()[0]);
         frame.setExtendedState(java.awt.Frame.NORMAL);
-        frame.setBounds(0, 0, 1600, 1000);
+        frame.setBounds(0, 0, 2560, 1440);
         frame.validate();
         String(frame.getWidth() + 'x' + frame.getHeight())
         """,
