@@ -147,7 +147,8 @@ def main() -> None:
     selection = parser.add_mutually_exclusive_group()
     selection.add_argument("--only", help="comma-separated scenario names")
     selection.add_argument("--tag", help="the scenarios of the runbooks carrying this tag, e.g. smoke")
-    parser.add_argument("--jobs", type=int, default=1, help="sandboxes side by side (Docker mode); see docs/testing.md")
+    parser.add_argument("--jobs", type=int, default=6 if sandbox.DOCKER else 1,
+                        help="sandboxes side by side, Docker mode only (default 6, measured in docs/testing.md)")
     args = parser.parse_args()
     feature_dir = args.feature_dir.resolve()
     if args.only:

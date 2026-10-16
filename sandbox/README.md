@@ -49,6 +49,8 @@ python run_all.py [--tag smoke]                          # regression (every sce
 
 ## Headless screen (night runs, CI, any OS)
 
+The step-by-step guide, with measured settings and the lessons behind them, is `docs/testing.md`.
+
 UI scenarios depend on the window size: a sleeping monitor makes Windows report 640x480 and clamps the frame
 until thread panels get no width. `run-ide-xvfb.sh` runs the sandbox IDE on a virtual 2560x1440 screen (Xvfb),
 with the floor IDE (IntelliJ Community from the build) as CI uses it.
