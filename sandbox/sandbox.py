@@ -179,14 +179,23 @@ def size_the_frame() -> None:
     tiny (620x392 seen): the editor is then a few pixels wide, inlaid thread panels get zero width, and the robot
     finds no panel at all."""
     import robot
-    robot.call_js("""
-        var frame = com.intellij.openapi.wm.WindowManager.getInstance().getFrame(
-            com.intellij.openapi.project.ProjectManager.getInstance().getOpenProjects()[0]);
-        frame.setExtendedState(java.awt.Frame.NORMAL);
-        frame.setBounds(0, 0, 2560, 1440);
-        frame.validate();
-        String(frame.getWidth() + 'x' + frame.getHeight())
-    """, edt=True)
+    # The servers answer before the project's frame exists; on a loaded machine (16 sandboxes) that gap ran seconds.
+    for _ in range(60):
+        size = robot.call_js("""
+            var frame = com.intellij.openapi.wm.WindowManager.getInstance().getFrame(
+                com.intellij.openapi.project.ProjectManager.getInstance().getOpenProjects()[0]);
+            if (frame == null) String('none');
+            else {
+                frame.setExtendedState(java.awt.Frame.NORMAL);
+                frame.setBounds(0, 0, 2560, 1440);
+                frame.validate();
+                String(frame.getWidth() + 'x' + frame.getHeight());
+            }
+        """, edt=True)
+        if size != "none":
+            return
+        time.sleep(1)
+    sys.exit("the sandbox IDE opened no project frame within 60 s")
 
 
 def window_note(mover: subprocess.Popen | None) -> str:
