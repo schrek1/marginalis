@@ -34,8 +34,13 @@ function threadOf(panel) {
 
     const val EDITORS = """
 function projectFile(path) { return project.getBaseDir().findFileByRelativePath(path); }
+// The robot's EDT scripts hold no lock, and 2025.2 refuses a document lookup outside a read action. A lock around
+// whole scripts is no way out: opening an editor under it waits for background reads that the lock holds back.
+function read(compute) {
+    return com.intellij.openapi.application.ReadAction.compute(new com.intellij.openapi.util.ThrowableComputable({ compute: compute }));
+}
 function textEditorOf(path) {
-    var document = com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().getDocument(projectFile(path));
+    var document = read(function () { return com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().getDocument(projectFile(path)); });
     var editors = com.intellij.openapi.editor.EditorFactory.getInstance().getEditors(document, project);
     for (var i = 0; i < editors.length; i++) {
         if (editors[i].getEditorKind() == com.intellij.openapi.editor.EditorKind.MAIN_EDITOR) return editors[i];

@@ -204,9 +204,6 @@ tasks.register<Test>("uiSandboxTest") {
     // Remote-Robot's client reads an IDE-side error into a Throwable through Gson's reflection.
     jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED")
     systemProperty("marginalis.sandbox.featureDir", layout.projectDirectory.asFile.absolutePath)
-    val installedIde = providers.gradleProperty("marginalis.localIde").orNull
-    onlyIf("marginalis.localIde names the installed IDE the sandbox runs on") { installedIde != null }
-    installedIde?.let { systemProperty("marginalis.localIde", it) }
 }
 
 tasks.named<org.gradle.api.tasks.JavaExec>("runIde") {

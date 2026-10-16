@@ -14,37 +14,48 @@ import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.copyToRecursively
 import kotlin.io.path.deleteRecursively
 import kotlin.io.path.exists
-import kotlin.io.path.isDirectory
-import kotlin.io.path.listDirectoryEntries
-import kotlin.io.path.name
-import kotlin.io.path.readText
-import kotlin.io.path.writeText
 
 /**
- * A sandbox IntelliJ running Marginalis built straight from a checkout, as `sandbox/sandbox.py` starts it: the
- * checkout's `gradlew runIdeForUiTests` with `sandbox/init.gradle`, its own config/system dirs under [runtime], and
- * [project], a copy of `sandbox/project-template`. The window is moved to a virtual desktop as soon as it appears.
+ * A sandbox IntelliJ running Marginalis built straight from a checkout, on a virtual 2560x1440 screen: the checkout's
+ * `runIdeForUiTests` (from `sandbox/init.gradle`) under `sandbox/run-ide-xvfb.sh`, opening [project], a copy of
+ * `sandbox/project-template`. `MARGINALIS_SANDBOX_LAUNCH` picks how it starts:
  *
- * Shares the runtime layout and `gradle.pid` with the Python harness, so either can stop what the other started.
+ * - `docker` (default): the image from `sandbox/Dockerfile`, as `sandbox.py` runs it with `MARGINALIS_SANDBOX_DOCKER=1`
+ *   (container `marginalis-sandbox-<robot port>`, the checkout mounted read-only, the project from the host);
+ * - `xvfb`: `run-ide-xvfb.sh` on this machine (Linux with Xvfb and JDK 25, e.g. CI);
+ * - `attach`: an IDE already answering on the robot port; it is neither started nor stopped, so a fresh project and
+ *   restarts are not available.
  */
 object Sandbox {
 
+    private enum class Launch { DOCKER, XVFB, ATTACH }
+
+    private val launch = Launch.valueOf((System.getenv("MARGINALIS_SANDBOX_LAUNCH") ?: "docker").uppercase())
+
+    val robotPort: Int = (System.getenv("MARGINALIS_ROBOT_PORT") ?: "8082").toInt()
     val featureDir: Path = Path.of(System.getProperty("marginalis.sandbox.featureDir") ?: ".").toAbsolutePath().normalize()
     val harness: Path = featureDir.resolve("sandbox")
-    val runtime: Path = Path.of(System.getenv("MARGINALIS_SANDBOX_RUNTIME") ?: featureDir.parent.resolve("marginalis-sandbox-runtime").toString())
+    private val container = "marginalis-sandbox-$robotPort"
+    val runtime: Path = Path.of(
+        System.getenv("MARGINALIS_SANDBOX_RUNTIME")
+            ?: featureDir.parent.resolve(if (launch == Launch.DOCKER) container else "marginalis-sandbox-runtime").toString(),
+    ).toAbsolutePath()
     val project: Path = runtime.resolve("project")
-    val robotPort: Int = (System.getenv("MARGINALIS_ROBOT_PORT") ?: "8082").toInt()
     val robot = Robot(robotPort)
 
-    private val pidFile = runtime.resolve("gradle.pid")
+    private const val IMAGE = "marginalis-sandbox"
+    private const val CONTAINER_ROBOT_PORT = 8082
+    private const val CONTAINER_REST_PORT = 63342
+
+    // Published next to the host's JetBrains IDEs, which hold 63342 and up.
+    private val dockerRestPort = 63390 + robotPort - 8082
+    private val projectInIde: String = if (launch == Launch.DOCKER) "/work/runtime/project" else project.toString().replace('\\', '/')
+    private val idePorts = if (launch == Launch.DOCKER) listOf(dockerRestPort) else (63342..63361).toList()
     private val logFile = runtime.resolve("run.log")
-    private val localIde = System.getProperty("marginalis.localIde")
-        ?: Path.of(System.getenv("LOCALAPPDATA"), "Programs", "IntelliJ IDEA Ultimate").toString()
-    private val idePorts = 63342..63361
-    private val desktop: Int? = (System.getenv("MARGINALIS_SANDBOX_DESKTOP") ?: "2").let { if (it.equals("none", true)) null else it.toInt() }
-    private val startTimeout = Duration.ofSeconds(600)
+    private val startTimeout = Duration.ofSeconds(900)
     private val http = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).connectTimeout(Duration.ofSeconds(1)).build()
 
+    private var ide: Process? = null
     private var cachedPort: Int? = null
 
     /** The built-in server port of the IDE that has the sandbox project open. */
@@ -54,52 +65,23 @@ object Sandbox {
     fun robotUp(): Boolean = runCatching { Socket().use { it.connect(InetSocketAddress("127.0.0.1", robotPort), 2_000) } }.isSuccess
 
     fun start(fresh: Boolean) {
+        cachedPort = null
+        if (launch == Launch.ATTACH) return awaitUp(process = null)
         check(!robotUp()) { "a sandbox already answers on robot port $robotPort; stop it first" }
         Files.createDirectories(runtime)
         if (fresh || !project.exists()) freshProject()
-        cachedPort = null
-        val gradle = ProcessBuilder(
-            featureDir.resolve("gradlew.bat").toString(), "--no-daemon", "--init-script", harness.resolve("init.gradle").toString(),
-            "runIdeForUiTests", "-Pmarginalis.localIde=$localIde",
-        ).directory(featureDir.toFile())
-            .redirectErrorStream(true)
-            .redirectOutput(logFile.toFile())
-            .apply {
-                environment()["JAVA_HOME"] = findJdk21().toString()
-                environment()["MARGINALIS_SANDBOX_RUNTIME"] = runtime.toString().replace('\\', '/')
-                environment()["MARGINALIS_ROBOT_PORT"] = robotPort.toString()
-            }
-            .start()
-        pidFile.writeText(gradle.pid().toString())
-        println("gradle pid ${gradle.pid()}, log $logFile")
-        val mover = desktop?.let {
-            ProcessBuilder(
-                "pwsh", "-NoProfile", "-File", harness.resolve("move_to_desktop.ps1").toString(),
-                "-RuntimeMarker", runtime.name, "-Desktop", it.toString(),
-            ).redirectOutput(ProcessBuilder.Redirect.DISCARD).redirectError(ProcessBuilder.Redirect.DISCARD).start()
-        }
-        val deadline = System.nanoTime() + startTimeout.toNanos()
-        while (System.nanoTime() < deadline) {
-            check(gradle.isAlive) { "gradle exited with ${gradle.exitValue()} before the IDE came up; see $logFile" }
-            val port = if (robotUp()) findMarginalisPort() else null
-            if (port != null && (mover == null || !mover.isAlive)) {
-                cachedPort = port
-                val frame = sizeTheFrame()
-                awaitProjectStartup()
-                println("sandbox up: robot http://127.0.0.1:$robotPort, marginalis http://127.0.0.1:$port, frame $frame${windowNote(mover)}")
-                return
-            }
-            Thread.sleep(1_000)
-        }
-        error("sandbox not up after ${startTimeout.seconds}s; see $logFile")
+        val process = if (launch == Launch.DOCKER) startContainer() else startOnXvfb()
+        ide = process
+        println("sandbox starting ($launch), log $logFile")
+        awaitUp(process)
     }
 
     fun stop() {
-        val pid = if (pidFile.exists()) pidFile.readText().trim() else null
+        if (launch == Launch.ATTACH) return
         if (robotUp()) {
             // Settings are saved explicitly first: the robot server goes down early in the shutdown, and a kill after
             // that loses whatever the exit had not flushed yet (workspace.xml, app options).
-            // A failed save must not keep the kill below from running: no sandbox IDE may outlive its scenario.
+            // A failed or hung save must not keep the kill below from running: no sandbox IDE may outlive its scenario.
             runCatching {
                 robot.runJs(
                     """
@@ -113,17 +95,18 @@ object Sandbox {
             // The IDE closes the connection before answering.
             runCatching { robot.runJs("com.intellij.openapi.application.ApplicationManager.getApplication().exit(true, true, false)", edt = true) }
         }
-        if (pid != null) {
-            // The shutdown often hangs after the robot server is gone (a leak it reports); everything is saved by
-            // now, so a short grace period and a kill are safe.
-            val gradle = ProcessHandle.of(pid.toLong())
-            for (second in 1..20) {
-                if (!gradle.map { it.isAlive }.orElse(false)) break
-                Thread.sleep(1_000)
+        when (launch) {
+            Launch.DOCKER -> docker("rm", "-f", container)
+            Launch.XVFB -> ide?.let { process ->
+                // The shutdown often hangs after the robot server is gone (a leak it reports); everything is saved by
+                // now, so a short grace period and a kill are safe.
+                process.waitFor(20, java.util.concurrent.TimeUnit.SECONDS)
+                process.descendants().forEach { it.destroyForcibly() }
+                process.destroyForcibly()
             }
-            ProcessBuilder("taskkill", "/T", "/F", "/PID", pid).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start().waitFor()
-            Files.deleteIfExists(pidFile)
+            Launch.ATTACH -> Unit
         }
+        ide = null
         cachedPort = null
         println("sandbox stopped")
     }
@@ -133,8 +116,62 @@ object Sandbox {
         start(fresh)
     }
 
-    // With the screen asleep or its layout changed, Windows opens new windows tiny (620x392 seen): the editor is then a
-    // few pixels wide, inlaid thread panels get zero width, and the robot finds no panel at all.
+    /** Builds the image (a no-op once cached) and runs the container; the returned process follows its log. */
+    private fun startContainer(): Process {
+        docker("build", "-q", "-t", IMAGE, harness.toString(), check = true)
+        docker("rm", "-f", container)
+        docker(
+            "run", "-d", "--name", container,
+            "-p", "127.0.0.1:$robotPort:$CONTAINER_ROBOT_PORT", "-p", "127.0.0.1:$dockerRestPort:$CONTAINER_REST_PORT",
+            "--mount", "type=bind,source=$featureDir,target=/src,readonly",
+            "--mount", "type=bind,source=$project,target=/work/runtime/project",
+            // Build output and the IDE's config live in the container's volume between starts, the Gradle cache in one
+            // volume for every sandbox.
+            "--mount", "type=volume,source=$container-work,target=/work",
+            "--mount", "type=volume,source=marginalis-gradle,target=/root/.gradle",
+            IMAGE,
+            check = true,
+        )
+        return ProcessBuilder("docker", "logs", "-f", container).redirectErrorStream(true).redirectOutput(logFile.toFile()).start()
+    }
+
+    private fun startOnXvfb(): Process =
+        ProcessBuilder("bash", harness.resolve("run-ide-xvfb.sh").toString())
+            .directory(featureDir.toFile())
+            .redirectErrorStream(true)
+            .redirectOutput(logFile.toFile())
+            .apply {
+                environment()["MARGINALIS_SANDBOX_RUNTIME"] = runtime.toString()
+                environment()["MARGINALIS_ROBOT_PORT"] = robotPort.toString()
+            }
+            .start()
+
+    private fun awaitUp(process: Process?) {
+        val deadline = System.nanoTime() + startTimeout.toNanos()
+        while (System.nanoTime() < deadline) {
+            check(process == null || process.isAlive) { "the sandbox IDE exited before it came up; see $logFile" }
+            val port = if (robotUp()) findMarginalisPort() else null
+            if (port != null) {
+                cachedPort = port
+                val frame = sizeTheFrame()
+                awaitProjectStartup()
+                println("sandbox up: robot http://127.0.0.1:$robotPort, marginalis http://127.0.0.1:$port, frame $frame")
+                return
+            }
+            Thread.sleep(1_000)
+        }
+        error("sandbox not up after ${startTimeout.seconds}s; see $logFile")
+    }
+
+    private fun docker(vararg args: String, check: Boolean = false) {
+        val process = ProcessBuilder("docker", *args).redirectErrorStream(true).start()
+        val output = process.inputStream.bufferedReader().readText()
+        val exit = process.waitFor()
+        check(!check || exit == 0) { "docker ${args.first()} exited with $exit: $output" }
+    }
+
+    // A frame sized like a real screen: a window manager or a sleeping monitor may open it tiny, and inlaid thread
+    // panels then get zero width, so the robot finds none.
     private fun sizeTheFrame(): String = robot.callJs(
         """
         var frame = com.intellij.openapi.wm.WindowManager.getInstance().getFrame(
@@ -175,14 +212,15 @@ object Sandbox {
     }
 
     private fun findMarginalisPort(): Int? {
-        val wanted = project.toString().replace('\\', '/').lowercase()
+        val wanted = projectInIde.lowercase()
         fun servesSandbox(port: Int): Boolean {
             val ping = getJson("http://127.0.0.1:$port/api/marginalis/ping") ?: return false
             return ping.getAsJsonArray("projects")?.any { it.asJsonObject.get("path")?.asString?.lowercase() == wanted } == true
         }
         idePorts.firstOrNull(::servesSandbox)?.let { return it }
-        // With the usual range taken by other IDEs the platform falls back to a random port; the sandbox knows it.
-        if (!robotUp()) return null
+        // With the usual range taken by other IDEs the platform falls back to a random port; the sandbox knows it. A
+        // container's port is fixed, so only a local IDE can be asked.
+        if (launch == Launch.DOCKER || !robotUp()) return null
         val port = runCatching { robot.callJs("String(org.jetbrains.ide.BuiltInServerManager.getInstance().getPort())").toInt() }.getOrNull()
         return port?.takeIf(::servesSandbox)
     }
@@ -191,21 +229,4 @@ object Sandbox {
         val request = HttpRequest.newBuilder(URI(url)).timeout(Duration.ofSeconds(1)).build()
         JsonParser.parseString(http.send(request, HttpResponse.BodyHandlers.ofString()).body()).asJsonObject
     }.getOrNull()
-
-    private fun findJdk21(): Path {
-        val jdks = Path.of(System.getProperty("user.home"), ".jdks")
-        val candidates = jdks.childrenStartingWith("corretto-21") + Path.of("C:\\Program Files\\Java").childrenStartingWith("jdk-21")
-        return candidates.firstOrNull { it.resolve("bin").resolve("java.exe").exists() }
-            ?: error("no JDK 21 found in ~/.jdks or C:\\Program Files\\Java")
-    }
-
-    private fun Path.childrenStartingWith(prefix: String): List<Path> =
-        if (isDirectory()) listDirectoryEntries("$prefix*").sortedDescending() else emptyList()
-
-    private fun windowNote(mover: Process?): String = when (mover?.exitValue()) {
-        null -> ""
-        0 -> ", window on virtual desktop ${desktop!! + 1}"
-        2 -> "; no virtual desktop ${desktop!! + 1}, the window stays where it opened"
-        else -> "; moving the window failed"
-    }
 }
