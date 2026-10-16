@@ -43,8 +43,9 @@ CI, whatever the monitor does, and nothing appears on your desktop. The IDE insi
   It builds the checkout once, then runs six sandboxes side by side; each takes the next scenario from one queue,
   longest first. Results land in `marginalis-sandbox-runs/<run>/<port>/` next to the checkout (`gate-logs/` per
   scenario, `shots/`), and the summary lists every failing check.
-- **Several checkouts at once** (parallel feature work) is fine: each run picks free ports and its own folder.
-  Keep the total number of sandboxes on the machine within the budget below.
+- **Several checkouts at once** (parallel feature work) queue up: a multi-sandbox run takes the machine-wide lock
+  `marginalis-sandbox-runs/.lock` and the next one waits, because two runs side by side overload the machine and
+  both fail at random. Each run picks free ports and its own folder.
 
 ### Measured settings
 
