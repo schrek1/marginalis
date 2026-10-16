@@ -32,3 +32,4 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-60 | Select Opened Thread works with a review diff in front | `fix/MARG-60-locate-in-review-diff` | schrek1/marginalis#64 | — | `63a26b4` |
 | MARG-81 | Sandbox scenarios in Docker, in parallel from one build, with a testing guide | `chore/sandbox-header-press` | — | — | `da69c29` |
 | MARG-86 | A new project thread no longer stalls the IDE while its REST call opens the Margin tab | `fix/MARG-86-tab-open-after-rest` | — | — | `9ba1083` |
+| MARG-63 | Headless tests for the sandbox checks: 68 move out of the UI suite, plus twins of the UI-only ones (part 1) | `feat/MARG-63-headless` | — | — | `65c8920` |

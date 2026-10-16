@@ -97,6 +97,17 @@ class ProjectThreadsTest : MarginTabTestCase() {
         )
     }
 
+    fun testAnUnsentReplyKeepsItsTextWhenAnotherThreadChanges() {
+        val alpha = agent.ask("Alpha question")
+        agent.ask("Bravo question")
+        user.type(tab.panel("Bravo question"), "Half-written answer")
+
+        agent.reply(alpha, "More on alpha")
+        tab.settle()
+
+        assertEquals("Half-written answer", user.composer(tab.panel("Bravo question")).text)
+    }
+
     fun testAResolvedThreadHoldingAnUnsentReplyStaysInTheListUntilTheReplyIsGone() {
         val alpha = agent.ask("Alpha question")
         user.type(tab.panel("Alpha question"), "Half-written answer")
