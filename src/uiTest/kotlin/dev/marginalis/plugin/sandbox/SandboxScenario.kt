@@ -14,8 +14,9 @@ import java.time.LocalTime
 import java.util.Locale
 
 /**
- * One sandbox scenario: a fresh sandbox IDE on a fresh project for the class, its cases run in their declared
- * [org.junit.jupiter.api.Order] (later cases build on the threads earlier ones posted), the IDE stopped at the end.
+ * One sandbox scenario: a fresh sandbox IDE of its own on a fresh project for the class, its cases run in their
+ * declared [org.junit.jupiter.api.Order] (later cases build on the threads earlier ones posted) on one thread, the IDE
+ * stopped at the end. Scenarios run side by side; each records its duration for [LongestFirst].
  *
  * Every behaviour is a [check] that prints `PASS  name` or `FAIL  name  (detail)` as the Python scenarios do, into
  * the test output and `<runtime>/kotlin-logs/<scenario>.log`. A case fails when any of its checks did, or when it
@@ -36,14 +37,17 @@ abstract class SandboxScenario(private val scenario: String) {
         Files.createDirectories(log.parent)
         Files.deleteIfExists(log)
         started = System.nanoTime()
-        report("INFO  $scenario starts on test fork ${System.getProperty("org.gradle.test.worker") ?: "-"} at ${LocalTime.now().withNano(0)}")
-        Sandbox.restart(fresh = true)
+        report("INFO  $scenario starts on ${Thread.currentThread().name} at ${LocalTime.now().withNano(0)}")
+        Sandbox.open(scenario)
+        Sandbox.start(fresh = true)
     }
 
     @AfterAll
     fun stopSandbox() {
-        Sandbox.stop()
-        val minutes = Duration.ofNanos(System.nanoTime() - started).toMillis() / 60_000.0
+        Sandbox.close()
+        val elapsed = Duration.ofNanos(System.nanoTime() - started)
+        Durations.record(javaClass.name, elapsed)
+        val minutes = elapsed.toMillis() / 60_000.0
         report("INFO  $scenario ends at ${LocalTime.now().withNano(0)}")
         report("== $scenario: $passes pass, ${failures.size} fail, ${"%.1f".format(Locale.ROOT, minutes)} min")
     }

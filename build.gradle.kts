@@ -224,10 +224,18 @@ tasks.register<Test>("uiSandboxTest") {
         dependsOn(sandboxPrebuilt)
         systemProperty("marginalis.sandbox.prebuilt", sandboxPrebuiltDir.get().asFile.absolutePath)
     }
-    // Every fork drives a sandbox of its own and takes the next scenario class when it is free. A fixed robot port
-    // fits one sandbox only.
-    maxParallelForks = if (System.getenv("MARGINALIS_ROBOT_PORT") != null) 1
+    // One JVM runs the scenario classes side by side, each with a sandbox of its own, the longest first (Gradle's
+    // forks would take them in scan order). A fixed robot port fits one sandbox only.
+    val jobs = if (System.getenv("MARGINALIS_ROBOT_PORT") != null) 1
         else providers.gradleProperty("marginalis.sandbox.jobs").orElse("6").get().toInt()
+    maxParallelForks = 1
+    systemProperty("junit.jupiter.execution.parallel.enabled", "true")
+    systemProperty("junit.jupiter.execution.parallel.mode.default", "same_thread")
+    systemProperty("junit.jupiter.execution.parallel.mode.classes.default", "concurrent")
+    systemProperty("junit.jupiter.execution.parallel.config.strategy", "fixed")
+    systemProperty("junit.jupiter.execution.parallel.config.fixed.parallelism", jobs.toString())
+    systemProperty("junit.jupiter.execution.parallel.config.fixed.max-pool-size", jobs.toString())
+    systemProperty("junit.jupiter.testclass.order.default", "dev.marginalis.plugin.sandbox.LongestFirst")
     val uiTestSourceSet = sourceSets["uiTest"]
     testClassesDirs = uiTestSourceSet.output.classesDirs
     classpath = uiTestSourceSet.runtimeClasspath
