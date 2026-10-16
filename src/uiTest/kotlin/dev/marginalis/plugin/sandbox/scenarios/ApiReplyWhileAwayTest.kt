@@ -9,8 +9,7 @@ import org.junit.jupiter.api.Test
 import kotlin.concurrent.thread
 
 /**
- * A thread left open shows the agent's reply that arrived while its tab was in the background (MARG-50); a port of
- * `sandbox/scenarios/api_reply_while_away.py`.
+ * A thread left open shows the agent's reply that arrived while its tab was in the background (MARG-50).
  *
  * The user writes into an open thread, moves to another tab while the agent works, the agent replies through
  * `comment_reply` while it also holds a `comment_wait` long-poll, and the user comes back. A background editor tab

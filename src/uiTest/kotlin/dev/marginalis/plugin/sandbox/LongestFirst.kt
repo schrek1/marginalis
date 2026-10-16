@@ -39,7 +39,7 @@ object Durations {
     }
 }
 
-/** Starts the longest scenarios first, as `run_all.py --jobs` does, so the run does not end on one long straggler. */
+/** Starts the longest scenarios first, so the run does not end on one long straggler. */
 class LongestFirst : ClassOrderer {
     override fun orderClasses(context: ClassOrdererContext) {
         val durations = Durations.all()

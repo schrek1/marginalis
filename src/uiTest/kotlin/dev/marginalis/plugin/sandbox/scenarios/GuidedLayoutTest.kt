@@ -16,8 +16,7 @@ import org.junit.jupiter.api.Test
 /**
  * Guided layout (fork MARG-10, MARG-47): the tool window lays a walkthrough out by step number (the default;
  * consecutive steps in one file fold under it, consecutive project-level steps under a project node), by folder or by
- * file, remembers the choice per project, and the step arrows follow step numbers in every layout; a port of
- * `sandbox/scenarios/guided_layout.py`.
+ * file, remembers the choice per project, and the step arrows follow step numbers in every layout.
  */
 class GuidedLayoutTest : SandboxScenario("guided_layout") {
 

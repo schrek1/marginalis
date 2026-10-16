@@ -18,9 +18,9 @@ import java.util.Locale
  * declared [org.junit.jupiter.api.Order] (later cases build on the threads earlier ones posted) on one thread, the IDE
  * stopped at the end. Scenarios run side by side; each records its duration for [LongestFirst].
  *
- * Every behaviour is a [check] that prints `PASS  name` or `FAIL  name  (detail)` as the Python scenarios do, into
- * the test output and `<runtime>/kotlin-logs/<scenario>.log`. A case fails when any of its checks did, or when it
- * throws: that is reported as a FAIL named after the case, like the Python scenarios' guard.
+ * Every behaviour is a [check] that prints `PASS  name` or `FAIL  name  (detail)` into the test output and
+ * `<runtime>/kotlin-logs/<scenario>.log`. A case fails when any of its checks did, or when it throws: that is reported
+ * as a FAIL named after the case.
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation::class)
@@ -60,7 +60,7 @@ abstract class SandboxScenario(private val scenario: String) {
         if (!passed && !inCase) throw AssertionError("$name  ($detail)")
     }
 
-    /** Runs one case of the scenario; `name` is the Python scenario's method name, which a crash is reported under. */
+    /** Runs one case of the scenario; a crash in it is reported as a FAIL under `name`. */
     protected fun case(name: String, body: () -> Unit) {
         val failedBefore = failures.size
         inCase = true

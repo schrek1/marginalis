@@ -5,7 +5,7 @@ UI steps never move the OS mouse or keyboard (Ondra works in his own IDE meanwhi
 `doClick()` / `ActionButton.click()` and text is set on the component, all on the EDT. Reads that have no UI
 (store state) go through the plugin's own classes, loaded with the plugin's class loader.
 
-Every function here reads one thing or performs one user step; scenarios compose them.
+Every function here reads one thing or performs one user step; a demo or an experiment composes them.
 """
 from __future__ import annotations
 

@@ -12,8 +12,7 @@ import org.junit.jupiter.api.Test
 /**
  * Expand / Collapse in the tool window's toolbar: from the selection's folder one level further out per press, up to
  * its section, then every section; Collapse folds everything inside (as IntelliJ's Collapse All); folded folders stay
- * folded when the tree refreshes. Uses the deep walkthrough fixture; a port of
- * `sandbox/scenarios/section_expand_collapse.py`.
+ * folded when the tree refreshes. Uses the deep walkthrough fixture.
  */
 class SectionExpandCollapseTest : SandboxScenario("section_expand_collapse") {
 

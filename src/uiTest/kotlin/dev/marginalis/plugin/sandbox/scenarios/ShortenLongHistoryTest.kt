@@ -6,8 +6,7 @@ import dev.marginalis.plugin.sandbox.SandboxUi
 import org.junit.jupiter.api.Test
 
 /**
- * A long thread shortens its history: the read middle hides behind one line (MARG-12); a port of
- * `sandbox/scenarios/shorten_long_history.py`.
+ * A long thread shortens its history: the read middle hides behind one line (MARG-12).
  *
  * The agent posts a seven-message thread. Unread, every message shows; read and reopened, the panel keeps the first
  * message and the last two and hides the four between behind one link; the link shows the full history, which stays

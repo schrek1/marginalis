@@ -8,8 +8,7 @@ import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
 
 /**
- * An open thread in the editor shows a reply the agent posts through the HTTP API (MARG-14); a port of
- * `sandbox/scenarios/api_reply_rerenders.py`.
+ * An open thread in the editor shows a reply the agent posts through the HTTP API (MARG-14).
  *
  * Each case opens a thread, lets the agent reply through `comment_reply`, and reads what the open panel renders: the
  * reply among the messages, and a panel at least as tall as it needs (an inlay that does not grow hides the new

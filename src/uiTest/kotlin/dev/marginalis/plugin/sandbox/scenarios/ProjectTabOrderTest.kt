@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test
 
 /**
  * Margin tab order: oldest first by default, walkthrough steps in step order, the Sort menu, the new-thread draft on
- * the chosen side, and the choice remembered per project; a port of `sandbox/scenarios/project_tab_order.py`.
+ * the chosen side, and the choice remembered per project.
  *
  * Hold still's "N new threads" pill needs the tab in front, which the sandbox on another desktop never is; its
  * direction is covered by the core tests (HoldStillTest).

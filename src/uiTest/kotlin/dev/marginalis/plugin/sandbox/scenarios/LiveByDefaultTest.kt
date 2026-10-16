@@ -13,9 +13,8 @@ import org.junit.jupiter.api.Test
 import kotlin.concurrent.thread
 
 /**
- * Live by default: the tool window toggle, a thread's own switch, and the Settings default; a port of
- * `sandbox/scenarios/live_by_default.py`. The Settings default is application-wide, so it is switched off before the
- * first fresh project and again at the end.
+ * Live by default: the tool window toggle, a thread's own switch, and the Settings default. The Settings default is
+ * application-wide, so it is switched off before the first fresh project and again at the end.
  */
 class LiveByDefaultTest : SandboxScenario("live_by_default") {
 

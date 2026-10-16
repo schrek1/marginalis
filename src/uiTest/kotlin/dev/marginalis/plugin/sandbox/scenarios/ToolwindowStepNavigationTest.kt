@@ -9,8 +9,8 @@ import org.junit.jupiter.api.Test
 
 /**
  * Walking the Guided section with the tool window's arrows on a review-sized walkthrough (the deep walkthrough
- * fixture); a port of `sandbox/scenarios/toolwindow_step_navigation.py`. Records what each press selects, so a jump
- * back to the first node or an order that ignores step numbers shows up.
+ * fixture). Records what each press selects, so a jump back to the first node or an order that ignores step numbers
+ * shows up.
  */
 class ToolwindowStepNavigationTest : SandboxScenario("toolwindow_step_navigation") {
 

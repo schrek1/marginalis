@@ -15,9 +15,9 @@ import kotlin.io.path.writeText
 /**
  * The Margin tab shows only with something in it (MARG-48): a fresh project opens without it, the agent's first
  * project thread brings it, an empty tab does not come back after a restart, and a project with an open project
- * thread opens it unpinned; a port of `sandbox/scenarios/no_empty_margin_tab.py`.
+ * thread opens it unpinned.
  *
- * The scenario's first start is the fresh project the base class opens; Python restarts into one more of the same.
+ * The scenario's first start is the fresh project the base class opens.
  */
 class NoEmptyMarginTabTest : SandboxScenario("no_empty_margin_tab") {
 

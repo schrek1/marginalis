@@ -8,8 +8,8 @@ import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
 
 /**
- * Margin text spacing: a single Enter is a line break, paragraphs and lists get a gap, the first block sits flush;
- * a port of `sandbox/scenarios/margin_text_spacing.py`. Measured in the rendered message panes, in pixels.
+ * Margin text spacing: a single Enter is a line break, paragraphs and lists get a gap, the first block sits flush.
+ * Measured in the rendered message panes, in pixels.
  */
 class MarginTextSpacingTest : SandboxScenario("margin_text_spacing") {
 
