@@ -78,6 +78,29 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
         }
     }
 
+    /** Whether the header button `name` is enabled, as its action's own update reports it to the user. */
+    fun isToolWindowActionEnabled(name: String): Boolean {
+        var enabled = false
+        retryWhileHeaderIsBuilt("no $name button in the tool window header") {
+            enabled = js(
+                FIND + HEADER + """
+                var button = find(root, function (c) {
+                    return c instanceof com.intellij.openapi.actionSystem.impl.ActionButton
+                        && c.getPresentation().getText() == ${lit(name)};
+                });
+                if (button == null) throw '$NO_HEADER_BUTTON ' + ${lit(name)};
+                var action = button.getAction();
+                var event = com.intellij.openapi.actionSystem.AnActionEvent.createEvent(
+                    action, com.intellij.ide.DataManager.getInstance().getDataContext(button), button.getPresentation().clone(),
+                    'MarginalisSandbox', com.intellij.openapi.actionSystem.ActionUiKind.NONE, null);
+                action.update(event);
+                String(event.getPresentation().isEnabled())
+                """,
+            ) == "true"
+        }
+        return enabled
+    }
+
     /** Picks an entry of the header's Guided Layout menu through the button's own action group. */
     fun chooseGuidedLayout(label: String) {
         val escaped = lit(label)
@@ -393,16 +416,21 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
 
     fun screenshotToolWindow(target: Path) {
         val xpath = "//div[@class='MarginalisToolWindowPanel' or @javaclass='dev.marginalis.plugin.ui.toolwindow.MarginalisToolWindowPanel']"
-        // The robot's hierarchy misses the panel for a moment while the tool window relays out.
-        repeat(5) {
-            val found = Sandbox.robot.findAll(xpath)
-            if (found.size == 1) {
-                Sandbox.robot.screenshot(target, found.single())
+        // The robot's hierarchy misses the panel for a moment while the tool window relays out; on the floor IDE in a
+        // container that moment ran past 5 s.
+        var found = 0
+        repeat(20) {
+            val panels = Sandbox.robot.findAll(xpath)
+            if (panels.size == 1) {
+                Sandbox.robot.screenshot(target, panels.single())
                 return
             }
+            found = panels.size
             Thread.sleep(1_000)
         }
-        Sandbox.robot.screenshot(target, Sandbox.robot.findOne(xpath))
+        // A shot documents the run, it checks nothing: the whole frame stands in rather than failing the scenario.
+        println("WARN  the robot finds $found tool window panels; ${target.fileName} shows the whole frame")
+        SandboxUi.screenshotFrame(target)
     }
 
     private fun intList(raw: String): List<Int> = JsonParser.parseString(raw).asJsonArray.map { it.asInt }

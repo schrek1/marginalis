@@ -30,8 +30,12 @@ function threadOf(panel) {
     field.setAccessible(true);
     return field.get(panel);
 }
-// A caret move needs the write-intent lock, which 2025.2 does not give the robot's EDT calls. Only around that call: a
-// lock around a whole script deadlocks an editor opening on background reads.
+// The robot's EDT scripts hold no lock, and 2025.2 (the floor) then refuses model and caret reads, and caret moves.
+// Take the lock around just those calls: around a whole script, opening an editor waits on background reads it holds
+// back. An int computed in `read` comes back as a JS double, so callers take `| 0`.
+function read(compute) {
+    return com.intellij.openapi.application.ReadAction.compute(new com.intellij.openapi.util.ThrowableComputable({ compute: compute }));
+}
 function asUser(run) {
     return com.intellij.openapi.application.WriteIntentReadAction.compute(new com.intellij.openapi.util.ThrowableComputable({ compute: run }));
 }
@@ -45,12 +49,6 @@ function performLater(action, event) {
 
     const val EDITORS = """
 function projectFile(path) { return project.getBaseDir().findFileByRelativePath(path); }
-// The robot's EDT scripts hold no lock, and 2025.2 refuses document and caret reads outside a read action. A lock
-// around whole scripts is no way out: opening an editor under it waits for background reads that the lock holds back.
-// An int computed in it comes back as a JS double, so callers take `| 0`.
-function read(compute) {
-    return com.intellij.openapi.application.ReadAction.compute(new com.intellij.openapi.util.ThrowableComputable({ compute: compute }));
-}
 function textEditorOf(path) {
     var document = read(function () { return com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().getDocument(projectFile(path)); });
     var editors = com.intellij.openapi.editor.EditorFactory.getInstance().getEditors(document, project);
