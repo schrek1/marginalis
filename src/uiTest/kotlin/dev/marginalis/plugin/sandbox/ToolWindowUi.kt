@@ -230,6 +230,23 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
     fun dirExpanded(sectionPrefix: String, dirName: String): Boolean =
         js(dirNode(sectionPrefix, dirName) + "String(tree.isExpanded(dirPath))") == "true"
 
+    /** Selects the section node, as a click on its title would. */
+    fun selectSection(sectionPrefix: String) {
+        js(
+            TREE + """
+            var tree = marginalisTree();
+            var root = tree.getModel().getRoot();
+            var found = null;
+            for (var i = 0; i < root.getChildCount() && found == null; i++) {
+                if (sectionTitle(root.getChildAt(i)).indexOf(${lit(sectionPrefix)}) == 0) found = root.getChildAt(i);
+            }
+            if (found == null) throw 'no section starting with ' + ${lit(sectionPrefix)};
+            tree.setSelectionPath(new javax.swing.tree.TreePath(found.getPath()));
+            String(true)
+            """,
+        )
+    }
+
     fun selectDir(sectionPrefix: String, dirName: String) {
         js(dirNode(sectionPrefix, dirName) + "tree.setSelectionPath(dirPath); String(true)")
     }

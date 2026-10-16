@@ -95,6 +95,26 @@ class SectionExpandCollapseTest : SandboxScenario("section_expand_collapse") {
         ToolWindowUi.screenshotToolWindow(shots.resolve("folded-folder-after-refresh.png"))
     }
 
+    @Test
+    @Order(4)
+    fun collapsingASectionFoldsEveryFolderInIt() = case("collapsing_a_section_folds_every_folder_in_it") {
+        ToolWindowUi.selectSection(GUIDED)
+        pause()
+        ToolWindowUi.pressToolWindowAction(*EXPAND)
+        pause()
+        check(ToolWindowUi.sectionsState().getValue(GUIDED).full) { "setup: the Guided section is not open all the way down" }
+        // The section itself is the collapse target: no walk out from a step folds the folders on the way.
+        ToolWindowUi.pressToolWindowAction(*COLLAPSE)
+        pause()
+        ToolWindowUi.openSectionOnly(GUIDED)
+        pause()
+        check(
+            "Collapse on a section folds a folder beside the selection too, so reopening it shows one level",
+            !ToolWindowUi.dirExpanded(GUIDED, ORDERS_SRC), ToolWindowUi.sectionsState().getValue(GUIDED),
+        )
+        ToolWindowUi.screenshotToolWindow(shots.resolve("section-collapsed-directly.png"))
+    }
+
     /**
      * Folders are the levels Expand and Collapse step through; a build with a Guided layout menu (MARG-10) starts in
      * step order, which has none. Set on the panel rather than through the header menu: this is setup, and the header
