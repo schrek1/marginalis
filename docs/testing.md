@@ -47,7 +47,8 @@ CI, whatever the monitor does, and nothing appears on your desktop. The IDE insi
   `marginalis-sandbox-runs/.lock` and the next one waits, because two runs side by side overload the machine and
   both fail at random. Each run picks free ports and its own folder. Never create or delete the lock by hand: a
   one-off experiment with a sandbox runs as `py sandbox/run_all.py --locked <command...>`, which waits for the lock,
-  holds it for the command and releases only its own.
+  holds it for the command and releases only its own. A lock whose owner process is gone (a run killed hard) is
+  taken over by the next run at once; the Kotlin suite also removes the sandbox containers such a run left behind.
 
 ### Measured settings
 
