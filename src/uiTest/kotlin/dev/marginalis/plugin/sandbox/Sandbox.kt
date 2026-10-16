@@ -338,18 +338,24 @@ object Sandbox {
         }
 
         // A frame sized like a real screen: a window manager or a sleeping monitor may open it tiny, and inlaid
-        // thread panels then get zero width, so the robot finds none.
-        private fun sizeTheFrame(): String = robot.callJs(
-            """
-            var frame = com.intellij.openapi.wm.WindowManager.getInstance().getFrame(
-                com.intellij.openapi.project.ProjectManager.getInstance().getOpenProjects()[0]);
-            frame.setExtendedState(java.awt.Frame.NORMAL);
-            frame.setBounds(0, 0, 2560, 1440);
-            frame.validate();
-            String(frame.getWidth() + 'x' + frame.getHeight())
-            """,
-            edt = true,
-        )
+        // thread panels then get zero width, so the robot finds none. The servers answer before the project's frame
+        // exists; on a loaded machine that gap ran seconds.
+        private fun sizeTheFrame(): String = awaitValue("the project's frame exists", Duration.ofSeconds(60), Duration.ofSeconds(1)) {
+            robot.callJs(
+                """
+                var frame = com.intellij.openapi.wm.WindowManager.getInstance().getFrame(
+                    com.intellij.openapi.project.ProjectManager.getInstance().getOpenProjects()[0]);
+                if (frame == null) String('none');
+                else {
+                    frame.setExtendedState(java.awt.Frame.NORMAL);
+                    frame.setBounds(0, 0, 2560, 1440);
+                    frame.validate();
+                    String(frame.getWidth() + 'x' + frame.getHeight());
+                }
+                """,
+                edt = true,
+            ).takeIf { it != "none" }
+        }
 
         // The IDE restores its tool window layout during the project's startup; the Project view it shows then takes
         // the left side from a Marginalis tool window a scenario has just shown. And while the platform's own startup
