@@ -7,6 +7,7 @@ import dev.marginalis.plugin.sandbox.Sandbox
 import dev.marginalis.plugin.sandbox.SandboxScenario
 import dev.marginalis.plugin.sandbox.SandboxUi
 import dev.marginalis.plugin.sandbox.safe
+import dev.marginalis.plugin.sandbox.awaitUntil
 import dev.marginalis.plugin.sandbox.waitUntil
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Order
@@ -108,7 +109,7 @@ class ReviewDiffWalkthroughTest : SandboxScenario("review_diff_walkthrough") {
     private fun harnessBuildsAReviewDiff(): Boolean {
         SandboxUi.closeAllEditors()
         ReviewDiffUi.openReviewDiffWithFiles(REVIEW_FILES, shown = SHOWS_TARGET)
-        val shown = waitUntil { ReviewDiffUi.diffShows(TARGET_AFTER) }
+        val shown = waitUntil("the review diff shows review_target.py") { ReviewDiffUi.diffShows(TARGET_AFTER) }
         val processor = ReviewDiffUi.selectedDiffProcessor()
         check("harness: the review diff runs on MutableDiffRequestProcessor", processor == ReviewDiffUi.PROCESSOR, processor)
         check("harness: the review diff shows its first file", shown)
@@ -119,13 +120,13 @@ class ReviewDiffWalkthroughTest : SandboxScenario("review_diff_walkthrough") {
         SandboxUi.closeAllEditors()
         ReviewDiffUi.openReviewDiffWithFiles(REVIEW_FILES, shown)
         val after = REVIEW_FILES[shown].after
-        waitUntil { ReviewDiffUi.diffShows(after) }
+        awaitUntil("the review diff shows ${REVIEW_FILES[shown].path}") { ReviewDiffUi.diffShows(after) }
         SandboxUi.openThreadInDiff(steps.getValue(step), after)
-        waitUntil { steps.getValue(step) in SandboxUi.threadIdsOpenInDiff(after) }
+        awaitUntil("step $step opens in the review diff") { steps.getValue(step) in SandboxUi.threadIdsOpenInDiff(after) }
     }
 
     private fun expectStepInDiff(case: String, step: String, after: String, line: Int) {
-        val opened = waitUntil { steps.getValue(step) in SandboxUi.threadIdsOpenInDiff(after) }
+        val opened = waitUntil("step $step opens in the review diff") { steps.getValue(step) in SandboxUi.threadIdsOpenInDiff(after) }
         shot(case)
         val kind = SandboxUi.selectedEditorKind()
         check("$case: the review diff stays in front", kind == "DIFF", kind)
@@ -136,7 +137,7 @@ class ReviewDiffWalkthroughTest : SandboxScenario("review_diff_walkthrough") {
     }
 
     private fun expectStepInFileTab(case: String, step: String, file: String) {
-        val opened = waitUntil { steps.getValue(step) in ReviewDiffUi.threadIdsOpenInFileTab(file) }
+        val opened = waitUntil("step $step opens in the tab of $file") { steps.getValue(step) in ReviewDiffUi.threadIdsOpenInFileTab(file) }
         shot(case)
         val kind = SandboxUi.selectedEditorKind()
         check("$case: the step opens in the file's own tab", kind == "TEXT:${file.substringAfterLast('/')}", kind)

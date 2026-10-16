@@ -79,15 +79,5 @@ abstract class SandboxScenario(private val scenario: String) {
     }
 }
 
-/** Polls `condition` (a failing read counts as not yet) until it holds or the timeout passes. */
-fun waitUntil(timeout: Duration = Duration.ofSeconds(10), condition: () -> Boolean): Boolean {
-    val deadline = System.nanoTime() + timeout.toNanos()
-    while (System.nanoTime() < deadline) {
-        if (runCatching(condition).getOrDefault(false)) return true
-        Thread.sleep(500)
-    }
-    return false
-}
-
 /** `read()`, or the error it raised as text, for a FAIL line's detail. */
 fun safe(read: () -> Any?): Any? = runCatching(read).getOrElse { "${it::class.simpleName}: ${it.message}" }

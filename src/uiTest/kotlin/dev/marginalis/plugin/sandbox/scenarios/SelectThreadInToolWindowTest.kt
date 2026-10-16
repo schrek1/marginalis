@@ -7,7 +7,6 @@ import dev.marginalis.plugin.sandbox.ToolWindowUi
 import dev.marginalis.plugin.sandbox.ToolWindowUi.SelectedStep
 import dev.marginalis.plugin.sandbox.fixtures.DeepWalkthrough
 import dev.marginalis.plugin.sandbox.fixtures.postWalkthrough
-import dev.marginalis.plugin.sandbox.waitUntil
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
@@ -70,11 +69,7 @@ class SelectThreadInToolWindowTest : SandboxScenario("select_thread_in_tool_wind
         SandboxUi.openInEditor(FILE)
         pause()
         SandboxUi.openThreadInEditor(resolved, FILE)
-        // A freshly reopened editor lays its inlays out a moment later; the robot sees a panel only once it is on screen.
-        waitUntil {
-            SandboxUi.threadPanel(resolved)
-            true
-        }
+        // A freshly reopened editor lays its inlays out a moment later; the press waits for the panel on screen.
         SandboxUi.pressPanelAction(resolved, SELECT_IN_MARGINALIS)
         val got = selected()
         ToolWindowUi.screenshotToolWindow(shots.resolve("2-resolved.png"))

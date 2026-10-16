@@ -5,7 +5,7 @@ import dev.marginalis.plugin.sandbox.Agent
 import dev.marginalis.plugin.sandbox.Sandbox
 import dev.marginalis.plugin.sandbox.SandboxScenario
 import dev.marginalis.plugin.sandbox.SandboxUi
-import dev.marginalis.plugin.sandbox.waitUntil
+import dev.marginalis.plugin.sandbox.awaitUntil
 import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
 import java.nio.file.Files
@@ -105,9 +105,7 @@ class NoEmptyMarginTabTest : SandboxScenario("no_empty_margin_tab") {
         settle()
     }
 
-    private fun awaitOrFail(what: String, condition: () -> Boolean) {
-        check(waitUntil(Duration.ofSeconds(60), condition)) { "$what not within 60s" }
-    }
+    private fun awaitOrFail(what: String, condition: () -> Boolean) = awaitUntil(what, Duration.ofSeconds(60), condition = condition)
 
     private fun threadsFile() = Sandbox.project.resolve(".idea").resolve("marginalis.json")
 

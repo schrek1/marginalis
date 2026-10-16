@@ -9,6 +9,7 @@ import dev.marginalis.plugin.sandbox.scenarios.ReviewDiffWalkthroughTest.Compani
 import dev.marginalis.plugin.sandbox.scenarios.ReviewDiffWalkthroughTest.Companion.SHOWS_TARGET
 import dev.marginalis.plugin.sandbox.scenarios.ReviewDiffWalkthroughTest.Companion.TARGET
 import dev.marginalis.plugin.sandbox.scenarios.ReviewDiffWalkthroughTest.Companion.TARGET_AFTER
+import dev.marginalis.plugin.sandbox.awaitUntil
 import dev.marginalis.plugin.sandbox.waitUntil
 import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
@@ -32,7 +33,7 @@ class SelectOpenedThreadInReviewDiffTest : SandboxScenario("select_opened_thread
         total = Agent.agentAddsStep(TARGET, 6, "Step 1: total sums the values.", 1, "review")
         SandboxUi.closeAllEditors()
         ReviewDiffUi.openReviewDiffWithFiles(REVIEW_FILES, shown = SHOWS_TARGET)
-        val shown = waitUntil { ReviewDiffUi.diffShows(TARGET_AFTER) }
+        val shown = waitUntil("the review diff shows review_target.py") { ReviewDiffUi.diffShows(TARGET_AFTER) }
         check("setup: the review diff shows review_target.py", shown)
         // Opening the diff can hide the tool window.
         SandboxUi.showToolWindow()
@@ -75,7 +76,7 @@ class SelectOpenedThreadInReviewDiffTest : SandboxScenario("select_opened_thread
     @Order(5)
     fun buttonSelectsTheThreadWhoseReplyBoxHasTheFocus() = case("button_selects_the_thread_whose_reply_box_has_the_focus") {
         SandboxUi.openThreadInDiff(total, TARGET_AFTER)
-        waitUntil { total in SandboxUi.threadIdsOpenInDiff(TARGET_AFTER) }
+        awaitUntil("the step opens in the review diff") { total in SandboxUi.threadIdsOpenInDiff(TARGET_AFTER) }
         putCaretInReview(IMPORT_IN_REVIEW)
         ToolWindowUi.selectDir("Open", "src")
         val focused = focusReplyBox(total)

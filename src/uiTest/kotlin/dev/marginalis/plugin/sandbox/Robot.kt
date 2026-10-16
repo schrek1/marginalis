@@ -15,11 +15,11 @@ import javax.imageio.ImageIO
  * IDE's JVM; in component-scoped calls `component` is the found Swing component. Only `callJs`/`runJs` and painted
  * screenshots are used: the fixtures' `click()`/`keyboard {}` drive the OS input, which the sandbox must never touch.
  */
-class Robot(port: Int) {
+class Robot(port: Int, timeout: Duration = Duration.ofSeconds(60)) {
 
     private val remote = RemoteRobot(
         "http://127.0.0.1:$port",
-        OkHttpClient.Builder().readTimeout(60, TimeUnit.SECONDS).callTimeout(Duration.ofSeconds(90)).build(),
+        OkHttpClient.Builder().readTimeout(timeout.seconds, TimeUnit.SECONDS).callTimeout(timeout.plusSeconds(30)).build(),
     )
 
     fun callJs(script: String, edt: Boolean = false, component: ComponentFixture? = null): String =

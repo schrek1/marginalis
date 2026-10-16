@@ -6,6 +6,7 @@ import dev.marginalis.plugin.sandbox.SandboxUi.js
 import dev.marginalis.plugin.sandbox.SandboxUi.lit
 import dev.marginalis.plugin.sandbox.SandboxUi.obj
 import java.nio.file.Path
+import java.time.Duration
 
 /**
  * The Marginalis tool window as the user sees it: its header buttons and its tree (a port of the tool window part of
@@ -13,8 +14,7 @@ import java.nio.file.Path
  */
 object ToolWindowUi {
 
-    /** One attempt per second while the tool window header is still being built. */
-    private const val HEADER_ATTEMPTS = 60
+    private val HEADER_WAIT: Duration = Duration.ofSeconds(60)
     private const val NO_HEADER_BUTTON = "no tool window button"
 
     const val TREE = """
@@ -128,17 +128,12 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
     }
 
     // Right after a start the header is built a while after the tool window shows; with several sandboxes busy at
-    // once that took longer than 15 s.
-    private fun retryWhileHeaderIsBuilt(gaveUp: String, press: () -> Unit) {
-        repeat(HEADER_ATTEMPTS) {
-            try {
-                return press()
-            } catch (error: Exception) {
-                if (error.message?.contains(NO_HEADER_BUTTON) != true) throw error
-                Thread.sleep(1_000)
-            }
+    // once that took longer than 15 s. Only a missing header button means "not yet": any other error is the step's.
+    private fun retryWhileHeaderIsBuilt(what: String, press: () -> Unit) {
+        awaitUntil(what, HEADER_WAIT, Duration.ofSeconds(1), retryOn = { it.message?.contains(NO_HEADER_BUTTON) == true }) {
+            press()
+            true
         }
-        error(gaveUp)
     }
 
     fun guidedLayout(): String = js("String(service('dev.marginalis.plugin.ui.toolwindow.GuidedLayoutSetting').getLayout().getStored())")

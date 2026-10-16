@@ -228,8 +228,8 @@ class EnvelopeOnlyWhileUnreadTest : SandboxScenario("envelope_only_while_unread"
      */
     private fun marginTabTitle(): String {
         val shown = SandboxUi.obj(
-            SandboxUi.js(
-                SandboxUi.MARGIN + """
+            SandboxUi.marginJs(
+                """
                 var marginFile = pluginLoader.loadClass('dev.marginalis.plugin.ui.tab.MarginFile').getField('INSTANCE').get(null);
                 var title = null;
                 try {
@@ -261,8 +261,8 @@ class EnvelopeOnlyWhileUnreadTest : SandboxScenario("envelope_only_while_unread"
     /** Per thread id, the turn signal after the mark on its Margin tab card. */
     private fun marginCardSignals(): Map<String, String> {
         val raw = SandboxUi.obj(
-            SandboxUi.js(
-                SandboxUi.MARGIN + SIGNALS + """
+            SandboxUi.marginJs(
+                SIGNALS + """
                 var children = fieldOf(marginPanel(), 'stack').getComponents();
                 var result = {};
                 for (var i = 0; i < children.length; i++) {
@@ -277,7 +277,7 @@ class EnvelopeOnlyWhileUnreadTest : SandboxScenario("envelope_only_while_unread"
         return raw.keySet().associateWith { raw.get(it).asString }
     }
 
-    private fun marginCounts(): String = SandboxUi.js(SandboxUi.MARGIN + "String(fieldOf(marginPanel(), 'counts').getText())")
+    private fun marginCounts(): String = SandboxUi.marginJs("String(fieldOf(marginPanel(), 'counts').getText())")
 
     /** The turn behind the editor tab and Project view badges of a file. */
     private fun fileTurn(path: String): String = SandboxUi.js("var turn = store.getFileTurns().of('$path'); String(turn == null ? 'null' : turn.name())")

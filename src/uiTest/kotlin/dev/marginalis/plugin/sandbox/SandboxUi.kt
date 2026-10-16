@@ -86,6 +86,10 @@ function find(root, test) {
 """
 
     const val MARGIN = """
+function marginTabOpen() {
+    var marginFile = pluginLoader.loadClass('dev.marginalis.plugin.ui.tab.MarginFile').getField('INSTANCE').get(null);
+    return com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).getAllEditors(marginFile).length > 0;
+}
 function marginPanel() {
     var marginFile = pluginLoader.loadClass('dev.marginalis.plugin.ui.tab.MarginFile').getField('INSTANCE').get(null);
     var editors = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).getAllEditors(marginFile);
@@ -119,9 +123,10 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
     }
 
     fun threadPanel(threadId: String): ComponentFixture =
-        Sandbox.robot.findAll("//div[@javaclass='dev.marginalis.plugin.ui.ThreadPanel']")
-            .firstOrNull { panel -> js("String(threadOf(component).getId())", panel) == threadId }
-            ?: error("no panel shows thread $threadId")
+        awaitValue("a panel on screen shows thread $threadId") {
+            Sandbox.robot.findAll("//div[@javaclass='dev.marginalis.plugin.ui.ThreadPanel']")
+                .firstOrNull { panel -> js("String(threadOf(component).getId())", panel) == threadId }
+        }
 
     fun openInEditor(file: String) {
         js(EDITORS + "com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).openFile(projectFile('$file'), true); String(true)")
@@ -501,7 +506,7 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
     }
 
     fun screenshotFrame(target: Path) {
-        Sandbox.robot.screenshot(target, Sandbox.robot.findOne("//div[@class='IdeFrameImpl']"))
+        Sandbox.robot.screenshot(target, awaitValue("the IDE frame on screen") { Sandbox.robot.findAll("//div[@class='IdeFrameImpl']").singleOrNull() })
     }
 
     // --- Margin (project) tab -----------------------------------------------------------------------------------
@@ -521,17 +526,22 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
             String(files.length ? files[0].getUrl() : '')
             """,
         )
-        val deadline = System.nanoTime() + limit.toNanos()
         var last = selected()
         var since = System.nanoTime()
-        while (System.nanoTime() < deadline && System.nanoTime() - since < quiet.toNanos()) {
-            Thread.sleep(100)
+        awaitUntil("the editor in front stays the same for ${quiet.toMillis()} ms", limit, Duration.ofMillis(100)) {
             val now = selected()
             if (now != last) {
                 last = now
                 since = System.nanoTime()
             }
+            System.nanoTime() - since >= quiet.toNanos()
         }
+    }
+
+    /** Runs a script that uses [MARGIN]'s helpers once the Margin tab is open. */
+    fun marginJs(script: String): String {
+        awaitUntil("the Margin tab is open") { js(MARGIN + "String(marginTabOpen())") == "true" }
+        return js(MARGIN + script)
     }
 
     /** The "+ New project thread" link: opens an empty draft in the Margin tab. */
@@ -541,8 +551,8 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
 
     /** What the Margin tab lists, top to bottom: thread ids, `conversation`, `draft`, or a component kind. */
     fun marginTabOrder(): List<String> = stringList(
-        js(
-            MARGIN + """
+        marginJs(
+            """
             var stack = fieldOf(marginPanel(), 'stack');
             var draft = fieldOf(marginPanel(), 'draftShown');
             var children = stack.getComponents();
@@ -563,8 +573,8 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
     /** Picks an entry of the Margin tab's Sort menu, through the toolbar button's own action group. */
     fun chooseMarginSort(label: String) {
         val escaped = lit(label)
-        js(
-            MARGIN + FIND + """
+        marginJs(
+            FIND + """
             var root = fieldOf(marginPanel(), 'root');
             var button = find(root, function (c) {
                 return c instanceof com.intellij.openapi.actionSystem.impl.ActionButton
@@ -588,7 +598,7 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
         )
     }
 
-    fun marginSort(): String = js(MARGIN + "String(service('dev.marginalis.plugin.ui.tab.ProjectTabSort').getOrder().getStored())")
+    fun marginSort(): String = marginJs("String(service('dev.marginalis.plugin.ui.tab.ProjectTabSort').getOrder().getStored())")
 
     /** Forced save of the project's workspace.xml, off the EDT: non-forced saves skip recently loaded components. */
     fun saveProjectState() {

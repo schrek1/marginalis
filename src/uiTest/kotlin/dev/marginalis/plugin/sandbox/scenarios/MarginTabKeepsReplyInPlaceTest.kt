@@ -206,7 +206,7 @@ class MarginTabKeepsReplyInPlaceTest : SandboxScenario("margin_tab_keeps_reply_i
         )
     }
 
-    private fun tabJs(script: String) = JsonParser.parseString(SandboxUi.js(TAB + script))
+    private fun tabJs(script: String) = JsonParser.parseString(SandboxUi.marginJs(TAB + script))
 
     private companion object {
         const val DRAFT = "draft"
@@ -219,7 +219,7 @@ class MarginTabKeepsReplyInPlaceTest : SandboxScenario("margin_tab_keeps_reply_i
 
         fun settle() = Thread.sleep(2_000)
 
-        val TAB = SandboxUi.MARGIN + SandboxUi.FIND + """
+        val TAB = SandboxUi.FIND + """
 function stackOf() { return fieldOf(marginPanel(), 'stack'); }
 function viewportOf() { return fieldOf(marginPanel(), 'scroll').getViewport(); }
 function target(key) {

@@ -95,7 +95,7 @@ class ApiReplyWhileAwayTest : SandboxScenario("api_reply_while_away") {
         SandboxUi.js(SandboxUi.EDITORS + "String(textEditorOf('$file').getContentComponent().isDisplayable())") == "true"
 
     private fun marginTabOnScreen(): Boolean =
-        SandboxUi.js(SandboxUi.MARGIN + "String(marginPanel().getComponent().isDisplayable())") == "true"
+        SandboxUi.marginJs("String(marginPanel().getComponent().isDisplayable())") == "true"
 
     /** The agent's `comment_wait`, held open in the background as a real agent holds it between replies. */
     private class AgentListening {

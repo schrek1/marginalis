@@ -10,6 +10,8 @@ import java.net.http.HttpResponse
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import kotlin.io.path.ExperimentalPathApi
@@ -95,11 +97,16 @@ object Sandbox {
     /** Stops the sandbox and, in Docker, removes its container and with it the claim on its port. */
     fun stop() = sandbox.stop(release = true)
 
+    /** Records what the calling thread's sandbox is doing: a thread dump in its IDE log and a shot of its frame. */
+    fun recordDiagnostics(what: String): String = current.get()?.recordDiagnostics(what) ?: "no sandbox on this thread to diagnose"
+
     /** Restarts the sandbox; a Docker sandbox keeps its container, so its port, IDE config and caches stay. */
     fun restart(fresh: Boolean, prepare: () -> Unit = {}) {
         sandbox.stop(release = false)
         sandbox.start(fresh, prepare)
     }
+
+    private class IdeExited(message: String) : IllegalStateException(message)
 
     private class Instance(private val dir: Path) {
 
@@ -119,7 +126,9 @@ object Sandbox {
         private val idePorts: List<Int> get() = if (launch == Launch.DOCKER) listOf(robotPort + 10000) else (63342..63361).toList()
 
         val marginalisPort: Int
-            get() = cachedPort ?: findMarginalisPort()?.also { cachedPort = it } ?: error("sandbox is not running; start it first")
+            get() = cachedPort
+                ?: awaitValue("the Marginalis API answers for the sandbox project", Duration.ofSeconds(30)) { findMarginalisPort() }
+                    .also { cachedPort = it }
 
         fun robotUp(): Boolean = runCatching { Socket().use { it.connect(InetSocketAddress("127.0.0.1", robotPort), 2_000) } }.isSuccess
 
@@ -253,20 +262,40 @@ object Sandbox {
                 .start()
 
         private fun awaitUp(process: Process?) {
-            val deadline = System.nanoTime() + startTimeout.toNanos()
-            while (System.nanoTime() < deadline) {
-                check(process == null || process.isAlive) { "the sandbox IDE exited before it came up; see $logFile" }
-                val port = if (robotUp()) findMarginalisPort() else null
-                if (port != null) {
-                    cachedPort = port
-                    val frame = sizeTheFrame()
-                    awaitProjectStartup()
-                    println("sandbox up: robot http://127.0.0.1:$robotPort, marginalis http://127.0.0.1:$port, frame $frame")
-                    return
-                }
-                Thread.sleep(1_000)
+            val port = awaitValue(
+                "the sandbox IDE answers on robot port $robotPort", startTimeout, Duration.ofSeconds(1), retryOn = { it !is IdeExited },
+            ) {
+                if (process != null && !process.isAlive) throw IdeExited("the sandbox IDE exited before it came up; see $logFile")
+                if (robotUp()) findMarginalisPort() else null
             }
-            error("sandbox not up after ${startTimeout.seconds}s; see $logFile")
+            cachedPort = port
+            val frame = sizeTheFrame()
+            awaitProjectStartup()
+            println("sandbox up: robot http://127.0.0.1:$robotPort, marginalis http://127.0.0.1:$port, frame $frame")
+        }
+
+        /** A thread dump in the IDE log and a shot of the frame, for a wait that timed out. */
+        fun recordDiagnostics(what: String): String {
+            val name = LocalTime.now().format(DateTimeFormatter.ofPattern("HHmmss")) + "-" +
+                what.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').take(60)
+            val dumped = threadDump()
+            val shot = dir.resolve("diagnostics").resolve("$name.png")
+            // A short timeout of its own: the wait may have timed out on an IDE whose UI thread is blocked.
+            val shotNote = runCatching {
+                val quick = Robot(robotPort, Duration.ofSeconds(15))
+                quick.screenshot(shot, quick.findOne("//div[@class='IdeFrameImpl']"))
+                "frame $shot"
+            }.getOrElse { "no frame shot (${it::class.simpleName}: ${it.message})" }
+            return "thread dump ${if (dumped) "in $logFile" else "not taken"}; $shotNote".also { println("DIAG  $what: $it") }
+        }
+
+        private fun threadDump(): Boolean = when (launch) {
+            Launch.DOCKER -> container?.let { docker("exec", it, "pkill", "-QUIT", "-f", "com.intellij.idea.Main") == 0 } ?: false
+            Launch.XVFB -> ide?.descendants()?.toList().orEmpty()
+                .filter { it.info().commandLine().orElse("").contains("com.intellij.idea.Main") }
+                .map { ProcessBuilder("kill", "-QUIT", it.pid().toString()).start().waitFor() == 0 }
+                .any { it }
+            Launch.ATTACH -> false
         }
 
         // A frame sized like a real screen: a window manager or a sleeping monitor may open it tiny, and inlaid
@@ -284,24 +313,29 @@ object Sandbox {
         )
 
         // The IDE restores its tool window layout during the project's startup; the Project view it shows then takes
-        // the left side from a Marginalis tool window a scenario has just shown. Smart mode flickers on right after
-        // startup.
+        // the left side from a Marginalis tool window a scenario has just shown. And while the platform's own startup
+        // write (the JPS model sync) waits for the lock, a file opened on the EDT blocks the editor providers' reads
+        // until their 30 s timeout. Smart mode flickers on right after startup, so it must hold three samples in a row.
         private fun awaitProjectStartup() {
-            val deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos()
             var settledPolls = 0
-            while (settledPolls < 3 && System.nanoTime() < deadline) {
-                val settled = runCatching {
-                    robot.callJs(
-                        """
-                        var projects = com.intellij.openapi.project.ProjectManager.getInstance().getOpenProjects();
-                        String(projects.length > 0
-                            && com.intellij.openapi.startup.StartupManager.getInstance(projects[0]).postStartupActivityPassed()
-                            && !com.intellij.openapi.project.DumbService.isDumb(projects[0]))
-                        """,
-                    ) == "true"
-                }.getOrDefault(false)
-                settledPolls = if (settled) settledPolls + 1 else 0
-                Thread.sleep(1_000)
+            awaitUntil(
+                "the project has started up, is out of dumb mode and has no write action pending, 3 s in a row",
+                Duration.ofSeconds(180), Duration.ofSeconds(1),
+            ) {
+                // A read that fails counts as unsettled too.
+                val before = settledPolls
+                settledPolls = 0
+                val settled = robot.callJs(
+                    """
+                    var projects = com.intellij.openapi.project.ProjectManager.getInstance().getOpenProjects();
+                    String(projects.length > 0
+                        && com.intellij.ide.startup.StartupManagerEx.getInstanceEx(projects[0]).postStartupActivityPassed()
+                        && !com.intellij.openapi.project.DumbService.isDumb(projects[0])
+                        && !com.intellij.openapi.application.ApplicationManager.getApplication().isWriteActionPending())
+                    """,
+                ) == "true"
+                settledPolls = if (settled) before + 1 else 0
+                settledPolls >= 3
             }
         }
 
