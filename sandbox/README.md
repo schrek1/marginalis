@@ -59,6 +59,13 @@ with the floor IDE (IntelliJ Community from the build) as CI uses it.
   the host's IDEs on 63342+. Build output, IDE config and the Gradle home stay in per-container Docker volumes
   (a new Gradle home starts as a copy of volume `marginalis-gradle`); the test project stays on the host in
   `marginalis-sandbox-<robot port>/project`. Containers on different robot ports run side by side.
+- **One build, many sandboxes:** `MARGINALIS_SANDBOX_DOCKER=1 MARGINALIS_SANDBOX_PREBUILT=<folder> python
+  sandbox.py build` builds the checkout once and leaves its plugins (Marginalis and robot-server) in the folder. A
+  sandbox started with the same `MARGINALIS_SANDBOX_PREBUILT` runs the IDE straight from them, without Gradle: it is
+  up in about 10 s instead of a minute, and parallel sandboxes no longer build at the same time. The stable gate
+  does this on its own in Docker mode.
+- **Ports:** robot 8082 and up, REST robot + 10000 (18082 and up). Both stay below Windows' dynamic port range
+  (49152 and up), where services take ports at random.
 - **Linux / CI without Docker:** install `xvfb` and JDK 25, then `sandbox/run-ide-xvfb.sh` with
   `MARGINALIS_SANDBOX_RUNTIME` and `MARGINALIS_ROBOT_PORT` set.
 
