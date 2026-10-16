@@ -16,6 +16,7 @@ Needs PowerShell 7 (`pwsh`) and the VirtualDesktop module (`Install-Module Virtu
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -34,7 +35,10 @@ ROBOT_PORT = int(os.environ.get("MARGINALIS_ROBOT_PORT", "8082"))
 # desktop, and the platform floor IDE (IntelliJ Community from the build) as CI runs it.
 DOCKER = os.environ.get("MARGINALIS_SANDBOX_DOCKER") == "1"
 CONTAINER = f"marginalis-sandbox-{ROBOT_PORT}"
-IMAGE = "marginalis-sandbox"
+# Tagged by what goes into the image: runs of different checkouts build their own image instead of swapping each
+# other's entrypoint under running containers.
+IMAGE = "marginalis-sandbox:" + hashlib.sha256(b"".join(
+    (HERE / name).read_bytes().replace(b"\r\n", b"\n") for name in ("Dockerfile", "docker-entrypoint.sh"))).hexdigest()[:12]
 BUILD_CONTAINER = "marginalis-sandbox-build"
 # Plugins built once by `sandbox.py build`; a sandbox started with this set runs the IDE without Gradle.
 PREBUILT = Path(os.environ["MARGINALIS_SANDBOX_PREBUILT"]) if os.environ.get("MARGINALIS_SANDBOX_PREBUILT") else None
