@@ -31,6 +31,7 @@ abstract class SandboxScenario(private val scenario: String) {
     private val failures = mutableListOf<String>()
     private var passes = 0
     private var started = 0L
+    private var inCase = false
 
     @BeforeAll
     fun startSandbox() {
@@ -55,16 +56,21 @@ abstract class SandboxScenario(private val scenario: String) {
     fun check(name: String, passed: Boolean, detail: Any? = "") {
         report(if (passed) "PASS  $name" else "FAIL  $name  ($detail)")
         if (passed) passes++ else failures += name
+        // Outside a case (e.g. in @BeforeAll) nothing else would fail the run for it.
+        if (!passed && !inCase) throw AssertionError("$name  ($detail)")
     }
 
     /** Runs one case of the scenario; `name` is the Python scenario's method name, which a crash is reported under. */
     protected fun case(name: String, body: () -> Unit) {
         val failedBefore = failures.size
+        inCase = true
         try {
             body()
         } catch (error: Exception) {
             check(name, false, "${error::class.simpleName}: ${error.message}")
             error.printStackTrace()
+        } finally {
+            inCase = false
         }
         val failed = failures.drop(failedBefore)
         if (failed.isNotEmpty()) throw AssertionError("${failed.size} failed: ${failed.joinToString("; ")}")
