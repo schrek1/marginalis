@@ -76,6 +76,9 @@ EOF
 } > /tmp/idea.vmoptions
 
 display="${MARGINALIS_DISPLAY:-99}"
+# A container started again keeps its /tmp; an Xvfb killed with it leaves its lock there, and the next one refuses
+# the display.
+rm -f "/tmp/.X$display-lock" "/tmp/.X11-unix/X$display"
 Xvfb ":$display" -screen 0 2560x1440x24 -nolisten tcp >/dev/null 2>&1 &
 export DISPLAY=":$display" IDEA_PROPERTIES=/tmp/idea.properties IDEA_VM_OPTIONS=/tmp/idea.vmoptions
 exec "$ide/bin/idea.sh" nosplash /work/runtime/project
