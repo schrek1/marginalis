@@ -13,6 +13,10 @@ fi
 
 export MARGINALIS_SANDBOX_RUNTIME=/work/runtime MARGINALIS_ROBOT_PORT=8082
 plugins=/work/runtime/ide/plugins_runIdeForUiTests
+# A killed IDE leaves its instance lock and socket in the volume; the next IDE then hands its arguments to that
+# dead instance and exits, or waits on its socket. No other IDE ever runs in this container.
+rm -f /work/runtime/ide/config_runIdeForUiTests/.lock /work/runtime/ide/config_runIdeForUiTests/.port \
+      /work/runtime/ide/system_runIdeForUiTests/.lock /work/runtime/ide/system_runIdeForUiTests/.port
 
 if [ "$mode" != prebuilt ]; then
   # Gradle builds off a copy: on a host bind mount it is slow, and the copy keeps its build output between starts.

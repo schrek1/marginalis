@@ -35,6 +35,7 @@ ROBOT_PORT = int(os.environ.get("MARGINALIS_ROBOT_PORT", "8082"))
 DOCKER = os.environ.get("MARGINALIS_SANDBOX_DOCKER") == "1"
 CONTAINER = f"marginalis-sandbox-{ROBOT_PORT}"
 IMAGE = "marginalis-sandbox"
+BUILD_CONTAINER = "marginalis-sandbox-build"
 # Plugins built once by `sandbox.py build`; a sandbox started with this set runs the IDE without Gradle.
 PREBUILT = Path(os.environ["MARGINALIS_SANDBOX_PREBUILT"]) if os.environ.get("MARGINALIS_SANDBOX_PREBUILT") else None
 # Clear of the host's JetBrains IDEs (63342 and up) and of Windows' dynamic port range (49152 and up), where
@@ -114,9 +115,9 @@ def container_volumes(name: str) -> list[str]:
     return [
         "--mount", f"type=volume,source={name}-work,target=/work",
         # Gradle hands its cache locks between processes over loopback, which each container has to itself: one
-        # Gradle home per container, filled once from the shared one so the IDE is not downloaded again.
+        # Gradle home per container, filled once from the build container's, which holds the downloaded IDE.
         "--mount", f"type=volume,source={name}-gradle,target=/root/.gradle",
-        "--mount", "type=volume,source=marginalis-gradle,target=/gradle-seed,readonly",
+        "--mount", f"type=volume,source={BUILD_CONTAINER}-gradle,target=/gradle-seed,readonly",
     ]
 
 
@@ -129,7 +130,7 @@ def build_in_docker(feature_dir: Path, prebuilt: Path) -> None:
         "docker", "run", "--rm", "-e", "MARGINALIS_SANDBOX_MODE=build",
         "--mount", f"type=bind,source={feature_dir},target=/src,readonly",
         "--mount", f"type=bind,source={prebuilt.resolve()},target=/prebuilt",
-        *container_volumes("marginalis-sandbox-build"),
+        *container_volumes(BUILD_CONTAINER),
         IMAGE,
     ], check=True)
     print(f"plugins built into {prebuilt}")
