@@ -85,8 +85,11 @@ def machine_lock():
             break
         except FileExistsError:
             try:
+                judged = MACHINE_LOCK.read_text(encoding="utf-8", errors="replace")
                 if time.time() - MACHINE_LOCK.stat().st_mtime > STALE_LOCK_S:
-                    MACHINE_LOCK.unlink(missing_ok=True)
+                    # Another waiter may have replaced the stale lock with its own since: keep that one.
+                    if MACHINE_LOCK.read_text(encoding="utf-8", errors="replace") == judged:
+                        MACHINE_LOCK.unlink(missing_ok=True)
                     continue
             except FileNotFoundError:
                 continue
