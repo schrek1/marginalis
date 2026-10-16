@@ -44,11 +44,12 @@ object Sandbox {
     val robot = Robot(robotPort)
 
     private const val IMAGE = "marginalis-sandbox"
+    private const val GRADLE_SEED = "marginalis-sandbox-build-gradle"
     private const val CONTAINER_ROBOT_PORT = 8082
     private const val CONTAINER_REST_PORT = 63342
 
-    // Published next to the host's JetBrains IDEs, which hold 63342 and up.
-    private val dockerRestPort = 63390 + robotPort - 8082
+    // Clear of the host's JetBrains IDEs (63342 and up) and of Windows' dynamic port range.
+    private val dockerRestPort = robotPort + 10000
     private val projectInIde: String = if (launch == Launch.DOCKER) "/work/runtime/project" else project.toString().replace('\\', '/')
     private val idePorts = if (launch == Launch.DOCKER) listOf(dockerRestPort) else (63342..63361).toList()
     private val logFile = runtime.resolve("run.log")
@@ -127,9 +128,11 @@ object Sandbox {
             "--mount", "type=bind,source=$project,target=/work/runtime/project",
             // Build output, the IDE's config and the Gradle cache live in the sandbox's own volumes between starts. A
             // cache shared with another running sandbox stalls the build: the Gradle that runs that IDE holds the cache's
-            // journal lock, and Gradle's lock handoff cannot reach a process in another container.
+            // journal lock, and Gradle's lock handoff cannot reach a process in another container. A new sandbox's cache
+            // starts as a copy of the shared seed (docker-entrypoint.sh).
             "--mount", "type=volume,source=$container-work,target=/work",
             "--mount", "type=volume,source=$container-gradle,target=/root/.gradle",
+            "--mount", "type=volume,source=$GRADLE_SEED,target=/gradle-seed,readonly",
             IMAGE,
             check = true,
         )
