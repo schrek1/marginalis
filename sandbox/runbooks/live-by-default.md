@@ -2,7 +2,7 @@
 
 - **Key:** MARG-22 (schrek1/marginalis#22)
 - **Tags:** smoke, regression
-- **Scenario:** `live_by_default.py`
+- **Scenario:** `LiveByDefaultTest`
 
 ## Protects
 
@@ -13,7 +13,7 @@
 
 ## Automated
 
-`py sandbox/scenarios/live_by_default.py`
+`./gradlew uiSandboxTest --tests '*LiveByDefaultTest'`
 
 - without the default a reply does not wake the agent
 - the toolbar switches the project's default on

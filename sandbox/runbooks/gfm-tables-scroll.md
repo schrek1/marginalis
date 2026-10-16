@@ -2,7 +2,7 @@
 
 - **Key:** MARG-19 (schrek1/marginalis#19)
 - **Tags:** smoke, regression
-- **Scenario:** `stable_prs.py` --only tables
+- **Scenario:** `StablePrsTest.tables`
 
 ## Protects
 
@@ -11,7 +11,7 @@
 
 ## Automated
 
-`py sandbox/scenarios/stable_prs.py --only tables`
+`./gradlew uiSandboxTest --tests '*StablePrsTest.tables'`
 
 - the table renders as a table
 - strikethrough renders as `<s>`

@@ -2,7 +2,7 @@
 
 - **Key:** MARG-14 (schrek1/marginalis#14)
 - **Tags:** smoke, regression
-- **Scenario:** `api_reply_rerenders.py`
+- **Scenario:** `ApiReplyRerendersTest`
 
 ## Protects
 
@@ -11,8 +11,8 @@
 
 ## Automated
 
-`py sandbox/scenarios/api_reply_rerenders.py`. These two checks run for each of the four cases (plain,
-after-user-reply, walkthrough-step, margin-tab-step):
+`./gradlew uiSandboxTest --tests '*ApiReplyRerendersTest'`. These two checks run for each of the four cases
+(plain, after-user-reply, walkthrough-step, margin-tab-step):
 
 - the open thread renders the agent's reply
 - the panel grows to fit it

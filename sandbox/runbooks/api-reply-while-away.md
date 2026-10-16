@@ -2,7 +2,7 @@
 
 - **Key:** MARG-50 (schrek1/marginalis#50)
 - **Tags:** regression
-- **Scenario:** `api_reply_while_away.py`
+- **Scenario:** `ApiReplyWhileAwayTest`
 
 ## Protects
 
@@ -13,8 +13,8 @@
 
 ## Automated
 
-`PYTHONPATH=<harness>/sandbox py sandbox/scenarios/api_reply_while_away.py --feature-dir <checkout>`. Each case
-(control-in-view, editor-tab-away, margin-tab-away) runs these checks:
+`./gradlew uiSandboxTest --tests '*ApiReplyWhileAwayTest'`. Each case (control-in-view, editor-tab-away,
+margin-tab-away) runs these checks:
 
 - the agent's long-poll is open, and still open after the reply
 - the open thread renders the agent's reply

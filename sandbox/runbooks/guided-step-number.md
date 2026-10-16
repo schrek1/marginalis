@@ -2,7 +2,7 @@
 
 - **Key:** MARG-26 (schrek1/marginalis#26)
 - **Tags:** regression
-- **Scenario:** `guided_step_labels.py`
+- **Scenario:** `GuidedStepLabelsTest`
 
 ## Protects
 
@@ -10,7 +10,7 @@
 
 ## Automated
 
-`py sandbox/scenarios/guided_step_labels.py`
+`./gradlew uiSandboxTest --tests '*GuidedStepLabelsTest'`
 
 - both walkthroughs have their own section
 - round 2 steps show just their number

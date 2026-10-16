@@ -2,7 +2,7 @@
 
 - **Key:** MARG-27 (schrek1/marginalis#27)
 - **Tags:** smoke, regression
-- **Scenario:** `project_tab_order.py`
+- **Scenario:** `ProjectTabOrderTest`
 
 ## Protects
 
@@ -13,7 +13,7 @@
 
 ## Automated
 
-`py sandbox/scenarios/project_tab_order.py`
+`./gradlew uiSandboxTest --tests '*ProjectTabOrderTest'`
 
 - by default the tab lists the oldest thread first, and a reply does not move it
 - project-level steps posted as 3, 1, 2 read 1, 2, 3

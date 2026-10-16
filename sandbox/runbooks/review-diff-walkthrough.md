@@ -2,7 +2,7 @@
 
 - **Key:** MARG-17 (schrek1/marginalis#17)
 - **Tags:** regression
-- **Scenario:** `review_diff_walkthrough.py`
+- **Scenario:** `ReviewDiffWalkthroughTest`
 
 ## Protects
 
@@ -16,11 +16,9 @@
 
 ## Automated
 
-`py sandbox/scenarios/review_diff_walkthrough.py` (until the branch carries the in-repo harness:
-`PYTHONPATH=D:/OSOBNI/programming/marginalis-MARG-29/sandbox py sandbox/scenarios/review_diff_walkthrough.py
---feature-dir D:/OSOBNI/programming/marginalis-MARG-17`).
+`./gradlew uiSandboxTest --tests '*ReviewDiffWalkthroughTest'`
 
-The sandbox has no GitHub/GitLab review, so `review_diff_ui.py` builds the same kind of diff from the platform:
+The sandbox has no GitHub/GitLab review, so `ReviewDiffUi.kt` builds the same kind of diff from the platform:
 a `MutableDiffRequestProcessor` (the processor both review diffs run on) listing `src/review_target.py` and
 `src/greeting.py` as revision copies, in an editor tab, switching files asynchronously. The two `harness:` checks
 fail, and nothing else runs, when that diff cannot be built — the scenario never passes on a different diff.
