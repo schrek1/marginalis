@@ -206,11 +206,18 @@ val sandboxJobs = if (System.getenv("MARGINALIS_ROBOT_PORT") != null) 1
 val sandboxRunLock: java.nio.file.Path = layout.projectDirectory.asFile.toPath().parent.resolve("marginalis-sandbox-runs").resolve(".lock")
 val sandboxRunLockOwner = ProcessHandle.current().pid()
 
-fun sandboxRunLockIsStale(): Boolean {
-    val owner = runCatching { Files.readString(sandboxRunLock).lineSequence().first { it.startsWith("pid=") }.removePrefix("pid=").trim().toLong() }.getOrNull()
+fun sandboxRunLockText(): String? = runCatching { Files.readString(sandboxRunLock) }.getOrNull()
+
+fun sandboxRunLockIsStale(lockText: String): Boolean {
+    val owner = lockText.lineSequence().firstOrNull { it.startsWith("pid=") }?.removePrefix("pid=")?.trim()?.toLongOrNull()
     val age = runCatching { Duration.between(Files.getLastModifiedTime(sandboxRunLock).toInstant(), Instant.now()) }.getOrNull() ?: return false
     val alive = owner?.let { pid -> ProcessHandle.of(pid).map { it.isAlive }.orElse(false) } ?: false
     return age > Duration.ofHours(2) && !alive
+}
+
+// Another waiter may have replaced the judged lock with its own meanwhile; that one stays.
+fun deleteSandboxRunLockIfStill(judgedText: String) {
+    if (sandboxRunLockText() == judgedText) Files.deleteIfExists(sandboxRunLock)
 }
 
 fun releaseSandboxRunLock() {
@@ -236,9 +243,10 @@ val sandboxRunLocked by tasks.registering {
                 Files.writeString(sandboxRunLock, "pid=$sandboxRunLockOwner\nstarted=${Instant.now()}\n", StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)
                 break
             } catch (taken: FileAlreadyExistsException) {
-                if (sandboxRunLockIsStale()) {
+                val judgedText = sandboxRunLockText() ?: continue
+                if (sandboxRunLockIsStale(judgedText)) {
                     logger.lifecycle("taking the stale sandbox run lock $sandboxRunLock")
-                    Files.deleteIfExists(sandboxRunLock)
+                    deleteSandboxRunLockIfStill(judgedText)
                     continue
                 }
                 val holder = runCatching { Files.readString(sandboxRunLock).trim().replace('\n', ' ') }.getOrDefault("?")
