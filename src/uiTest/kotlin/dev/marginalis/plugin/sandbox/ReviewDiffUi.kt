@@ -5,8 +5,8 @@ import dev.marginalis.plugin.sandbox.SandboxUi.js
 import dev.marginalis.plugin.sandbox.SandboxUi.lit
 
 /**
- * Review-diff steps (a port of `sandbox/review_diff_ui.py`, same JavaScript): a diff driven by the platform's
- * `MutableDiffRequestProcessor`, the processor behind the GitHub and GitLab review diffs.
+ * Review-diff steps: a diff driven by the platform's `MutableDiffRequestProcessor`, the processor behind the GitHub
+ * and GitLab review diffs.
  *
  * The sandbox has no GitHub/GitLab review to open, so [openReviewDiffWithFiles] builds the same kind of diff from the
  * platform alone: the processor's `Navigator` lists several project files, each shown as a revision copy (the right

@@ -200,9 +200,9 @@ val sandboxPrebuiltDir = layout.buildDirectory.dir("sandbox-prebuilt")
 val sandboxJobs = if (System.getenv("MARGINALIS_ROBOT_PORT") != null) 1
     else providers.gradleProperty("marginalis.sandbox.jobs").orElse("6").get().toInt()
 
-// One sandbox run at a time on the machine, sandbox/run_all.py --jobs included: two runs side by side saturate the
-// CPU and their scenarios time out, and every Docker run builds in the same build container. The lock holds the
-// owner's pid and start time (the format run_all.py writes too). It is stale once that pid is gone, or, when the
+// One sandbox run at a time on the machine, `sandbox/sandbox.py locked` experiments included: two runs side by side
+// saturate the CPU and their scenarios time out, and every Docker run builds in the same build container. The lock
+// holds the owner's pid and start time (the format sandbox/sandbox.py writes too). It is stale once that pid is gone, or, when the
 // owner cannot be read, after 2 h.
 val sandboxRunLock: java.nio.file.Path = layout.projectDirectory.asFile.toPath().parent.resolve("marginalis-sandbox-runs").resolve(".lock")
 val sandboxRunLockOwner = ProcessHandle.current().pid()

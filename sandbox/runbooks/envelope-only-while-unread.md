@@ -2,7 +2,7 @@
 
 - **Key:** MARG-36 (schrek1/marginalis#36)
 - **Tags:** regression
-- **Scenario:** `envelope_only_while_unread.py`
+- **Scenario:** `EnvelopeOnlyWhileUnreadTest`
 
 ## Protects
 
@@ -17,8 +17,7 @@
 
 ## Automated
 
-`py sandbox/scenarios/envelope_only_while_unread.py` (from a checkout without the harness:
-`PYTHONPATH=<harness>/sandbox py sandbox/scenarios/envelope_only_while_unread.py --feature-dir <checkout>`)
+`./gradlew uiSandboxTest --tests '*EnvelopeOnlyWhileUnreadTest'`
 
 Four line threads in `src/review_target.py`: A an agent reply you have not read, B one you read but did not
 answer, C one you answered, D an FYI you read. Project A and Project B repeat A and B in the Margin tab.

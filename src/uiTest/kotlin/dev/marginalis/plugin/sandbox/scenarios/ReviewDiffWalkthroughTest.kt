@@ -15,8 +15,7 @@ import org.junit.jupiter.api.Test
 import kotlin.io.path.readText
 
 /**
- * A guided walkthrough followed inside a pull/merge request review diff stays in that diff (MARG-17); a port of
- * `sandbox/scenarios/review_diff_walkthrough.py`.
+ * A guided walkthrough followed inside a pull/merge request review diff stays in that diff (MARG-17).
  *
  * The review diff is the platform's `MutableDiffRequestProcessor` over two project files, both shown as revision
  * copies (the review branch is not checked out), built by [ReviewDiffUi]. Each case opens a fresh diff, opens its
@@ -188,7 +187,7 @@ class ReviewDiffWalkthroughTest : SandboxScenario("review_diff_walkthrough") {
 
         fun lines(vararg lines: String) = lines.joinToString("\n", postfix = "\n")
 
-        // A Windows checkout carries CRLF; the diff's documents hold LF, as Python's read_text gives it.
+        // A Windows checkout carries CRLF; the diff's documents hold LF.
         fun templateText(file: String) = Sandbox.harness.resolve("project-template").resolve(file).readText().replace("\r\n", "\n")
     }
 }

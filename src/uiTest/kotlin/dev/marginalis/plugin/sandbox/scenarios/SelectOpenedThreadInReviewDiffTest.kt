@@ -15,8 +15,7 @@ import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
 
 /**
- * Select Opened Thread in the tool window header works with a review diff in front (MARG-60); a port of
- * `sandbox/scenarios/select_opened_thread_in_review_diff.py`.
+ * Select Opened Thread in the tool window header works with a review diff in front (MARG-60).
  *
  * The review diff is the one [ReviewDiffWalkthroughTest] builds: two project files shown as revision copies. The caret
  * is put on a line of the review's text, and the button is read as the user would meet it: enabled or greyed out,

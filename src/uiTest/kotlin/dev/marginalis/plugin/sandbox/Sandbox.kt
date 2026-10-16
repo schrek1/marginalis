@@ -45,7 +45,8 @@ object Sandbox {
     private const val CONTAINER_REST_PORT = 63342
     private const val CONTAINER_PROJECT = "/work/runtime/project"
 
-    // Below 8100 the Python harness runs its gates; the claim stops at the first port docker can create and start.
+    // Below 8100 the manual sandboxes of sandbox.py run (8082 by default); the claim stops at the first port docker can
+    // create and start.
     private val claimablePorts = 8100..8199
 
     private val launch = Launch.valueOf((System.getenv("MARGINALIS_SANDBOX_LAUNCH") ?: "docker").uppercase())

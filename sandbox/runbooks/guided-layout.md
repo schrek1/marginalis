@@ -2,7 +2,7 @@
 
 - **Key:** MARG-10 (schrek1/marginalis#10), MARG-47 (schrek1/marginalis#47)
 - **Tags:** regression
-- **Scenario:** `guided_layout.py`
+- **Scenario:** `GuidedLayoutTest`
 
 ## Protects
 
@@ -16,8 +16,8 @@
 
 ## Automated
 
-`py sandbox/scenarios/guided_layout.py`, on a 33-step walkthrough, an 18-step one that hops between files, and a
-9-step one that opens with three project-level steps and comes back to project level after file steps:
+`./gradlew uiSandboxTest --tests '*GuidedLayoutTest'`, on a 33-step walkthrough, an 18-step one that hops between
+files, and a 9-step one that opens with three project-level steps and comes back to project level after file steps:
 
 - by default the layout is By step number, and the steps read in step order
 - By folder groups the steps under folders

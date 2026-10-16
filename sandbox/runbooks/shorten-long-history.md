@@ -2,7 +2,7 @@
 
 - **Key:** MARG-12 (schrek1/marginalis#12)
 - **Tags:** regression
-- **Scenario:** `shorten_long_history.py`
+- **Scenario:** `ShortenLongHistoryTest`
 
 ## Protects
 
@@ -16,7 +16,7 @@
 
 ## Automated
 
-`py sandbox/scenarios/shorten_long_history.py`. The agent posts a seven-message thread; the checks:
+`./gradlew uiSandboxTest --tests '*ShortenLongHistoryTest'`. The agent posts a seven-message thread; the checks:
 
 - an unread long thread shows every message and hides nothing
 - reading does not hide messages under the reader; the still-open thread offers to shorten

@@ -12,8 +12,8 @@ import kotlin.io.path.readText
 import kotlin.math.abs
 
 /**
- * The fork's PRs #1–#4, all merged into schreko_stable; a port of `sandbox/scenarios/stable_prs.py`. Python's
- * `--only` is Gradle's `--tests` here, e.g. `--tests '*StablePrsTest.zoom'`.
+ * The fork's PRs #1–#4, all merged into schreko_stable. One case runs on its own with
+ * `--tests '*StablePrsTest.zoom'`.
  */
 class StablePrsTest : SandboxScenario("stable_prs") {
 

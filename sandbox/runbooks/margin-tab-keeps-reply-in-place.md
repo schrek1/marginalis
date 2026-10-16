@@ -2,7 +2,7 @@
 
 - **Key:** MARG-45 (schrek1/marginalis#45)
 - **Tags:** regression
-- **Scenario:** `margin_tab_keeps_reply_in_place.py`
+- **Scenario:** `MarginTabKeepsReplyInPlaceTest`
 
 ## Protects
 
@@ -15,7 +15,7 @@
 
 ## Automated
 
-`py sandbox/scenarios/margin_tab_keeps_reply_in_place.py`
+`./gradlew uiSandboxTest --tests '*MarginTabKeepsReplyInPlaceTest'`
 
 - the threads above and in view are expanded
 - 1-reading: the message made the thread above taller

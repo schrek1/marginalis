@@ -2,7 +2,7 @@
 
 - **Key:** MARG-24 (schrek1/marginalis#24)
 - **Tags:** smoke, regression
-- **Scenario:** `toolwindow_step_navigation.py`
+- **Scenario:** `ToolwindowStepNavigationTest`
 
 ## Protects
 
@@ -12,7 +12,7 @@
 
 ## Automated
 
-`py sandbox/scenarios/toolwindow_step_navigation.py` (a review-sized walkthrough from `fixtures/deep_walkthrough`)
+`./gradlew uiSandboxTest --tests '*ToolwindowStepNavigationTest'` (the review-sized deep walkthrough fixture)
 
 - Next keeps a selection after every press
 - Next walks up the step numbers without jumping back

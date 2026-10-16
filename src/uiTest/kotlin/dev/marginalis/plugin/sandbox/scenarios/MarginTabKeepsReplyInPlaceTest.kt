@@ -10,8 +10,7 @@ import org.junit.jupiter.api.Test
 import kotlin.math.abs
 
 /**
- * The Margin tab keeps what you look at in place while other threads change (MARG-45); a port of
- * `sandbox/scenarios/margin_tab_keeps_reply_in_place.py`.
+ * The Margin tab keeps what you look at in place while other threads change (MARG-45).
  *
  * Three tall project threads; the agent posts a long message into the expanded thread above the one being looked at.
  * The card being written in (a reply draft, then a new project thread's draft) must keep its on-screen position, its

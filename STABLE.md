@@ -35,3 +35,4 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-63 | Headless tests for the sandbox checks: 68 move out of the UI suite, plus twins of the UI-only ones (part 1) | `feat/MARG-63-headless` | — | — | `65c8920` |
 | MARG-90 | Sandbox scenarios pass reliably side by side: the test project lives on the container's disk, starts wait until the IDE settles, one run per machine | `chore/MARG-90-suite-stability` | — | — | `ccaf1c7` |
 | MARG-63 | The sandbox scenarios as a Kotlin suite run by Gradle, as stable as the Python one, which it will replace (part 2) | `feat/MARG-63-kotlin-suites` | — | — | `8117435` |
+| MARG-63 | The stable gate runs the Kotlin suite; the Python scenarios retire, sandbox.py stays for demos (part 3) | `chore/MARG-63-gate-on-kotlin` | — | — | `0a5361e` |

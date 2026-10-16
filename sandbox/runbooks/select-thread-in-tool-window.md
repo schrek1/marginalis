@@ -2,7 +2,7 @@
 
 - **Key:** MARG-11 (schrek1/marginalis#11)
 - **Tags:** regression
-- **Scenario:** `select_thread_in_tool_window.py`
+- **Scenario:** `SelectThreadInToolWindowTest`
 
 ## Protects
 
@@ -14,7 +14,7 @@
 
 ## Automated
 
-`py sandbox/scenarios/select_thread_in_tool_window.py`. On a 33-step walkthrough plus two plain threads:
+`./gradlew uiSandboxTest --tests '*SelectThreadInToolWindowTest'`. On a 33-step walkthrough plus two plain threads:
 
 - Select in Marginalis selects step 27, in its Guided section
 - a thread outside any walkthrough is selected in Open

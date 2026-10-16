@@ -2,7 +2,7 @@
 
 - **Key:** MARG-21 (schrek1/marginalis#21)
 - **Tags:** regression
-- **Scenario:** `stable_prs.py` --only zoom
+- **Scenario:** `StablePrsTest.zoom`
 
 ## Protects
 
@@ -11,7 +11,7 @@
 
 ## Automated
 
-`py sandbox/scenarios/stable_prs.py --only zoom`
+`./gradlew uiSandboxTest --tests '*StablePrsTest.zoom'`
 
 - the zoom happened
 - the line under the mouse stays put

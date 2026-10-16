@@ -2,7 +2,7 @@
 
 - **Key:** MARG-25 (schrek1/marginalis#25)
 - **Tags:** regression
-- **Scenario:** `section_expand_collapse.py`
+- **Scenario:** `SectionExpandCollapseTest`
 
 ## Protects
 
@@ -13,7 +13,7 @@
 
 ## Automated
 
-`py sandbox/scenarios/section_expand_collapse.py` (the deep walkthrough fixture)
+`./gradlew uiSandboxTest --tests '*SectionExpandCollapseTest'` (the deep walkthrough fixture)
 
 - Collapse folds one level further out with each press, up to the section
 - Collapse up to the section leaves the other sections open

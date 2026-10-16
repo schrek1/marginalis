@@ -2,7 +2,7 @@
 
 - **Key:** MARG-23 (schrek1/marginalis#23)
 - **Tags:** regression
-- **Scenario:** `margin_text_spacing.py`
+- **Scenario:** `MarginTextSpacingTest`
 
 ## Protects
 
@@ -11,7 +11,7 @@
 
 ## Automated
 
-`py sandbox/scenarios/margin_text_spacing.py`
+`./gradlew uiSandboxTest --tests '*MarginTextSpacingTest'`
 
 - a single Enter starts a new line
 - two trailing spaces still give exactly one break (guard)

@@ -2,7 +2,7 @@
 
 - **Key:** MARG-48 (schrek1/marginalis#48)
 - **Tags:** regression
-- **Scenario:** `no_empty_margin_tab.py`
+- **Scenario:** `NoEmptyMarginTabTest`
 
 ## Protects
 
@@ -13,7 +13,7 @@
 
 ## Automated
 
-`py sandbox/scenarios/no_empty_margin_tab.py`
+`./gradlew uiSandboxTest --tests '*NoEmptyMarginTabTest'`
 
 - a fresh project without project threads opens without the Margin tab
 - the agent's first project thread opens the Margin tab

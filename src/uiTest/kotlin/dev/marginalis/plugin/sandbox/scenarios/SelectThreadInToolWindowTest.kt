@@ -13,8 +13,7 @@ import org.junit.jupiter.api.Test
 
 /**
  * Select a thread in the tool window (fork MARG-11): "Select in Marginalis" in a thread's header, and "Select Opened
- * Thread" in the tool window header, both land on the thread's node, in the section that lists it; a port of
- * `sandbox/scenarios/select_thread_in_tool_window.py`.
+ * Thread" in the tool window header, both land on the thread's node, in the section that lists it.
  */
 class SelectThreadInToolWindowTest : SandboxScenario("select_thread_in_tool_window") {
 

@@ -2,7 +2,7 @@
 
 - **Key:** MARG-60 (schrek1/marginalis#60)
 - **Tags:** regression
-- **Scenario:** `select_opened_thread_in_review_diff.py`
+- **Scenario:** `SelectOpenedThreadInReviewDiffTest`
 
 ## Protects
 
@@ -12,8 +12,7 @@
 
 ## Automated
 
-`py sandbox/scenarios/select_opened_thread_in_review_diff.py` (from a checkout without the harness:
-`PYTHONPATH=<harness>/sandbox py sandbox/scenarios/select_opened_thread_in_review_diff.py --feature-dir <checkout>`)
+`./gradlew uiSandboxTest --tests '*SelectOpenedThreadInReviewDiffTest'`
 
 A review diff of `review_target.py` whose copy moves every line down by three, and one step on `total`:
 

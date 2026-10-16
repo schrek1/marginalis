@@ -9,8 +9,7 @@ import dev.marginalis.plugin.sandbox.fixtures.postWalkthrough
 import org.junit.jupiter.api.Test
 
 /**
- * Two walkthroughs open at once: every step shows just `(n/total)`, the section title carries the label; a port of
- * `sandbox/scenarios/guided_step_labels.py`.
+ * Two walkthroughs open at once: every step shows just `(n/total)`, the section title carries the label.
  */
 class GuidedStepLabelsTest : SandboxScenario("guided_step_labels") {
 

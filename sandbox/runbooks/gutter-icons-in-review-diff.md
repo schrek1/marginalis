@@ -2,7 +2,7 @@
 
 - **Key:** MARG-20 (schrek1/marginalis#20)
 - **Tags:** smoke, regression
-- **Scenario:** `stable_prs.py` --only review_diff_icons
+- **Scenario:** `StablePrsTest.reviewDiffIcons`
 
 ## Protects
 
@@ -13,7 +13,7 @@
 
 ## Automated
 
-`py sandbox/scenarios/stable_prs.py --only review_diff_icons`
+`./gradlew uiSandboxTest --tests '*StablePrsTest.reviewDiffIcons'`
 
 - icons sit on the threads' lines in the PR text
 - an added file's one-sided diff shows icons too

@@ -2,7 +2,7 @@
 
 - **Key:** MARG-18 (schrek1/marginalis#18)
 - **Tags:** smoke, regression
-- **Scenario:** `stable_prs.py` --only stay_in_diff
+- **Scenario:** `StablePrsTest.stayInDiff`
 
 ## Protects
 
@@ -11,13 +11,14 @@
 
 ## Automated
 
-`py sandbox/scenarios/stable_prs.py --only stay_in_diff`
+`./gradlew uiSandboxTest --tests '*StablePrsTest.stayInDiff'`
 
 - next step in a local diff keeps the diff in front
 - the next step opens in that diff
 
-Known gap, not in the default run: `--only resolve_in_review_diff` (Resolve in the diff of a pull request that
-is not checked out).
+Known gap, not in the default run: `StablePrsTest.resolveInReviewDiff` (Resolve in the diff of a pull request
+that is not checked out), run with
+`MARGINALIS_SANDBOX_KNOWN_GAPS=true ./gradlew uiSandboxTest --tests '*StablePrsTest.resolveInReviewDiff'`.
 
 ## Manual
 

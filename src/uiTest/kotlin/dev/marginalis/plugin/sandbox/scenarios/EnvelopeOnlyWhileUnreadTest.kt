@@ -9,8 +9,7 @@ import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
 
 /**
- * The ✉ envelope shows only while something in the thread is unread (MARG-36); a port of
- * `sandbox/scenarios/envelope_only_while_unread.py`.
+ * The ✉ envelope shows only while something in the thread is unread (MARG-36).
  *
  * Four line threads in one file cover every case: A an agent reply the user has not read, B one the user read but did
  * not answer, C one the user answered (the agent's move), D an FYI the user read. Two project threads repeat A and B
