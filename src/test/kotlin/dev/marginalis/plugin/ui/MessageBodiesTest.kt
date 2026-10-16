@@ -4,6 +4,8 @@ import com.intellij.openapi.fileTypes.PlainTextFileType
 import dev.marginalis.plugin.testing.Browser
 import dev.marginalis.plugin.testing.RenderedBody
 import dev.marginalis.plugin.transport.HttpContractTestCase
+import javax.swing.JEditorPane
+import javax.swing.ScrollPaneConstants
 import javax.swing.text.DefaultCaret
 import javax.swing.text.html.HTML
 
@@ -189,6 +191,27 @@ class MessageBodiesTest : HttpContractTestCase() {
         assertEquals(listOf("Alphablank one", "Bravoblank two", "", "Charlieblank three"), body.blocks())
     }
 
+    fun testAWideTableBetweenProseIsATableOfItsOwn() {
+        val body = rendered(WIDE_TABLE_BETWEEN_PROSE)
+
+        assertEquals(listOf("prose", "table", "prose"), body.kinds())
+    }
+
+    fun testStrikethroughAfterAWideTableIsStillStruckThrough() {
+        val body = rendered(WIDE_TABLE_BETWEEN_PROSE)
+
+        assertTrue(body.markedAs("struck out").contains("s"))
+    }
+
+    fun testAWideTableIsLaidOutWiderThanThePanelAndMayScrollSideways() {
+        val table = rendered(WIDE_TABLE_BETWEEN_PROSE).tables.single()
+        val pane = table.viewport.view as JEditorPane
+
+        assertFalse(table.horizontalScrollBarPolicy == ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER)
+        assertFalse(pane.scrollableTracksViewportWidth)
+        assertTrue("${pane.preferredSize.width} vs ${table.preferredSize.width}", pane.preferredSize.width > table.preferredSize.width)
+    }
+
     fun testATableIsDrawnAsATableOfCells() {
         val body = rendered("| Name | Age |\n|------|-----|\n| Ann  | 3   |")
 
@@ -278,5 +301,10 @@ class MessageBodiesTest : HttpContractTestCase() {
 
     private companion object {
         val LINE_BREAK = Regex("<br")
+        val WIDE_TABLE_BETWEEN_PROSE = "Before the table, prose that should keep wrapping to the panel.\n\n" +
+            (1..24).joinToString(" | ", "| ", " |\n") { "column $it" } +
+            "|" + "---|".repeat(24) + "\n" +
+            (1..24).joinToString(" | ", "| ", " |\n") { "value $it" } +
+            "\nAnd ~~struck out~~ text after it."
     }
 }

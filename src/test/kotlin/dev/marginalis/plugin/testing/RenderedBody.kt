@@ -26,6 +26,8 @@ class RenderedBody private constructor(private val parts: List<JComponent>) {
 
     val codeBlocks: List<EditorTextField> get() = parts.filterIsInstance<EditorTextField>()
 
+    val tables: List<JScrollPane> get() = parts.filterIsInstance<JScrollPane>()
+
     fun kinds(): List<String> = parts.map {
         when (it) {
             is JScrollPane -> "table"
