@@ -368,6 +368,16 @@ java {
     targetCompatibility = JavaVersion.VERSION_21
 }
 
+kover {
+    currentProject {
+        instrumentation {
+            // Kover runs every Test task for its reports, and `check` verifies them: without this, `build` would
+            // start IDEs (the sandbox suite builds a Docker image and takes the machine lock). They are run by name.
+            disabledForTestTasks.addAll("uiTest", "uiSandboxTest")
+        }
+    }
+}
+
 kotlin {
     compilerOptions {
         jvmTarget = JvmTarget.JVM_21
