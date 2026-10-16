@@ -38,6 +38,19 @@ class RenderedBody private constructor(private val parts: List<JComponent>) {
 
     fun text(): String = prose.joinToString("\n") { textOf(it) }
 
+    fun html(): String = prose.joinToString("\n") { it.text }
+
+    /** The text of each block of the prose in order, an empty line as an empty block. */
+    fun blocks(): List<String> = prose.flatMap { pane ->
+        val document = pane.document as HTMLDocument
+        val body = generateSequence<Element>(document.defaultRootElement) { element ->
+            (0 until element.elementCount).map(element::getElement).firstOrNull { it.name == "body" }
+        }.last()
+        (0 until body.elementCount).map(body::getElement).map { block ->
+            document.getText(block.startOffset, block.endOffset - block.startOffset).trim()
+        }
+    }
+
     private fun textOf(pane: JEditorPane): String = pane.document.getText(0, pane.document.length).trim()
 
     fun fontOf(words: String): Font {

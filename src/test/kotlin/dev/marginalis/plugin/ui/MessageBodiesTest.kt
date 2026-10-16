@@ -171,6 +171,24 @@ class MessageBodiesTest : HttpContractTestCase() {
         assertEquals(listOf("Line one", "Line two"), body.lines())
     }
 
+    fun testASingleEnterIsOneLineBreak() {
+        val body = rendered("Alphaline first\nBravoline second")
+
+        assertEquals(1, LINE_BREAK.findAll(body.html()).count())
+    }
+
+    fun testTwoTrailingSpacesStillGiveExactlyOneLineBreak() {
+        val body = rendered("Alphaline first  \nBravoline second")
+
+        assertEquals(1, LINE_BREAK.findAll(body.html()).count())
+    }
+
+    fun testASecondBlankLineAddsAnEmptyLine() {
+        val body = rendered("Alphablank one\n\nBravoblank two\n\n\nCharlieblank three")
+
+        assertEquals(listOf("Alphablank one", "Bravoblank two", "", "Charlieblank three"), body.blocks())
+    }
+
     fun testATableIsDrawnAsATableOfCells() {
         val body = rendered("| Name | Age |\n|------|-----|\n| Ann  | 3   |")
 
@@ -256,5 +274,9 @@ class MessageBodiesTest : HttpContractTestCase() {
 
         assertEquals("Copy this sentence.", body.selection("Copy this")?.trim())
         assertEquals(mapOf("Copy" to true, "Select All" to true), body.contextMenu("Copy this"))
+    }
+
+    private companion object {
+        val LINE_BREAK = Regex("<br")
     }
 }
