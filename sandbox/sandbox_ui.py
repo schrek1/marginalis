@@ -105,11 +105,12 @@ def show_tool_window() -> None:
     """)
 
 
-def press_tool_window_action(text: str) -> None:
-    """Presses a button in the Marginalis tool window's header. The new UI paints those only on hover, so they are
-    absent from the robot's hierarchy, and both `click()` and `tryToExecute` silently skip them. The button's own
-    action runs instead, with the button's data context."""
-    escaped = json.dumps(text)
+def press_tool_window_action(*names: str) -> None:
+    """Presses a button in the Marginalis tool window's header, the first one carrying any of `names` (builds name
+    some buttons differently). The new UI paints those only on hover, so they are absent from the robot's hierarchy,
+    and both `click()` and `tryToExecute` silently skip them. The button's own action runs instead, with the
+    button's data context."""
+    escaped = json.dumps(list(names))
     # Right after a start the header is built a while after the tool window shows; with several sandboxes busy at
     # once that took longer than 15 s.
     for attempt in range(HEADER_ATTEMPTS):
@@ -124,6 +125,7 @@ def press_tool_window_action(text: str) -> None:
 
 def _press_tool_window_action(escaped: str) -> None:
     js(_FIND + f"""
+        var wanted = {escaped};
         var window = com.intellij.openapi.wm.ToolWindowManager.getInstance(project).getToolWindow('Marginalis');
         // A restart can restore the tool window hidden; its header is built only once it shows.
         if (!window.isVisible()) window.show(null);
@@ -134,10 +136,11 @@ def _press_tool_window_action(escaped: str) -> None:
         var texts = [];
         var button = find(root, function (c) {{
             if (!(c instanceof com.intellij.openapi.actionSystem.impl.ActionButton)) return false;
-            texts.push(String(c.getPresentation().getText()));
-            return c.getPresentation().getText() == {escaped};
+            var text = String(c.getPresentation().getText());
+            texts.push(text);
+            return wanted.indexOf(text) >= 0;
         }});
-        if (button == null) throw 'no tool window button ' + {escaped} + ' among [' + texts.join(', ') + ']';
+        if (button == null) throw 'no tool window button ' + wanted.join(' / ') + ' among [' + texts.join(', ') + ']';
         var action = button.getAction();
         var event = com.intellij.openapi.actionSystem.AnActionEvent.createEvent(
             action, com.intellij.ide.DataManager.getInstance().getDataContext(button), button.getPresentation().clone(),

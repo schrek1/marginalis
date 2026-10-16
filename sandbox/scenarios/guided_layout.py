@@ -13,7 +13,6 @@ import traceback
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import robot
 import sandbox
 import sandbox_ui as ui
 from fixtures import deep_walkthrough as fixture
@@ -55,14 +54,7 @@ def top_level_steps(shape: list[dict]) -> list[int]:
 
 
 def press(*names: str) -> None:
-    for name in names:
-        try:
-            ui.press_tool_window_action(name)
-            return
-        except robot.RobotError as error:
-            if "no tool window button" not in str(error):
-                raise
-    raise RuntimeError(f"none of {names} is in the tool window header")
+    ui.press_tool_window_action(*names)
 
 
 class Scenarios:

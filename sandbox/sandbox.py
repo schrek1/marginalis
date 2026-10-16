@@ -35,8 +35,12 @@ ROBOT_PORT = int(os.environ.get("MARGINALIS_ROBOT_PORT", "8082"))
 DOCKER = os.environ.get("MARGINALIS_SANDBOX_DOCKER") == "1"
 CONTAINER = f"marginalis-sandbox-{ROBOT_PORT}"
 IMAGE = "marginalis-sandbox"
-# Published next to the host's JetBrains IDEs, which hold 63342 and up.
-BUILTIN_PORT = 63390 + ROBOT_PORT - 8082 if DOCKER else None
+BUILD_CONTAINER = "marginalis-sandbox-build"
+# Plugins built once by `sandbox.py build`; a sandbox started with this set runs the IDE without Gradle.
+PREBUILT = Path(os.environ["MARGINALIS_SANDBOX_PREBUILT"]) if os.environ.get("MARGINALIS_SANDBOX_PREBUILT") else None
+# Clear of the host's JetBrains IDEs (63342 and up) and of Windows' dynamic port range (49152 and up), where
+# services hold ports at random.
+BUILTIN_PORT = ROBOT_PORT + 10000 if DOCKER else None
 # Next to the checkout, so every worktree of one clone shares one sandbox.
 RUNTIME = Path(os.environ.get("MARGINALIS_SANDBOX_RUNTIME",
                               REPO.parent / (CONTAINER if DOCKER else "marginalis-sandbox-runtime")))
@@ -107,21 +111,45 @@ def fresh_project() -> None:
     shutil.copytree(HERE / "project-template", PROJECT)
 
 
+def container_volumes(name: str) -> list[str]:
+    return [
+        "--mount", f"type=volume,source={name}-work,target=/work",
+        # Gradle hands its cache locks between processes over loopback, which each container has to itself: one
+        # Gradle home per container, filled once from the build container's, which holds the downloaded IDE.
+        "--mount", f"type=volume,source={name}-gradle,target=/root/.gradle",
+        "--mount", f"type=volume,source={BUILD_CONTAINER}-gradle,target=/gradle-seed,readonly",
+    ]
+
+
+def build_in_docker(feature_dir: Path, prebuilt: Path) -> None:
+    """Builds the checkout once and leaves its plugins in `prebuilt`, for sandboxes started with
+    MARGINALIS_SANDBOX_PREBUILT pointing there."""
+    subprocess.run(["docker", "build", "-q", "-t", IMAGE, str(HERE)], check=True, stdout=subprocess.DEVNULL)
+    prebuilt.mkdir(parents=True, exist_ok=True)
+    subprocess.run([
+        "docker", "run", "--rm", "-e", "MARGINALIS_SANDBOX_MODE=build",
+        "--mount", f"type=bind,source={feature_dir},target=/src,readonly",
+        "--mount", f"type=bind,source={prebuilt.resolve()},target=/prebuilt",
+        *container_volumes(BUILD_CONTAINER),
+        IMAGE,
+    ], check=True)
+    print(f"plugins built into {prebuilt}")
+
+
 def start_in_docker(feature_dir: Path) -> subprocess.Popen:
     """Builds the image (a no-op once cached) and runs the container; the returned process follows its log and
     ends with it. The build output, the sandbox IDE's config and the Gradle cache live in volumes between starts."""
     subprocess.run(["docker", "build", "-q", "-t", IMAGE, str(HERE)], check=True, stdout=subprocess.DEVNULL)
     subprocess.run(["docker", "rm", "-f", CONTAINER], capture_output=True)
+    source = (["-e", "MARGINALIS_SANDBOX_MODE=prebuilt",
+               "--mount", f"type=bind,source={PREBUILT.resolve()},target=/prebuilt,readonly"] if PREBUILT else
+              ["--mount", f"type=bind,source={feature_dir},target=/src,readonly"])
     subprocess.run([
         "docker", "run", "-d", "--name", CONTAINER,
         "-p", f"127.0.0.1:{ROBOT_PORT}:8082", "-p", f"127.0.0.1:{BUILTIN_PORT}:63342",
-        "--mount", f"type=bind,source={feature_dir},target=/src,readonly",
+        *source,
         "--mount", f"type=bind,source={PROJECT.resolve()},target=/work/runtime/project",
-        "--mount", f"type=volume,source={CONTAINER}-work,target=/work",
-        # Gradle hands its cache locks between processes over loopback, which each container has to itself: one
-        # Gradle home per container, filled once from the shared one so the IDE is not downloaded again.
-        "--mount", f"type=volume,source={CONTAINER}-gradle,target=/root/.gradle",
-        "--mount", "type=volume,source=marginalis-gradle,target=/gradle-seed,readonly",
+        *container_volumes(CONTAINER),
         IMAGE,
     ], check=True, stdout=subprocess.DEVNULL)
     log = LOG_FILE.open("w", encoding="utf-8")
@@ -178,14 +206,23 @@ def size_the_frame() -> None:
     tiny (620x392 seen): the editor is then a few pixels wide, inlaid thread panels get zero width, and the robot
     finds no panel at all."""
     import robot
-    robot.call_js("""
-        var frame = com.intellij.openapi.wm.WindowManager.getInstance().getFrame(
-            com.intellij.openapi.project.ProjectManager.getInstance().getOpenProjects()[0]);
-        frame.setExtendedState(java.awt.Frame.NORMAL);
-        frame.setBounds(0, 0, 2560, 1440);
-        frame.validate();
-        String(frame.getWidth() + 'x' + frame.getHeight())
-    """, edt=True)
+    # The servers answer before the project's frame exists; on a loaded machine (16 sandboxes) that gap ran seconds.
+    for _ in range(60):
+        size = robot.call_js("""
+            var frame = com.intellij.openapi.wm.WindowManager.getInstance().getFrame(
+                com.intellij.openapi.project.ProjectManager.getInstance().getOpenProjects()[0]);
+            if (frame == null) String('none');
+            else {
+                frame.setExtendedState(java.awt.Frame.NORMAL);
+                frame.setBounds(0, 0, 2560, 1440);
+                frame.validate();
+                String(frame.getWidth() + 'x' + frame.getHeight());
+            }
+        """, edt=True)
+        if size != "none":
+            return
+        time.sleep(1)
+    sys.exit("the sandbox IDE opened no project frame within 60 s")
 
 
 def window_note(mover: subprocess.Popen | None) -> str:
@@ -243,7 +280,7 @@ def status() -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["start", "stop", "status"])
+    parser.add_argument("command", choices=["start", "stop", "status", "build"])
     parser.add_argument("--feature-dir", type=Path, default=DEFAULT_FEATURE_DIR)
     parser.add_argument("--fresh", action="store_true", help="recopy the test project from project-template")
     args = parser.parse_args()
@@ -251,6 +288,10 @@ def main() -> None:
         start(args.feature_dir.resolve(), args.fresh)
     elif args.command == "stop":
         stop()
+    elif args.command == "build":
+        if not (DOCKER and PREBUILT):
+            sys.exit("build needs MARGINALIS_SANDBOX_DOCKER=1 and MARGINALIS_SANDBOX_PREBUILT=<folder for the plugins>")
+        build_in_docker(args.feature_dir.resolve(), PREBUILT)
     else:
         status()
 

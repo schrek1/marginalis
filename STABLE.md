@@ -30,3 +30,4 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-48 | The Margin tab shows only when there is something in it | `fix/MARG-48-no-empty-margin-tab` | schrek1/marginalis#55 | — | `6a0ebec` |
 | MARG-45 | The reply you are typing in the Margin tab stays put while other threads change | `fix/MARG-45-margin-tab-keeps-reply-in-place` | schrek1/marginalis#58 | — | `02b80a1` |
 | MARG-60 | Select Opened Thread works with a review diff in front | `fix/MARG-60-locate-in-review-diff` | schrek1/marginalis#64 | — | `63a26b4` |
+| MARG-81 | Sandbox scenarios in Docker, in parallel from one build, with a testing guide | `chore/sandbox-header-press` | — | — | `da69c29` |
