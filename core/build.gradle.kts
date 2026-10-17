@@ -21,6 +21,7 @@ dependencies {
 
     testImplementation(kotlin("stdlib"))
     testImplementation(kotlin("test"))
+    testImplementation("io.kotest:kotest-assertions-core:5.9.1")
     testImplementation("com.google.code.gson:gson:2.11.0")
 }
 

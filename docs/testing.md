@@ -12,6 +12,13 @@ is ready for review when the layers it touches pass, and the whole sandbox set p
 Run the platform tests against the build's own IDE (IntelliJ Community 2025.2, the platform floor). Do not pass
 `-Pmarginalis.localIde` for them: a local Ultimate ships obfuscated classes and every test fails.
 
+**Assertions:** new core and platform tests use Kotest's matchers (`io.kotest:kotest-assertions-core`):
+`listed shouldContainExactly expected`, `heard.shouldBeEmpty()`, `value shouldBeSameInstanceAs thread`, not
+`kotlin.test`'s `assertEquals` / `assertTrue`. They read as the expectation, and a failure shows the whole value.
+Older tests convert when they are touched anyway. A source set that has no Kotest yet gets the dependency
+(`testImplementation`) with its first such test. The sandbox scenarios keep their own `check(name, passed, detail)`,
+which prints the PASS/FAIL lines.
+
 ## Sandbox scenarios
 
 A scenario starts a sandbox IDE with the plugin built from the checkout, plays the user's side through the real
