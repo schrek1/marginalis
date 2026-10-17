@@ -9,7 +9,8 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # schreko_stable is the fork's integration branch: its pushes also fill the Gradle cache its pull requests read.
+    branches: [main, schreko_stable]
   pull_request:
 
 jobs:
@@ -36,6 +37,8 @@ jobs:
           distribution: temurin
           java-version: "25"
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.event_name != 'push' }}
       - name: Install a virtual display
         # Margin tab tests that need an active IDE window skip themselves
         # without a display.
@@ -87,6 +90,8 @@ jobs:
           distribution: temurin
           java-version: "25"
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.event_name != 'push' }}
       - name: Sandbox scenarios
         env:
           MARGINALIS_SANDBOX_RUNTIME: ${{ github.workspace }}/build/sandbox-runtime
@@ -112,6 +117,8 @@ jobs:
           distribution: temurin
           java-version: "25"
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.event_name != 'push' }}
       - name: Run IntelliJ Plugin Verifier
         run: ./gradlew verifyPlugin --console=plain
       - uses: actions/upload-artifact@v4
