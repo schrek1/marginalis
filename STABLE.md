@@ -43,3 +43,4 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-92 | Sandbox failure paths: each scenario starts from the default app settings, and a restart never starts from an older project copy | `fix/MARG-92-sandbox-failure-paths` | — | — | `ca42e7b` |
 | MARG-101 | CI keeps its Gradle cache under the 10 GB limit: only the build job writes it | `fix/MARG-101-ci-cache-one-writer` | — | — | `fe9eafa` |
 | MARG-43 | Sandbox scenarios: a core tag runs the critical flows alone | `feat/MARG-43-core-tag` | — | — | `2bd8f09` |
+| MARG-103 | Sandbox scenarios fail on errors the plugin logs | `feat/MARG-103-fail-on-plugin-errors` | — | — | `febd7d0` |
