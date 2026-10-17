@@ -1,10 +1,12 @@
 package dev.marginalis.plugin.sandbox.scenarios
 
 import dev.marginalis.plugin.sandbox.Agent
+import dev.marginalis.plugin.sandbox.ReviewDiffUi
 import dev.marginalis.plugin.sandbox.Sandbox
 import dev.marginalis.plugin.sandbox.SandboxScenario
 import dev.marginalis.plugin.sandbox.SandboxUi
-import dev.marginalis.plugin.sandbox.awaitValue
+import dev.marginalis.plugin.sandbox.awaitUntil
+import dev.marginalis.plugin.sandbox.readUntil
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
@@ -30,8 +32,8 @@ class StablePrsTest : SandboxScenario("stable_prs") {
             "Before the table, prose that should keep wrapping to the panel.\n\n" + WIDE_TABLE + "\nAnd ~~struck out~~ text after it.",
         )
         // The panel lays its panes out a moment after it renders them; a table read before has no viewport width yet.
-        val panes = awaitValue("the thread's messages laid out", Duration.ofSeconds(20)) {
-            SandboxUi.messagePanes(thread).takeIf { panes -> panes.isNotEmpty() && panes.filter { it.table }.all { it.viewportWidth > 0 } }
+        val panes = readUntil("the thread's messages laid out", read = { SandboxUi.messagePanes(thread) }) { panes ->
+            panes.isNotEmpty() && panes.filter { it.table }.all { it.viewportWidth > 0 }
         }
         val tables = panes.filter { it.table }
         check("the table renders as a table", tables.size == 1, panes)
@@ -52,14 +54,15 @@ class StablePrsTest : SandboxScenario("stable_prs") {
         Agent.agentAddsLineThread(REVIEW_FILE, 9, "On legacy_helper, which the PR deletes")
         Thread.sleep(1_000)
         SandboxUi.openReviewDiff(REVIEW_FILE, REVIEW_BEFORE, REVIEW_AFTER)
-        Thread.sleep(2_000)
-        val lines = SandboxUi.diffIconLines(REVIEW_AFTER)
         // 1-based 2 and 6 in the base (0-based 1 and 5) move to 0-based 4 and 8 in the PR text; legacy_helper is gone.
+        val lines = iconLinesUntil(listOf(4, 8))
         check("icons sit on the threads' lines in the PR text", lines == listOf(4, 8), lines)
 
         SandboxUi.openReviewDiff(REVIEW_FILE, "", REVIEW_AFTER, added = true)
-        Thread.sleep(2_000)
-        check("an added file's one-sided diff shows icons too", SandboxUi.diffIconLines(REVIEW_AFTER) == listOf(4, 8), SandboxUi.diffIconLines(REVIEW_AFTER))
+        // The PR diff shows the same text, and its icons would pass for the added file's while it is still on screen.
+        awaitUntil("the PR diff off screen behind the added file's diff", Duration.ofSeconds(20)) { !ReviewDiffUi.diffShows(REVIEW_BEFORE) }
+        val addedLines = iconLinesUntil(listOf(4, 8))
+        check("an added file's one-sided diff shows icons too", addedLines == listOf(4, 8), addedLines)
     }
 
     /**
@@ -79,9 +82,8 @@ class StablePrsTest : SandboxScenario("stable_prs") {
         SandboxUi.openThreadInDiff(first, REVIEW_BEFORE)
         Thread.sleep(1_000)
         SandboxUi.pressPanelAction(first, "Next Step")
-        Thread.sleep(2_000)
+        val openInDiff = openInDiffUntil(second, REVIEW_BEFORE)
         check("next step in a local diff keeps the diff in front", SandboxUi.selectedEditorKind() == "DIFF", SandboxUi.selectedEditorKind())
-        val openInDiff = SandboxUi.threadIdsOpenInDiff(REVIEW_BEFORE)
         check("the next step opens in that diff", second in openInDiff, openInDiff)
 
         SandboxUi.closeAllEditors()
@@ -110,9 +112,13 @@ class StablePrsTest : SandboxScenario("stable_prs") {
         val sizeBefore = SandboxUi.editorFontSize(file)
         val before = SandboxUi.lineUnderPoint(file, 200, 150)
         SandboxUi.ctrlWheelZoom(file, 200, 150)
+        // Time for the open thread to re-lay out and move the view away from the mouse, which it must not.
         Thread.sleep(2_000)
-        val after = SandboxUi.lineUnderPoint(file, 200, 150)
-        check("the zoom happened", SandboxUi.editorFontSize(file) > sizeBefore, SandboxUi.editorFontSize(file))
+        val (sizeAfter, after) = readUntil(
+            "the zoomed view with the same line under the mouse",
+            read = { SandboxUi.editorFontSize(file) to SandboxUi.lineUnderPoint(file, 200, 150) },
+        ) { (size, line) -> size > sizeBefore && abs(line - before) <= 2 }
+        check("the zoom happened", sizeAfter > sizeBefore, sizeAfter)
         check("the line under the mouse stays put", abs(after - before) <= 2, "$before -> $after")
     }
 
@@ -130,10 +136,9 @@ class StablePrsTest : SandboxScenario("stable_prs") {
         SandboxUi.openThreadInDiff(first, REVIEW_AFTER)
         Thread.sleep(1_000)
         SandboxUi.pressPanelAction(first, "Resolve")
-        Thread.sleep(2_000)
+        val openInDiff = openInDiffUntil(second, REVIEW_AFTER)
         val kind = SandboxUi.selectedEditorKind()
         check("Resolve in a review diff keeps the diff in front", kind == "DIFF", kind)
-        val openInDiff = SandboxUi.threadIdsOpenInDiff(REVIEW_AFTER)
         check("the next step opens in that diff", second in openInDiff, openInDiff)
         SandboxUi.closeAllEditors()
         SandboxUi.openLocalDiff(REVIEW_FILE, REVIEW_AFTER)
@@ -144,6 +149,12 @@ class StablePrsTest : SandboxScenario("stable_prs") {
         Thread.sleep(2_000)
         report("INFO  resolve in a local diff (checked-out branch) lands in: ${SandboxUi.selectedEditorKind()}")
     }
+
+    private fun iconLinesUntil(expected: List<Int>): List<Int> =
+        readUntil("thread icons on the diff's lines $expected", read = { SandboxUi.diffIconLines(REVIEW_AFTER) }) { it == expected }
+
+    private fun openInDiffUntil(threadId: String, shownText: String): List<String> =
+        readUntil("thread $threadId open in the diff", read = { SandboxUi.threadIdsOpenInDiff(shownText) }) { threadId in it }
 
     private companion object {
         const val REVIEW_FILE = "src/review_target.py"
