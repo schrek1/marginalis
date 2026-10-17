@@ -40,6 +40,10 @@ History before 0.1.19 lives in git tags.
 
 ### Fixed
 
+- A thread whose code an edit removed now always shows as orphaned. When
+  a tool rewrote a file and a reply or another change to the thread came
+  in before anything refreshed the list, the thread could stay open,
+  pinned to whatever code had taken its old line.
 - A busy IDE no longer reports an error that blames Marginalis. When
   the IDE was stuck for a while, for example during startup, opening a
   file could show "IDE error occurred" naming Marginalis, although
