@@ -1,7 +1,6 @@
 # Guided steps show just their number
 
 - **Key:** MARG-26 (schrek1/marginalis#26)
-- **Tags:** regression
 - **Scenario:** `GuidedStepLabelsTest`
 
 ## Protects

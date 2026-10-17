@@ -1,7 +1,6 @@
 # Select Opened Thread works with a review diff in front
 
 - **Key:** MARG-60 (schrek1/marginalis#60)
-- **Tags:** regression
 - **Scenario:** `SelectOpenedThreadInReviewDiffTest`
 
 ## Protects

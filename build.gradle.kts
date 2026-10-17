@@ -368,7 +368,12 @@ tasks.register<Test>("uiSandboxTest") {
     val uiTestSourceSet = sourceSets["uiTest"]
     testClassesDirs = uiTestSourceSet.output.classesDirs
     classpath = uiTestSourceSet.runtimeClasspath
-    useJUnitPlatform { includeEngines("junit-jupiter") }
+    // `-Pmarginalis.sandbox.tags=core` runs the critical flows alone; the value is a JUnit tag expression.
+    val tags = providers.gradleProperty("marginalis.sandbox.tags").orNull
+    useJUnitPlatform {
+        includeEngines("junit-jupiter")
+        tags?.let { includeTags(it) }
+    }
     filter { includeTestsMatching("dev.marginalis.plugin.sandbox.*") }
     // A scenario's outcome depends on the IDE it drives, not only on these inputs.
     outputs.upToDateWhen { false }

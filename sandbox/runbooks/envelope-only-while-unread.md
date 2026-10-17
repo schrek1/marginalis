@@ -1,7 +1,6 @@
 # The ✉ envelope shows only while something in the thread is unread
 
 - **Key:** MARG-36 (schrek1/marginalis#36)
-- **Tags:** regression
 - **Scenario:** `EnvelopeOnlyWhileUnreadTest`
 
 ## Protects

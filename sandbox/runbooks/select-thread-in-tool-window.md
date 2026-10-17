@@ -1,7 +1,6 @@
 # Find a thread in the tool window in one click
 
 - **Key:** MARG-11 (schrek1/marginalis#11)
-- **Tags:** regression
 - **Scenario:** `SelectThreadInToolWindowTest`
 
 ## Protects

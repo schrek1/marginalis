@@ -1,7 +1,6 @@
 # A walkthrough in a review diff stays in that diff
 
 - **Key:** MARG-17 (schrek1/marginalis#17)
-- **Tags:** regression
 - **Scenario:** `ReviewDiffWalkthroughTest`
 
 ## Protects

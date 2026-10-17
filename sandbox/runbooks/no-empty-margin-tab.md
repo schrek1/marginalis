@@ -1,7 +1,6 @@
 # The Margin tab shows only when there is something in it
 
 - **Key:** MARG-48 (schrek1/marginalis#48)
-- **Tags:** regression
 - **Scenario:** `NoEmptyMarginTabTest`
 
 ## Protects

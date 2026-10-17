@@ -1,7 +1,6 @@
 # Zooming keeps the code where the mouse points
 
 - **Key:** MARG-21 (schrek1/marginalis#21)
-- **Tags:** regression
 - **Scenario:** `StablePrsTest.zoom`
 
 ## Protects

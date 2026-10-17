@@ -1,7 +1,6 @@
 # Margin text renders as typed
 
 - **Key:** MARG-23 (schrek1/marginalis#23)
-- **Tags:** regression
 - **Scenario:** `MarginTextSpacingTest`
 
 ## Protects

@@ -1,7 +1,6 @@
 # A walkthrough reads in step order, or by folder, or by file
 
 - **Key:** MARG-10 (schrek1/marginalis#10), MARG-47 (schrek1/marginalis#47)
-- **Tags:** regression
 - **Scenario:** `GuidedLayoutTest`
 
 ## Protects
