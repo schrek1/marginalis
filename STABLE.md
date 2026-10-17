@@ -50,3 +50,4 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-105 | E2E scenario: what the user left in the margin survives an IDE restart | `feat/MARG-105-threads-survive-restart` | — | — | `7378c33` |
 | MARG-106 | E2E scenario: the user starts a thread on a line, a selection or a whole file | `feat/MARG-106-user-starts-thread` | — | — | `e749dc4` |
 | MARG-107 | E2E scenario: a thread follows its code while the user edits | `feat/MARG-107-anchoring-through-edits` | — | — | `f538111` |
+| MARG-119 | Sandbox scenarios run the plugin users get, without the test libraries | `fix/MARG-119-sandbox-runs-the-shipped-plugin` | — | — | `b57fcc3` |

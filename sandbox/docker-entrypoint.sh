@@ -47,9 +47,16 @@ fi
 
 if [ "$mode" = build ]; then
   cd /work/src
-  ./gradlew --no-daemon -q --init-script sandbox/init.gradle prepareSandbox_runIdeForUiTests
+  ./gradlew --no-daemon -q --init-script sandbox/init.gradle prepareSandbox_runIdeForUiTests buildPlugin
   rm -rf /prebuilt/plugins && mkdir -p /prebuilt/plugins
   cp -a "$plugins"/. /prebuilt/plugins/
+  # The testing sandbox adds the test dependencies to the plugin's lib; the sandbox runs what users get instead:
+  # the distribution zip's content.
+  version=$(sed -n 's/^version = "\([^"]*\)".*/\1/p' build.gradle.kts)
+  distribution="/work/src/build/distributions/marginalis-$version.zip"
+  [ -f "$distribution" ] || { echo "no distribution zip $distribution" >&2; exit 1; }
+  rm -rf /prebuilt/plugins/marginalis
+  (cd /prebuilt/plugins && jar xf "$distribution")
   # Set by the harness on a Linux host, where files root writes into a bind mount stay root's.
   if [ -n "${MARGINALIS_HOST_OWNER:-}" ]; then
     chown -R "$MARGINALIS_HOST_OWNER" /prebuilt/plugins
