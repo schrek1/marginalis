@@ -98,9 +98,12 @@ mount stay root's: the harness hands them back to the runner's user (`MARGINALIS
    threads; `Sandbox.restart(fresh = ...)` gives a case a new project or a persisted state.
 4. The agent's side is `Agent`, the user's `SandboxUi`, `ToolWindowUi` and `ReviewDiffUi`, larger thread sets
    `fixtures/Walkthroughs.kt`. Add a missing step there rather than inline JavaScript in the scenario.
-5. Every wait for a condition goes through `Waits.kt` (`waitUntil`, `awaitUntil`, `awaitValue`): bounded, and a
-   timeout records the diagnostics. Prefer one over a fixed sleep, and never fall back to a weaker read when the
-   real one fails: the step fails instead.
+5. Every wait for a condition goes through `Waits.kt` (`waitUntil`, `awaitUntil`, `awaitValue`, `readUntil`):
+   bounded, and a timeout records the diagnostics. Prefer one over a fixed sleep, and never fall back to a weaker
+   read when the real one fails: the step fails instead. A check of an outcome the IDE reaches asynchronously
+   (layout, a re-render, the tree, a badge, a selection) reads it with `readUntil` and the check's own condition,
+   so a slow machine is waited for and a timeout still fails the check on the value last read. A fixed sleep stays
+   only where the check must see that something did not happen.
 
 ### Rules for the steps
 
