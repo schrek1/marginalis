@@ -44,3 +44,4 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-101 | CI keeps its Gradle cache under the 10 GB limit: only the build job writes it | `fix/MARG-101-ci-cache-one-writer` | — | — | `fe9eafa` |
 | MARG-43 | Sandbox scenarios: a core tag runs the critical flows alone | `feat/MARG-43-core-tag` | — | — | `2bd8f09` |
 | MARG-103 | Sandbox scenarios fail on errors the plugin logs | `feat/MARG-103-fail-on-plugin-errors` | — | — | `febd7d0` |
+| MARG-117 | A stalled IDE no longer blames Marginalis: the Margin tab's editor provider takes no read lock | `fix/MARG-117-provider-no-read-lock` | — | — | `510f774` |
