@@ -256,6 +256,55 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
             ),
         ).asJsonArray.map { it.asInt }
 
+    /** 0-based lines of the thread gutter icons in the file's own editor (the document's markers). */
+    fun editorIconLines(file: String): List<Int> =
+        JsonParser.parseString(
+            js(
+                EDITORS + """
+                var editor = textEditorOf('$file');
+                var lines = [];
+                var highlighters = editor.getFilteredDocumentMarkupModel().getAllHighlighters();
+                for (var i = 0; i < highlighters.length; i++) {
+                    var renderer = highlighters[i].getGutterIconRenderer();
+                    if (renderer != null && renderer.getClass().getSimpleName() == 'ThreadGutterIconRenderer') {
+                        var offset = highlighters[i].getStartOffset();
+                        lines.push(read(function () { return editor.getDocument().getLineNumber(offset); }) | 0);
+                    }
+                }
+                lines.sort(function (a, b) { return a - b; });
+                String(JSON.stringify(lines))
+                """,
+            ),
+        ).asJsonArray.map { it.asInt }
+
+    /** Clicks the thread gutter icon on 0-based `line` of the file's editor: the icon's own click action runs. */
+    fun clickThreadIcon(file: String, line: Int) {
+        val token = js(
+            EDITORS + """
+            var editor = textEditorOf('$file');
+            var highlighters = editor.getFilteredDocumentMarkupModel().getAllHighlighters();
+            var renderer = null;
+            for (var i = 0; i < highlighters.length && renderer == null; i++) {
+                var candidate = highlighters[i].getGutterIconRenderer();
+                var offset = highlighters[i].getStartOffset();
+                if (candidate != null && candidate.getClass().getSimpleName() == 'ThreadGutterIconRenderer'
+                    && read(function () { return editor.getDocument().getLineNumber(offset); }) == $line) renderer = candidate;
+            }
+            if (renderer == null) throw 'no thread icon on line $line of $file';
+            var action = renderer.getClickAction();
+            var context = com.intellij.openapi.actionSystem.impl.SimpleDataContext.builder()
+                .add(com.intellij.openapi.actionSystem.CommonDataKeys.EDITOR, editor)
+                .add(com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT, project)
+                .build();
+            var event = com.intellij.openapi.actionSystem.AnActionEvent.createEvent(
+                action, context, action.getTemplatePresentation().clone(),
+                'MarginalisSandbox', com.intellij.openapi.actionSystem.ActionUiKind.NONE, null);
+            String(performLater(action, event))
+            """,
+        )
+        awaitActionRan("open the thread from its gutter icon", token)
+    }
+
     /** Puts 0-based `topLine` at the top of the file's editor, without animation. */
     fun scrollEditorTo(file: String, topLine: Int) {
         js(
@@ -346,20 +395,32 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
     }
 
     /** Presses the thread header's own ⚡ ("Live: …" when on, "Go Live: …" when off) with its Swing `click()`. */
+    /**
+     * Presses the thread header's Live toggle once its own update enables it (live needs the agent waiting): the
+     * toolbar repaints its text asynchronously, so the button is found by its action, not by what it last showed.
+     */
     fun toggleThreadLive(threadId: String) {
-        js(
-            FIND + """
-            var button = find(component, function (c) {
-                if (!(c instanceof com.intellij.openapi.actionSystem.impl.ActionButton)) return false;
-                var text = c.getPresentation().getText();
-                return text != null && (text.startsWith('Live:') || text.startsWith('Go Live:'));
-            });
-            button.click();
-            String(true)
-            """,
-            threadPanel(threadId),
-        )
+        val enabled = readUntil("the Live toggle of $threadId turns on", read = { liveToggle(threadId, press = false) == "enabled" }) { it }
+        check(enabled) { "the Live toggle of $threadId stayed off: no agent it could go live with is waiting" }
+        awaitActionRan("Live", liveToggle(threadId, press = true))
     }
+
+    private fun liveToggle(threadId: String, press: Boolean): String = js(
+        FIND + """
+        var button = find(component, function (c) {
+            return c instanceof com.intellij.openapi.actionSystem.impl.ActionButton
+                && c.getAction().getClass().getName().indexOf('liveAction') >= 0;
+        });
+        if (button == null) throw 'no Live toggle in the thread header';
+        var action = button.getAction();
+        var event = com.intellij.openapi.actionSystem.AnActionEvent.createEvent(
+            action, com.intellij.ide.DataManager.getInstance().getDataContext(button), button.getPresentation().clone(),
+            'MarginalisSandbox', com.intellij.openapi.actionSystem.ActionUiKind.NONE, null);
+        action.update(event);
+        ${if (press) "String(performLater(action, event))" else "String(event.getPresentation().isEnabled() ? 'enabled' : 'disabled')"}
+        """,
+        threadPanel(threadId),
+    )
 
     fun liveByDefault(): Boolean = js("String(store.getLiveByDefault())") == "true"
 

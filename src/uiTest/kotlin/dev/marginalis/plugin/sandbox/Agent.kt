@@ -22,7 +22,7 @@ object Agent {
     private val identity = mapOf("author_name" to "Claude", "author_id" to "claude-sandbox")
     private val gson = GsonBuilder().disableHtmlEscaping().create()
     private val http = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build()
-    private val since = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'.000Z'").withZone(ZoneOffset.UTC)
+    private val since = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").withZone(ZoneOffset.UTC)
 
     private val apiBase get() = "http://127.0.0.1:${Sandbox.marginalisPort}/api/marginalis"
 
@@ -77,13 +77,17 @@ object Agent {
         return parsed(http.send(request, HttpResponse.BodyHandlers.ofString()), route)
     }
 
-    /** Blocks like an agent's `comment_wait` from now on; returns the wake or the timeout. */
+    /**
+     * Blocks like an agent's `comment_wait`; returns the wake or the timeout. Its `since` is the last round the agent
+     * was woken by, as the guide tells agents: the host's clock is not the IDE's, so a `since` of "now" can fall before
+     * a round that already woke it, which would then wake it again at once. Before any round, `since` is now.
+     */
     fun agentWaits(timeoutSeconds: Int): JsonObject =
         apiGet(
             "comment_wait",
-            mapOf("since" to since.format(Instant.now()), "timeout" to timeoutSeconds.toString()),
+            mapOf("since" to (Sandbox.lastRoundAt ?: since.format(Instant.now())), "timeout" to timeoutSeconds.toString()),
             Duration.ofSeconds(timeoutSeconds + 30L),
-        )
+        ).also { wake -> wake.get("handed_back_at")?.takeUnless { it.isJsonNull }?.let { Sandbox.lastRoundAt = it.asString } }
 
     private fun parsed(response: HttpResponse<String>, route: String): JsonObject {
         check(response.statusCode() < 400) { "$route answered ${response.statusCode()}: ${response.body()}" }
