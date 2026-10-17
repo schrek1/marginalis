@@ -4,10 +4,12 @@ import dev.marginalis.plugin.sandbox.Agent
 import dev.marginalis.plugin.sandbox.Sandbox
 import dev.marginalis.plugin.sandbox.SandboxScenario
 import dev.marginalis.plugin.sandbox.SandboxUi
+import dev.marginalis.plugin.sandbox.awaitValue
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable
+import java.time.Duration
 import kotlin.io.path.readText
 import kotlin.math.abs
 
@@ -27,8 +29,10 @@ class StablePrsTest : SandboxScenario("stable_prs") {
         val thread = Agent.agentStartsProjectThread(
             "Before the table, prose that should keep wrapping to the panel.\n\n" + WIDE_TABLE + "\nAnd ~~struck out~~ text after it.",
         )
-        Thread.sleep(2_000)
-        val panes = SandboxUi.messagePanes(thread)
+        // The panel lays its panes out a moment after it renders them; a table read before has no viewport width yet.
+        val panes = awaitValue("the thread's messages laid out", Duration.ofSeconds(20)) {
+            SandboxUi.messagePanes(thread).takeIf { panes -> panes.isNotEmpty() && panes.filter { it.table }.all { it.viewportWidth > 0 } }
+        }
         val tables = panes.filter { it.table }
         check("the table renders as a table", tables.size == 1, panes)
         check("strikethrough renders as <s>", panes.any { it.strike }, panes)
