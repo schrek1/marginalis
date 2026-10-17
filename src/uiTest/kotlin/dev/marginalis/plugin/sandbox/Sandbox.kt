@@ -458,8 +458,9 @@ object Sandbox {
                         """
                         var projects = com.intellij.openapi.project.ProjectManager.getInstance().getOpenProjects();
                         // The global workspace model is read from a cache first and reloaded from disk seconds later,
-                        // in a background write. Without that private flag (another platform version) the condition is
-                        // skipped, and the reason reported.
+                        // in a background write. The private flag is one Boolean up to 2025.x and a Boolean per
+                        // environment in 2026.x (loaded once there is one and all are true). Without it (another
+                        // platform version) the condition is skipped, and the reason reported.
                         var globalModel = true;
                         var globalModelUnavailable = null;
                         try {
@@ -469,7 +470,13 @@ object Sandbox {
                             var sync = app.getService(type);
                             var field = sync.getClass().getDeclaredField('loadedFromDisk');
                             field.setAccessible(true);
-                            globalModel = field.getBoolean(sync);
+                            var loaded = field.get(sync);
+                            if (loaded instanceof java.util.Map) {
+                                var values = new java.util.ArrayList(loaded.values());
+                                globalModel = values.size() > 0 && !values.contains(java.lang.Boolean.FALSE);
+                            } else {
+                                globalModel = loaded.booleanValue();
+                            }
                         } catch (e) {
                             globalModelUnavailable = String(e);
                         }
