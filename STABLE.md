@@ -39,3 +39,4 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-38 | Every pull request runs the sandbox scenarios in CI, on the free runner: Linux file ownership fixed and the waits that a slow machine needs | `feat/MARG-38-ci-e2e` | — | — | `fe39057` |
 | MARG-96 | Open Thread on a project thread the agent just started always brings the Margin tab to the front | `fix/MARG-96-reveal-wins` | — | — | `ab808b8` |
 | MARG-85 | Core tests no longer flake on Windows: threads created in the same instant keep their arrival order | `fix/MARG-85-deterministic-order` | — | — | `e31b1e0` |
+| MARG-83 | Stable releases are built in CI and served to every machine from one plugin repository on GitHub Pages | `feat/MARG-83-ci-releases` | — | — | `fe26212` |
