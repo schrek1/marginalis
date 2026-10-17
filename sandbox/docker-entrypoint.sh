@@ -39,6 +39,10 @@ if [ "$mode" = build ]; then
   ./gradlew --no-daemon -q --init-script sandbox/init.gradle prepareSandbox_runIdeForUiTests
   rm -rf /prebuilt/plugins && mkdir -p /prebuilt/plugins
   cp -a "$plugins"/. /prebuilt/plugins/
+  # Set by the harness on a Linux host, where files root writes into a bind mount stay root's.
+  if [ -n "${MARGINALIS_HOST_OWNER:-}" ]; then
+    chown -R "$MARGINALIS_HOST_OWNER" /prebuilt/plugins
+  fi
   exit 0
 fi
 

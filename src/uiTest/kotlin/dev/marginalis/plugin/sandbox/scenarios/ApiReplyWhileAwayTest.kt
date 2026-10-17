@@ -3,6 +3,7 @@ package dev.marginalis.plugin.sandbox.scenarios
 import dev.marginalis.plugin.sandbox.Agent
 import dev.marginalis.plugin.sandbox.SandboxScenario
 import dev.marginalis.plugin.sandbox.SandboxUi
+import dev.marginalis.plugin.sandbox.readUntil
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
@@ -47,8 +48,8 @@ class ApiReplyWhileAwayTest : SandboxScenario("api_reply_while_away") {
         SandboxUi.userReplies(thread, "Why split on commas here?")
         settle()
         SandboxUi.openInEditor(OTHER_FILE)
-        settle()
-        check("$case: the thread's editor tab left the screen", !editorOnScreen(FILE))
+        val onScreen = readUntil("$case: the thread's editor tab off screen", read = { editorOnScreen(FILE) }) { shown -> !shown }
+        check("$case: the thread's editor tab left the screen", !onScreen)
         val reply = "Reply F, posted while the thread's editor tab was in the background."
         agentRepliesWhileListening(case, thread, reply)
         SandboxUi.openInEditor(FILE)
@@ -65,8 +66,8 @@ class ApiReplyWhileAwayTest : SandboxScenario("api_reply_while_away") {
         SandboxUi.userReplies(thread, "Does the plan cover the shop-api tests?")
         settle()
         SandboxUi.openInEditor(FILE)
-        settle()
-        check("$case: the Margin tab left the screen", !marginTabOnScreen())
+        val onScreen = readUntil("$case: the Margin tab off screen", read = { marginTabOnScreen() }) { shown -> !shown }
+        check("$case: the Margin tab left the screen", !onScreen)
         val reply = "Reply G, posted while the Margin tab was in the background."
         agentRepliesWhileListening(case, thread, reply)
         SandboxUi.openMarginTab(thread)
@@ -77,14 +78,16 @@ class ApiReplyWhileAwayTest : SandboxScenario("api_reply_while_away") {
         val listening = AgentListening()
         check("$case: the agent's long-poll is open", listening.open, listening.error)
         Agent.agentReplies(threadId, reply)
+        // Time for the reply to end the long-poll, which it must not.
         settle()
         check("$case: the long-poll is still open after the reply", listening.open, listening.error)
         listening.close()
     }
 
     private fun expectReplyShown(case: String, threadId: String, reply: String) {
-        settle()
-        val view = SandboxUi.panelView(threadId)
+        val view = readUntil("$case: the reply shown in a panel grown to fit it", read = { SandboxUi.panelView(threadId) }) { view ->
+            reply in view.texts && view.height >= view.preferredHeight
+        }
         shot(case)
         check("$case: the open thread renders the agent's reply", reply in view.texts, view.texts)
         check("$case: the panel grows to fit it", view.height >= view.preferredHeight, "height ${view.height} < preferred ${view.preferredHeight}")

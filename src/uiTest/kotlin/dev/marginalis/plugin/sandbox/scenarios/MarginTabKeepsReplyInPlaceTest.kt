@@ -5,6 +5,7 @@ import com.google.gson.JsonParser
 import dev.marginalis.plugin.sandbox.Agent
 import dev.marginalis.plugin.sandbox.SandboxScenario
 import dev.marginalis.plugin.sandbox.SandboxUi
+import dev.marginalis.plugin.sandbox.readUntil
 import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
 import kotlin.math.abs
@@ -33,15 +34,15 @@ class MarginTabKeepsReplyInPlaceTest : SandboxScenario("margin_tab_keeps_reply_i
             Agent.agentStartsProjectThread(tallBody("Thread $name", paragraphs))
         }
         SandboxUi.openMarginTab(created[0])
-        settle()
         // Whatever the tab's sort order, the message goes into the card above the one being looked at.
-        val order = SandboxUi.marginTabOrder().filter { it in created }
+        val order = readUntil("the three threads listed in the Margin tab", read = { SandboxUi.marginTabOrder().filter { it in created } }) {
+            it.size == created.size
+        }
         upper = order[0]
         middle = order[1]
         lower = order[2]
         listOf(upper, middle).forEach(SandboxUi::openMarginTab)
-        settle()
-        val expanded = expandedThreadIds()
+        val expanded = readUntil("the threads above and in view expanded", read = { expandedThreadIds() }) { upper in it && middle in it }
         check("the threads above and in view are expanded", upper in expanded && middle in expanded, expanded)
     }
 
@@ -108,12 +109,16 @@ class MarginTabKeepsReplyInPlaceTest : SandboxScenario("margin_tab_keeps_reply_i
 
     private data class OnScreen(val offset: Double, val viewTop: Double, val focused: Boolean, val text: String?, val caret: Int?, val grower: Int)
 
+    /** The agent posts into `grower`; `after` is read once it has grown and `watched` is back in place, as every case checks. */
     private fun messageAbove(watched: String, grower: String, shot: String): Pair<OnScreen, OnScreen> {
         val before = onScreen(watched, grower)
         shot("$shot-before")
         Agent.agentReplies(grower, tallBody("Agent update", 10))
+        // Time for the re-render to take the draft's focus or caret, which it must not.
         settle()
-        val after = onScreen(watched, grower)
+        val after = readUntil("$shot: the thread above grown, $watched in place", read = { onScreen(watched, grower) }) { now ->
+            now.grower > before.grower && abs(now.offset - before.offset) <= TOLERANCE_PX
+        }
         shot("$shot-after")
         check("$shot: the message made the thread above taller", after.grower > before.grower, before.grower to after.grower)
         return before to after

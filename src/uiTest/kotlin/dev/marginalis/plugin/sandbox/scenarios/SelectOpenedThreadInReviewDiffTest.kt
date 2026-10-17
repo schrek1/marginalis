@@ -10,6 +10,7 @@ import dev.marginalis.plugin.sandbox.scenarios.ReviewDiffWalkthroughTest.Compani
 import dev.marginalis.plugin.sandbox.scenarios.ReviewDiffWalkthroughTest.Companion.TARGET
 import dev.marginalis.plugin.sandbox.scenarios.ReviewDiffWalkthroughTest.Companion.TARGET_AFTER
 import dev.marginalis.plugin.sandbox.awaitUntil
+import dev.marginalis.plugin.sandbox.readUntil
 import dev.marginalis.plugin.sandbox.waitUntil
 import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
@@ -45,9 +46,10 @@ class SelectOpenedThreadInReviewDiffTest : SandboxScenario("select_opened_thread
     @Test
     @Order(2)
     fun buttonIsEnabledInAReviewDiff() = case("button_is_enabled_in_a_review_diff") {
-        val kind = SandboxUi.selectedEditorKind()
+        val kind = readUntil("the review diff in front", read = { SandboxUi.selectedEditorKind() }) { it == "DIFF" }
         check("the review diff is in front", kind == "DIFF", kind)
-        check("Select Opened Thread is enabled with a review diff in front", ToolWindowUi.isToolWindowActionEnabled(BUTTON))
+        val enabled = readUntil("$BUTTON enabled", read = { ToolWindowUi.isToolWindowActionEnabled(BUTTON) }) { it }
+        check("Select Opened Thread is enabled with a review diff in front", enabled)
     }
 
     @Test
@@ -55,8 +57,7 @@ class SelectOpenedThreadInReviewDiffTest : SandboxScenario("select_opened_thread
     fun buttonSelectsTheThreadOnTheCaretLine() = case("button_selects_the_thread_on_the_caret_line") {
         putCaretInReview(TOTAL_IN_REVIEW)
         ToolWindowUi.pressToolWindowAction(BUTTON)
-        pause()
-        val got = ToolWindowUi.selectedStep()
+        val got = totalSelectedUntil()
         ToolWindowUi.screenshotToolWindow(shots.resolve("1-thread.png"))
         check("on the line of a thread in the review's text it selects that thread", got?.thread == total, got)
     }
@@ -66,8 +67,7 @@ class SelectOpenedThreadInReviewDiffTest : SandboxScenario("select_opened_thread
     fun buttonSelectsTheFileElsewhere() = case("button_selects_the_file_elsewhere") {
         putCaretInReview(IMPORT_IN_REVIEW)
         ToolWindowUi.pressToolWindowAction(BUTTON)
-        pause()
-        val name = ToolWindowUi.selectedNodeName()
+        val name = readUntil("the file selected", read = { ToolWindowUi.selectedNodeName() }) { it == "review_target.py" }
         check("on a line without a thread it selects the file", name == "review_target.py", name)
     }
 
@@ -81,11 +81,13 @@ class SelectOpenedThreadInReviewDiffTest : SandboxScenario("select_opened_thread
         val focused = focusReplyBox(total)
         check("setup: the step's reply box holds the focus", focused == "true", focused)
         ToolWindowUi.pressToolWindowAction(BUTTON)
-        pause()
-        val got = ToolWindowUi.selectedStep()
+        val got = totalSelectedUntil()
         ToolWindowUi.screenshotToolWindow(shots.resolve("2-reply-box.png"))
         check("with the caret in a thread's reply box it selects that thread, not the caret line's file", got?.thread == total, got)
     }
+
+    private fun totalSelectedUntil(): ToolWindowUi.SelectedStep? =
+        readUntil("the step selected in the tool window", read = { ToolWindowUi.selectedStep() }) { it?.thread == total }
 
     private fun putCaretInReview(line: Int) {
         SandboxUi.js(

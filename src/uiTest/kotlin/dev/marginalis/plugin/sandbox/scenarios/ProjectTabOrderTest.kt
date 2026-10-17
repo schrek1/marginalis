@@ -4,6 +4,7 @@ import dev.marginalis.plugin.sandbox.Agent
 import dev.marginalis.plugin.sandbox.Sandbox
 import dev.marginalis.plugin.sandbox.SandboxScenario
 import dev.marginalis.plugin.sandbox.SandboxUi
+import dev.marginalis.plugin.sandbox.readUntil
 import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
 
@@ -24,21 +25,19 @@ class ProjectTabOrderTest : SandboxScenario("project_tab_order") {
         listOf("a", "b", "c").forEach(::start)
         Agent.agentReplies(threads.getValue("a"), "news on the oldest thread")
         SandboxUi.openMarginTab(threads.getValue("a"))
+        // Time for the reply to move the oldest thread, which it must not.
         settle()
+        val oldestFirst = listedUntil("a", "b", "c") { it == listOf("a", "b", "c") }
         shot("1-default-oldest-first")
-        check(
-            "by default the tab lists the oldest thread first, and a reply does not move it",
-            listed("a", "b", "c") == listOf("a", "b", "c"), listed("a", "b", "c"),
-        )
+        check("by default the tab lists the oldest thread first, and a reply does not move it", oldestFirst == listOf("a", "b", "c"), oldestFirst)
     }
 
     @Test
     @Order(2)
     fun walkthroughStepsReadInStepOrder() = case("walkthrough_steps_read_in_step_order") {
         listOf(3, 1, 2).forEach(::step)
-        settle()
+        val steps = listedUntil("step1", "step2", "step3") { it == listOf("step1", "step2", "step3") }
         shot("2-steps-in-step-order")
-        val steps = listed("step1", "step2", "step3")
         check("project-level steps posted as 3, 1, 2 read 1, 2, 3", steps == listOf("step1", "step2", "step3"), steps)
     }
 
@@ -46,10 +45,9 @@ class ProjectTabOrderTest : SandboxScenario("project_tab_order") {
     @Order(3)
     fun sortMenuSwitchesTheOrder() = case("sort_menu_switches_the_order") {
         SandboxUi.chooseMarginSort("Newest first")
-        settle()
+        val listed = listedUntil("a", "b", "c", "step1", "step2", "step3") { it == listOf("step1", "step2", "step3", "c", "b", "a") }
         shot("3-newest-first")
         check("the Sort menu stores Newest first for the project", SandboxUi.marginSort() == "NEWEST_FIRST", SandboxUi.marginSort())
-        val listed = listed("a", "b", "c", "step1", "step2", "step3")
         check(
             "newest first lists the latest created thread first, steps still 1, 2, 3",
             listed == listOf("step1", "step2", "step3", "c", "b", "a"), listed,
@@ -57,9 +55,9 @@ class ProjectTabOrderTest : SandboxScenario("project_tab_order") {
 
         SandboxUi.chooseMarginSort("Recent activity")
         Agent.agentReplies(threads.getValue("b"), "news on b")
-        settle()
+        val byActivity = listedUntil("a", "b", "c") { it.take(1) == listOf("b") }
         shot("4-recent-activity")
-        check("recent activity puts the thread with the latest reply first", listed("a", "b", "c").take(1) == listOf("b"), listed("a", "b", "c"))
+        check("recent activity puts the thread with the latest reply first", byActivity.take(1) == listOf("b"), byActivity)
     }
 
     @Test
@@ -67,15 +65,13 @@ class ProjectTabOrderTest : SandboxScenario("project_tab_order") {
     fun draftSitsOnTheNewSide() = case("draft_sits_on_the_new_side") {
         SandboxUi.chooseMarginSort("Oldest first")
         SandboxUi.userStartsNewProjectThread()
-        settle()
+        val oldestFirst = listedUntil("a", "b", "c") { it.takeLast(1) == listOf("draft") }
         shot("5-draft-oldest-first")
-        val oldestFirst = listed("a", "b", "c")
         check("with oldest first a new thread's draft sits below the threads", oldestFirst.takeLast(1) == listOf("draft"), oldestFirst)
 
         SandboxUi.chooseMarginSort("Newest first")
-        settle()
+        val newestFirst = listedUntil("a", "b", "c") { it.take(1) == listOf("draft") }
         shot("6-draft-newest-first")
-        val newestFirst = listed("a", "b", "c")
         check("with newest first the draft sits above the threads", newestFirst.take(1) == listOf("draft"), newestFirst)
     }
 
@@ -96,6 +92,9 @@ class ProjectTabOrderTest : SandboxScenario("project_tab_order") {
         val wanted = names.toSet() + "draft"
         return SandboxUi.marginTabOrder().map { entry -> byId[entry] ?: entry }.filter { it in wanted }
     }
+
+    private fun listedUntil(vararg names: String, done: (List<String>) -> Boolean): List<String> =
+        readUntil("the Margin tab's order of ${names.toList()}", read = { listed(*names) }, done = done)
 
     private fun start(name: String) {
         threads[name] = Agent.agentStartsProjectThread("Thread $name")

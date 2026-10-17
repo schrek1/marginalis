@@ -46,6 +46,27 @@ fun <T : Any> awaitValue(
     )
 }
 
+/**
+ * The first value `read` gives that `done` accepts within `timeout`. A timeout returns the last value read, so the
+ * step's own check fails on what the IDE really shows, and records diagnostics; when every read threw, it rethrows the
+ * last error.
+ */
+fun <T> readUntil(
+    what: String,
+    timeout: Duration = Duration.ofSeconds(20),
+    every: Duration = pollEvery,
+    read: () -> T,
+    done: (T) -> Boolean,
+): T {
+    var last: Read<T>? = null
+    val polled = poll(what, timeout, every, retryOn = { true }) {
+        Read(read()).also { last = it }.takeIf { done(it.value) }
+    }
+    return (polled.value ?: last ?: throw checkNotNull(polled.lastError)).value
+}
+
+private class Read<T>(val value: T)
+
 private class Polled<T>(val value: T?, val lastError: Throwable?, val diagnostics: String?)
 
 private fun <T : Any> poll(what: String, timeout: Duration, every: Duration, retryOn: (Throwable) -> Boolean, read: () -> T?): Polled<T> {

@@ -8,6 +8,7 @@ import dev.marginalis.plugin.sandbox.SandboxScenario
 import dev.marginalis.plugin.sandbox.SandboxUi
 import dev.marginalis.plugin.sandbox.safe
 import dev.marginalis.plugin.sandbox.awaitUntil
+import dev.marginalis.plugin.sandbox.readUntil
 import dev.marginalis.plugin.sandbox.waitUntil
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Order
@@ -131,15 +132,16 @@ class ReviewDiffWalkthroughTest : SandboxScenario("review_diff_walkthrough") {
         check("$case: the review diff stays in front", kind == "DIFF", kind)
         check("$case: the diff shows the step's file", ReviewDiffUi.diffShows(after))
         check("$case: the step's thread opens in the diff", opened, safe { SandboxUi.threadIdsOpenInDiff(after) })
-        val caret = safe { ReviewDiffUi.diffCaretLine(after) }
+        val caret = safe { readUntil("$case: the caret on the step's line", read = { ReviewDiffUi.diffCaretLine(after) }) { it == line } }
         check("$case: the diff scrolls to the step's line in the review's text", caret == line, caret)
     }
 
     private fun expectStepInFileTab(case: String, step: String, file: String) {
         val opened = waitUntil("step $step opens in the tab of $file") { steps.getValue(step) in ReviewDiffUi.threadIdsOpenInFileTab(file) }
+        val fileTab = "TEXT:${file.substringAfterLast('/')}"
+        val kind = readUntil("$case: the file's own tab in front", read = { SandboxUi.selectedEditorKind() }) { it == fileTab }
         shot(case)
-        val kind = SandboxUi.selectedEditorKind()
-        check("$case: the step opens in the file's own tab", kind == "TEXT:${file.substringAfterLast('/')}", kind)
+        check("$case: the step opens in the file's own tab", kind == fileTab, kind)
         check("$case: the step's thread opens there", opened, safe { ReviewDiffUi.threadIdsOpenInFileTab(file) })
     }
 

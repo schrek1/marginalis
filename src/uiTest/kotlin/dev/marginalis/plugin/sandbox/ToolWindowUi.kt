@@ -55,8 +55,9 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
      * All names are looked up at once: a header still being built is retried, a name the header does not use is not.
      */
     fun pressToolWindowAction(vararg names: String) {
+        var token = ""
         retryWhileHeaderIsBuilt("none of ${names.toList()} is in the tool window header") {
-            js(
+            token = js(
                 FIND + HEADER + """
                 var names = ${lit(names)};
                 var button = null;
@@ -71,11 +72,11 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
                 var event = com.intellij.openapi.actionSystem.AnActionEvent.createEvent(
                     action, com.intellij.ide.DataManager.getInstance().getDataContext(button), button.getPresentation().clone(),
                     'MarginalisSandbox', com.intellij.openapi.actionSystem.ActionUiKind.NONE, null);
-                performLater(action, event);
-                String(true)
+                String(performLater(action, event))
                 """,
             )
         }
+        SandboxUi.awaitActionRan(names.first(), token)
     }
 
     /** Whether the header button `name` is enabled, as its action's own update reports it to the user. */
@@ -427,6 +428,7 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
         }
 
     fun screenshotToolWindow(target: Path) {
+        SandboxUi.showToolWindow()
         val xpath = "//div[@class='MarginalisToolWindowPanel' or @javaclass='dev.marginalis.plugin.ui.toolwindow.MarginalisToolWindowPanel']"
         // The robot's hierarchy misses the panel for a moment while the tool window relays out; on the floor IDE in a
         // container that moment ran past 5 s. Longer, the tool window is off screen, which the user would notice.

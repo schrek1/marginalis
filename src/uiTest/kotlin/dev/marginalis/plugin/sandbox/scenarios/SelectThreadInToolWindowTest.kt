@@ -7,6 +7,7 @@ import dev.marginalis.plugin.sandbox.ToolWindowUi
 import dev.marginalis.plugin.sandbox.ToolWindowUi.SelectedStep
 import dev.marginalis.plugin.sandbox.fixtures.DeepWalkthrough
 import dev.marginalis.plugin.sandbox.fixtures.postWalkthrough
+import dev.marginalis.plugin.sandbox.readUntil
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
@@ -40,7 +41,7 @@ class SelectThreadInToolWindowTest : SandboxScenario("select_thread_in_tool_wind
         SandboxUi.openThreadInEditor(steps.getValue(order), file)
         pause()
         SandboxUi.pressPanelAction(steps.getValue(order), SELECT_IN_MARGINALIS)
-        val got = selected()
+        val got = selectedUntil { it?.thread == steps.getValue(order) && it.section.startsWith("Guided") }
         ToolWindowUi.screenshotToolWindow(shots.resolve("1-step.png"))
         check("Select in Marginalis selects the step", got?.thread == steps.getValue(order), got)
         check("…in its Guided section", got?.section.orEmpty().startsWith("Guided"), got)
@@ -53,7 +54,7 @@ class SelectThreadInToolWindowTest : SandboxScenario("select_thread_in_tool_wind
         SandboxUi.openThreadInEditor(plain, FILE)
         pause()
         SandboxUi.pressPanelAction(plain, SELECT_IN_MARGINALIS)
-        val got = selected()
+        val got = selectedUntil { it?.thread == plain && it.section == "Open" }
         check("a thread outside any walkthrough is selected in Open", got?.thread == plain && got.section == "Open", got)
     }
 
@@ -70,7 +71,7 @@ class SelectThreadInToolWindowTest : SandboxScenario("select_thread_in_tool_wind
         SandboxUi.openThreadInEditor(resolved, FILE)
         // A freshly reopened editor lays its inlays out a moment later; the press waits for the panel on screen.
         SandboxUi.pressPanelAction(resolved, SELECT_IN_MARGINALIS)
-        val got = selected()
+        val got = selectedUntil { it?.thread == resolved && it.section == "Resolved" }
         ToolWindowUi.screenshotToolWindow(shots.resolve("2-resolved.png"))
         check("a resolved thread is selected inside the folded Resolved section", got?.thread == resolved && got.section == "Resolved", got)
     }
@@ -83,20 +84,17 @@ class SelectThreadInToolWindowTest : SandboxScenario("select_thread_in_tool_wind
         pause()
         SandboxUi.moveCaret(FILE, 5)
         ToolWindowUi.pressToolWindowAction("Select Opened Thread")
-        val got = selected()
+        val got = selectedUntil { it?.thread == plain }
         check("Select Opened Thread selects the thread on the caret's line", got?.thread == plain, got)
 
         SandboxUi.moveCaret(FILE, 2)
         ToolWindowUi.pressToolWindowAction("Select Opened Thread")
-        pause()
-        val name = ToolWindowUi.selectedNodeName()
+        val name = readUntil("the file selected", read = { ToolWindowUi.selectedNodeName() }) { it == "review_target.py" }
         check("on a line without a thread it selects the file", name == "review_target.py", name)
     }
 
-    private fun selected(): SelectedStep? {
-        pause()
-        return ToolWindowUi.selectedStep()
-    }
+    private fun selectedUntil(done: (SelectedStep?) -> Boolean): SelectedStep? =
+        readUntil("the thread selected in the tool window", read = { ToolWindowUi.selectedStep() }, done = done)
 
     private companion object {
         const val FILE = "src/review_target.py"

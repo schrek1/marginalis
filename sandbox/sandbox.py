@@ -36,6 +36,9 @@ ROBOT_PORT = int(os.environ.get("MARGINALIS_ROBOT_PORT", "8082"))
 # window size whatever the monitor does (asleep it reports 640x480, which clamps every window), nothing on the
 # desktop, and the platform floor IDE (IntelliJ Community from the build) as CI runs it.
 DOCKER = os.environ.get("MARGINALIS_SANDBOX_DOCKER") == "1"
+# The container runs as root. Docker Desktop (Windows, macOS) maps what it writes into a bind mount to the host user;
+# a Linux host keeps root as the owner, so the copies brought out are handed to the host user.
+HOST_OWNER = f"{os.getuid()}:{os.getgid()}" if sys.platform.startswith("linux") else None
 CONTAINER = f"marginalis-sandbox-{ROBOT_PORT}"
 # Tagged by what goes into the image: runs of different checkouts build their own image instead of swapping each
 # other's entrypoint under running containers.
@@ -143,6 +146,7 @@ def build_in_docker(feature_dir: Path, prebuilt: Path) -> None:
     prebuilt.mkdir(parents=True, exist_ok=True)
     subprocess.run([
         "docker", "run", "--rm", "-e", "MARGINALIS_SANDBOX_MODE=build",
+        *(["-e", f"MARGINALIS_HOST_OWNER={HOST_OWNER}"] if HOST_OWNER else []),
         "--mount", f"type=bind,source={feature_dir},target=/src,readonly",
         "--mount", f"type=bind,source={prebuilt.resolve()},target=/prebuilt",
         *container_volumes(BUILD_CONTAINER),
@@ -329,7 +333,8 @@ def push_project() -> None:
 def pull_project() -> None:
     """Brings the IDE's copy back into the host folder, so the next start (and reads after the stop) see it."""
     if container_running():
-        subprocess.run(["docker", "exec", CONTAINER, "rsync", "-a", "--delete", "/work/runtime/project/",
+        chown = [f"--chown={HOST_OWNER}"] if HOST_OWNER else []
+        subprocess.run(["docker", "exec", CONTAINER, "rsync", "-a", "--delete", *chown, "/work/runtime/project/",
                         "/project-host/"], capture_output=True)
 
 

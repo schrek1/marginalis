@@ -303,8 +303,14 @@ val sandboxPrebuilt by tasks.registering(Exec::class) {
     outputs.upToDateWhen { false }
     val output = sandboxPrebuiltDir.get().asFile
     doFirst { output.mkdirs() }
+    // The container builds as root; on a Linux host the plugins it copies out stay root's unless handed back.
+    val hostOwner = if (System.getProperty("os.name").startsWith("Linux")) {
+        com.sun.security.auth.module.UnixSystem().let { user -> listOf("-e", "MARGINALIS_HOST_OWNER=${user.uid}:${user.gid}") }
+    } else {
+        emptyList()
+    }
     commandLine(
-        "docker", "run", "--rm", "-e", "MARGINALIS_SANDBOX_MODE=build",
+        "docker", "run", "--rm", "-e", "MARGINALIS_SANDBOX_MODE=build", *hostOwner.toTypedArray(),
         "--mount", "type=bind,source=${layout.projectDirectory.asFile.absolutePath},target=/src,readonly",
         "--mount", "type=bind,source=${output.absolutePath},target=/prebuilt",
         // The volumes sandbox.py's build container uses: its Gradle home seeds every sandbox's own.

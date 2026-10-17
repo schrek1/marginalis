@@ -77,6 +77,23 @@ out. Six is the default: under a 5-minute target with half the machine left. A s
 
 The Kotlin suite was measured at the default 6 sandboxes on 2026-10-16: about 4.2 min, 5 runs in a row green.
 
+### In CI
+
+Every pull request runs the suite in the `e2e` job of `.github/workflows/ci.yml`. It runs on GitHub's free
+`ubuntu-latest` runner (4 vCPU, 16 GB) with 4 sandboxes: about 15 min, of which the plugin build takes about 2.5 min
+and the scenarios about 10 min. The job keeps the JUnit results, each scenario's IDE log, the timeout diagnostics
+and the shots as the `e2e-reports` artifact. The runner is a Linux host, where files a container writes into a bind
+mount stay root's: the harness hands them back to the runner's user (`MARGINALIS_HOST_OWNER`, `rsync --chown`).
+
+Measured on 2026-10-17: 10 runs out of 10 green on one commit, 12.3–17.7 min each. The runner is much slower than a
+desktop, and getting there showed where a scenario must wait for a condition rather than for time:
+- a pressed button returns once its action ran;
+- a value read after an asynchronous change goes through `readUntil`;
+- the Margin tab is revealed only once it is done opening behind the file in front;
+- the tool window counts as shown once it stays on screen.
+
+A failure there is a bug to diagnose from the artifact, never a reason to rerun the job until it passes.
+
 ## Adding a scenario
 
 1. Write the feature's runbook (`sandbox/runbooks/README.md` has the format); its `Scenario` line names the class.
@@ -90,9 +107,12 @@ The Kotlin suite was measured at the default 6 sandboxes on 2026-10-16: about 4.
    threads; `Sandbox.restart(fresh = ...)` gives a case a new project or a persisted state.
 4. The agent's side is `Agent`, the user's `SandboxUi`, `ToolWindowUi` and `ReviewDiffUi`, larger thread sets
    `fixtures/Walkthroughs.kt`. Add a missing step there rather than inline JavaScript in the scenario.
-5. Every wait for a condition goes through `Waits.kt` (`waitUntil`, `awaitUntil`, `awaitValue`): bounded, and a
-   timeout records the diagnostics. Prefer one over a fixed sleep, and never fall back to a weaker read when the
-   real one fails: the step fails instead.
+5. Every wait for a condition goes through `Waits.kt` (`waitUntil`, `awaitUntil`, `awaitValue`, `readUntil`):
+   bounded, and a timeout records the diagnostics. Prefer one over a fixed sleep, and never fall back to a weaker
+   read when the real one fails: the step fails instead. A check of an outcome the IDE reaches asynchronously
+   (layout, a re-render, the tree, a badge, a selection) reads it with `readUntil` and the check's own condition,
+   so a slow machine is waited for and a timeout still fails the check on the value last read. A fixed sleep stays
+   only where the check must see that something did not happen.
 
 ### Rules for the steps
 

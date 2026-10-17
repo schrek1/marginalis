@@ -5,6 +5,7 @@ import dev.marginalis.plugin.sandbox.SandboxScenario
 import dev.marginalis.plugin.sandbox.SandboxUi
 import dev.marginalis.plugin.sandbox.ToolWindowUi
 import dev.marginalis.plugin.sandbox.awaitValue
+import dev.marginalis.plugin.sandbox.readUntil
 import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
 
@@ -52,19 +53,21 @@ class EnvelopeOnlyWhileUnreadTest : SandboxScenario("envelope_only_while_unread"
     @Test
     @Order(2)
     fun treeShowsTheEnvelopeOnlyWhileUnread() = case("tree_shows_the_envelope_only_while_unread") {
-        val signals = threadSignals()
         val expected = mapOf("A" to "you", "B" to "none", "C" to "agent", "D" to "none", "Project A" to "you", "Project B" to "none")
+        val signals = readUntil("the tree's turn signals", read = { threadSignals() }) { shown ->
+            expected.all { (name, signal) -> shown[name] == signal }
+        }
         for ((name, signal) in expected) {
             check("tree: thread $name shows $signal", signals[name] == signal, signals[name])
         }
-        val counts = treeSignals().files[FILE_NAME]
+        val counts = fileCountsUntil(FileCounts(you = 1, agent = 1))
         check("tree: the file row counts ✉ 1 and ✈ 1", counts == FileCounts(you = 1, agent = 1), counts)
     }
 
     @Test
     @Order(3)
     fun stripeKeepsTheEnvelopeWhileSomethingIsUnread() = case("stripe_keeps_the_envelope_while_something_is_unread") {
-        val badge = stripeBadge()
+        val badge = stripeBadgeUntil("AWAITING_YOU")
         check("stripe: the envelope badge stays while A is unread", badge == "AWAITING_YOU", badge)
     }
 
@@ -72,12 +75,14 @@ class EnvelopeOnlyWhileUnreadTest : SandboxScenario("envelope_only_while_unread"
     @Order(4)
     fun marginTabShowsTheEnvelopeOnlyWhileUnread() = case("margin_tab_shows_the_envelope_only_while_unread") {
         checkStillUnread("before the Margin tab checks")
-        val title = marginTabTitle()
+        val title = marginTabTitleUntil("✉ 1")
         check("Margin tab: the title counts only the unread project thread (✉ 1)", title == "✉ 1", title)
-        val cards = marginCardSignals()
+        val cards = readUntil("the Margin tab cards' turn signals", read = { marginCardSignals() }) { cards ->
+            cards[id("Project A")] == "you" && cards[id("Project B")] == "none"
+        }
         check("Margin tab: Project A's card keeps the envelope", cards[id("Project A")] == "you", cards)
         check("Margin tab: Project B's card shows no envelope", cards[id("Project B")] == "none", cards)
-        val counts = marginCounts()
+        val counts = readUntil("the Margin tab header's counts", read = { marginCounts() }) { "2 your move" in it }
         check("Margin tab: the header still counts both as your move", "2 your move" in counts, counts)
     }
 
@@ -95,13 +100,14 @@ class EnvelopeOnlyWhileUnreadTest : SandboxScenario("envelope_only_while_unread"
     @Order(6)
     fun everythingReadClearsEveryEnvelope() = case("everything_read_clears_every_envelope") {
         listOf("A", "Project A").forEach { name -> SandboxUi.userReads(id(name)) }
+        // Time for reading to change the file's turn, which it must not.
         settle()
         shot("2-all-read")
-        val badge = stripeBadge()
+        val badge = stripeBadgeUntil("NONE")
         check("stripe: once everything is read the button is plain", badge == "NONE", badge)
-        val counts = treeSignals().files[FILE_NAME]
+        val counts = fileCountsUntil(FileCounts(you = null, agent = 1))
         check("tree: the file row shows no ✉ once everything is read", counts == FileCounts(you = null, agent = 1), counts)
-        val title = marginTabTitle()
+        val title = marginTabTitleUntil("Margin")
         check("Margin tab: the title is Margin once everything is read", title == "Margin", title)
         check("the file's editor-tab badge still follows your move", fileTurn(FILE) == "USER_OWES", fileTurn(FILE))
     }
@@ -110,11 +116,10 @@ class EnvelopeOnlyWhileUnreadTest : SandboxScenario("envelope_only_while_unread"
     @Order(7)
     fun aNewAgentMessageBringsTheEnvelopeBack() = case("a_new_agent_message_brings_the_envelope_back") {
         Agent.agentReplies(id("B"), "One more thing about B.")
-        settle()
+        val signal = readUntil("B's turn signal in the tree", read = { threadSignals()["B"] }) { it == "you" }
         shot("3-new-message-on-b")
-        val signal = threadSignals()["B"]
         check("tree: a new agent message on B brings its envelope back", signal == "you", signal)
-        val badge = stripeBadge()
+        val badge = stripeBadgeUntil("AWAITING_YOU")
         check("stripe: the envelope badge returns with it", badge == "AWAITING_YOU", badge)
     }
 
@@ -122,10 +127,18 @@ class EnvelopeOnlyWhileUnreadTest : SandboxScenario("envelope_only_while_unread"
     @Order(8)
     fun aBlockerStillWins() = case("a_blocker_still_wins") {
         Agent.agentAddsLineThread(FILE, 3, "A blocker: this must change before merge.", fields = mapOf("severity" to "blocker"))
-        settle()
-        val badge = stripeBadge()
+        val badge = stripeBadgeUntil("BLOCKER")
         check("stripe: an open blocker's red badge wins over the envelope", badge == "BLOCKER", badge)
     }
+
+    private fun stripeBadgeUntil(expected: String): String =
+        readUntil("the stripe badge $expected", read = { stripeBadge() }) { it == expected }
+
+    private fun fileCountsUntil(expected: FileCounts): FileCounts? =
+        readUntil("the file row's counts $expected", read = { treeSignals().files[FILE_NAME] }) { it == expected }
+
+    private fun marginTabTitleUntil(expected: String): String =
+        readUntil("the Margin tab titled $expected", read = { marginTabTitle() }) { it == expected }
 
     private fun id(name: String): String = ids[name] ?: error("thread $name was not seeded")
 

@@ -58,6 +58,14 @@ object Sandbox {
         .toAbsolutePath()
     private val prebuilt: Path? = System.getProperty("marginalis.sandbox.prebuilt")?.let(Path::of)?.takeIf { it.resolve("plugins").exists() }
 
+    // The IDE in the container runs as root. Docker Desktop (Windows, macOS) maps what it writes into a bind mount to
+    // the host user; a Linux host keeps root as the owner, and the harness could no longer delete the project.
+    private val hostOwner: String? = if (System.getProperty("os.name").startsWith("Linux")) {
+        com.sun.security.auth.module.UnixSystem().let { user -> "${user.uid}:${user.gid}" }
+    } else {
+        null
+    }
+
     // `sandboxImage` tags the image by its Dockerfile and entrypoint (build.gradle.kts).
     private val image: String = System.getProperty("marginalis.sandbox.image") ?: "marginalis-sandbox"
     private val startTimeout = Duration.ofSeconds(900)
@@ -309,7 +317,8 @@ object Sandbox {
 
         private fun pullProject() {
             if (launch == Launch.DOCKER && containerRunning()) {
-                val pulled = docker("exec", container!!, "rsync", "-a", "--delete", "$CONTAINER_PROJECT/", "/project-host/")
+                val chown = hostOwner?.let { owner -> listOf("--chown=$owner") }.orEmpty()
+                val pulled = docker("exec", container!!, "rsync", "-a", "--delete", *chown.toTypedArray(), "$CONTAINER_PROJECT/", "/project-host/")
                 if (pulled != 0) println("copying the IDE's project back to the host failed ($pulled)")
             }
         }

@@ -40,11 +40,18 @@ function read(compute) {
 function asUser(run) {
     return com.intellij.openapi.application.WriteIntentReadAction.compute(new com.intellij.openapi.util.ThrowableComputable({ compute: run }));
 }
-// An action runs as its own EDT event, with the locks a click gives it; later robot scripts queue behind it, so they
-// see its outcome.
+// An action runs as its own EDT event, with the locks a click gives it. A robot script is a raw EDT event of its own
+// and can overtake the application's invokeLater queue on a busy IDE, so the action records under the returned token
+// that it ran, for [SandboxUi.awaitActionRan].
 function performLater(action, event) {
+    var token = String(java.util.UUID.randomUUID());
     com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater(
-        new java.lang.Runnable({ run: function () { action.actionPerformed(event); } }));
+        new java.lang.Runnable({ run: function () {
+            var outcome = 'ok';
+            try { action.actionPerformed(event); } catch (error) { outcome = 'failed: ' + error; }
+            java.lang.System.getProperties().put('marginalis.sandbox.action.' + token, outcome);
+        } }));
+    return token;
 }
 """
 
@@ -111,15 +118,26 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
 
     // --- tool window and editors --------------------------------------------------------------------------------
 
+    /**
+     * Shows the Marginalis tool window and returns once it has been on screen for a second. On a busy machine the IDE
+     * restores its own tool window layout late and puts the Project view over it; it is then shown again, as a user
+     * would click it again.
+     */
     fun showToolWindow() {
-        js(
-            """
-            var window = com.intellij.openapi.wm.ToolWindowManager.getInstance(project).getToolWindow('Marginalis');
-            window.show();
-            if (window.getComponent().getWidth() < 300) window.stretchWidth(450 - window.getComponent().getWidth());
-            String(true)
-            """,
-        )
+        var shownSince: Long? = null
+        awaitUntil("the Marginalis tool window on screen for a second", Duration.ofSeconds(60), Duration.ofMillis(250)) {
+            val shown = js(
+                """
+                var window = com.intellij.openapi.wm.ToolWindowManager.getInstance(project).getToolWindow('Marginalis');
+                if (!window.isVisible()) window.show();
+                var component = window.getComponent();
+                if (window.isVisible() && component.isShowing() && component.getWidth() < 300) window.stretchWidth(450 - component.getWidth());
+                String(window.isVisible() && component.isShowing())
+                """,
+            ) == "true"
+            if (!shown) shownSince = null else if (shownSince == null) shownSince = System.nanoTime()
+            shownSince?.let { since -> System.nanoTime() - since >= Duration.ofSeconds(1).toNanos() } ?: false
+        }
     }
 
     fun threadPanel(threadId: String): ComponentFixture =
@@ -299,7 +317,7 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
     /** Runs a button of the thread header (e.g. "Next Step") with that button's own data context. */
     fun pressPanelAction(threadId: String, text: String) {
         val escaped = lit(text)
-        js(
+        val token = js(
             FIND + """
             var button = find(component, function (c) {
                 return c instanceof com.intellij.openapi.actionSystem.impl.ActionButton
@@ -310,11 +328,21 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
             var event = com.intellij.openapi.actionSystem.AnActionEvent.createEvent(
                 action, com.intellij.ide.DataManager.getInstance().getDataContext(button), button.getPresentation().clone(),
                 'MarginalisSandbox', com.intellij.openapi.actionSystem.ActionUiKind.NONE, null);
-            performLater(action, event);
-            String(true)
+            String(performLater(action, event))
             """,
             threadPanel(threadId),
         )
+        awaitActionRan(text, token)
+    }
+
+    /** Waits until the action [performLater] queued under `token` has run; an action that threw fails the step. */
+    fun awaitActionRan(name: String, token: String) {
+        val key = "'marginalis.sandbox.action.$token'"
+        val outcome = awaitValue("the $name action ran", Duration.ofSeconds(30)) {
+            js("var outcome = java.lang.System.getProperties().remove($key); String(outcome == null ? '' : outcome)")
+                .takeIf { it.isNotEmpty() }
+        }
+        check(outcome == "ok") { "the $name action $outcome" }
     }
 
     /** Presses the thread header's own ⚡ ("Live: …" when on, "Go Live: …" when off) with its Swing `click()`. */
@@ -513,11 +541,29 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
     // --- Margin (project) tab -----------------------------------------------------------------------------------
 
     fun openMarginTab(threadId: String) {
-        // A project thread the agent just posted opens the tab behind the file in front, which comes back to the front
-        // a moment later; a reveal inside that moment loses to it. A person never clicks that fast, so wait it out.
+        // A project thread the agent just posted opens the tab behind the file in front: the tab is selected before its
+        // editor exists, then the file comes back to the front. A reveal in that window loses to the file; it lasts a
+        // moment on a desktop and seconds on a CI runner (the plugin side is MARG-96), so wait it out.
+        awaitUntil("the Margin tab done opening behind the file in front", Duration.ofSeconds(30)) {
+            val state = obj(js(MARGIN + EDITOR_STATE))
+            val opening = state.get("selected").asString == "Margin" && !state.get("marginOpen").asBoolean
+            !opening && !state.get("openBehindQueued").asBoolean
+        }
         settleEditorSelection()
+        println("INFO  before the reveal: ${js(MARGIN + EDITOR_STATE)}")
         js(MARGIN + "projectTab().reveal(project, store.getThreads().byId('$threadId'), null); String(true)")
+        awaitUntil("the Margin tab in front after the reveal") {
+            obj(js(MARGIN + EDITOR_STATE)).get("selected").asString == "Margin"
+        }
     }
+
+    private const val EDITOR_STATE = """
+        var editors = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project);
+        var files = editors.getSelectedFiles();
+        var tabState = service('dev.marginalis.plugin.ui.tab.ProjectTabState');
+        String(JSON.stringify({ selected: files.length ? String(files[0].getName()) : '', marginOpen: marginTabOpen(),
+                                openBehindQueued: fieldOf(tabState, 'openBehindQueued').get() }))
+        """
 
     /** Waits until the editor in front has not changed for `quiet`, at most `limit`. */
     fun settleEditorSelection(quiet: Duration = Duration.ofMillis(500), limit: Duration = Duration.ofSeconds(5)) {

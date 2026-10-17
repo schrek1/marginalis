@@ -9,6 +9,7 @@ import dev.marginalis.plugin.sandbox.ToolWindowUi.ShapeNode
 import dev.marginalis.plugin.sandbox.fixtures.DeepWalkthrough
 import dev.marginalis.plugin.sandbox.fixtures.InterleavedWalkthrough
 import dev.marginalis.plugin.sandbox.fixtures.postWalkthrough
+import dev.marginalis.plugin.sandbox.readUntil
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
@@ -32,13 +33,12 @@ class GuidedLayoutTest : SandboxScenario("guided_layout") {
                 Agent.agentAddsStep(file, line, "Step $order: review note", order, PROJECT_FIRST_LABEL)
             }
         }
-        Thread.sleep(3_000)
     }
 
     @Test
     @Order(1)
     fun defaultIsTheStepNumberList() = case("default_is_the_step_number_list") {
-        val shape = ToolWindowUi.guidedShape()
+        val shape = shapeUntil("the open steps listed in step order") { topLevelSteps(it) == OPEN_STEPS }
         check("by default the layout is By step number", ToolWindowUi.guidedLayout() == "BY_STEP_NUMBER", ToolWindowUi.guidedLayout())
         check("by default the steps read in step order", topLevelSteps(shape) == OPEN_STEPS, topLevelSteps(shape))
     }
@@ -47,8 +47,7 @@ class GuidedLayoutTest : SandboxScenario("guided_layout") {
     @Order(2)
     fun byFolderGroupsUnderFolders() = case("by_folder_groups_under_folders") {
         ToolWindowUi.chooseGuidedLayout("By folder")
-        pause()
-        val shape = ToolWindowUi.guidedShape()
+        val shape = shapeUntil("the steps grouped under folders") { shape -> shape.any { it.kind == "DirNode" } }
         toolWindowShot("1-by-folder")
         check("By folder groups the steps under folders", shape.any { it.kind == "DirNode" }, shape)
     }
@@ -57,8 +56,10 @@ class GuidedLayoutTest : SandboxScenario("guided_layout") {
     @Order(3)
     fun byStepNumberListsStepsInOrder() = case("by_step_number_lists_steps_in_order") {
         ToolWindowUi.chooseGuidedLayout("By step number")
-        pause()
-        val shape = ToolWindowUi.guidedShape()
+        val shape = shapeUntil("the steps listed by step number") { shape ->
+            shape.all { it.kind in setOf("ThreadNode", "FileNode") } && topLevelSteps(shape) == OPEN_STEPS &&
+                shape.filter { it.kind == "ThreadNode" }.all { it.showsFile == true }
+        }
         toolWindowShot("2-by-step-number")
         val kinds = shape.map { it.kind }.toSet()
         check("By step number has no folder nodes", kinds.all { it in setOf("ThreadNode", "FileNode") }, kinds)
@@ -69,7 +70,7 @@ class GuidedLayoutTest : SandboxScenario("guided_layout") {
     @Test
     @Order(4)
     fun byStepNumberFoldsRunsInOneFile() = case("by_step_number_folds_runs_in_one_file") {
-        val shape = ToolWindowUi.guidedShape(HOPPING)
+        val shape = shapeUntil("the hopping walk folded by step number", HOPPING) { shape -> shape.map { it.steps } == HOPPING_BY_STEP }
         toolWindowShot("3-by-step-number-hopping")
         val steps = shape.map { it.steps }
         check(
@@ -92,7 +93,9 @@ class GuidedLayoutTest : SandboxScenario("guided_layout") {
     @Test
     @Order(5)
     fun byStepNumberFoldsProjectLevelRuns() = case("by_step_number_folds_project_level_runs") {
-        val shape = ToolWindowUi.guidedShape(PROJECT_FIRST)
+        val shape = shapeUntil("the project-level runs folded by step number", PROJECT_FIRST) { shape ->
+            shape.map { it.kind to it.steps } == PROJECT_FIRST_BY_STEP
+        }
         toolWindowShot("3b-by-step-number-project-first")
         val kindsAndSteps = shape.map { it.kind to it.steps }
         check(
@@ -103,15 +106,13 @@ class GuidedLayoutTest : SandboxScenario("guided_layout") {
             "a project-level run after file steps folds under a project node of its own",
             shape.filter { it.kind == "ProjectNode" }.map { it.steps } == listOf(listOf(1, 2, 3), listOf(8, 9)), kindsAndSteps,
         )
-        ToolWindowUi.selectStep(1, PROJECT_FIRST)
-        pause()
-        val seen = mutableListOf(ToolWindowUi.selectedStep()!!.order)
-        repeat(PROJECT_FIRST_STEPS.size - 1) {
-            ToolWindowUi.pressToolWindowAction(*NEXT)
-            pause()
-            seen += ToolWindowUi.selectedStep()!!.order
-        }
         val expected = PROJECT_FIRST_STEPS.map { it.order }
+        ToolWindowUi.selectStep(1, PROJECT_FIRST)
+        val seen = mutableListOf(selectedOrderUntil(expected.first()))
+        for (next in expected.drop(1)) {
+            ToolWindowUi.pressToolWindowAction(*NEXT)
+            seen += selectedOrderUntil(next)
+        }
         check("Next walks into, through and out of the project runs in step order", seen == expected, "$seen vs $expected")
     }
 
@@ -119,8 +120,7 @@ class GuidedLayoutTest : SandboxScenario("guided_layout") {
     @Order(6)
     fun byFileHasOneNodePerFile() = case("by_file_has_one_node_per_file") {
         ToolWindowUi.chooseGuidedLayout("By file")
-        pause()
-        val shape = ToolWindowUi.guidedShape()
+        val shape = shapeUntil("a file node per file") { shape -> shape.size > 1 && shape.all { it.kind == "FileNode" } }
         toolWindowShot("4-by-file")
         val files = shape.filter { it.kind == "FileNode" }
         check("By file has a file node per file and no folders", files.size == shape.size && files.size > 1, shape.map { it.kind })
@@ -128,20 +128,21 @@ class GuidedLayoutTest : SandboxScenario("guided_layout") {
         val firsts = files.map { it.steps.min() }
         check("files follow their first step", firsts == firsts.sorted(), firsts)
         check("steps inside a file follow their numbers", files.all { it.steps == it.steps.sorted() })
-        val hoppingFiles = ToolWindowUi.guidedShape(HOPPING).associate { it.name to it.steps }
+        val hoppingFiles = shapeUntil("the hopping walk's service gathered in one node", HOPPING) { shape ->
+            shape.any { it.name == InterleavedWalkthrough.SERVICE && it.steps == listOf(2, 3, 6, 9) }
+        }.associate { it.name to it.steps }
         check("in a hopping walk, By file gathers every step of a file", hoppingFiles[InterleavedWalkthrough.SERVICE] == listOf(2, 3, 6, 9), hoppingFiles)
     }
 
     @Test
     @Order(7)
     fun arrowsFollowStepNumbersByFile() = case("arrows_follow_step_numbers_by_file") {
-        ToolWindowUi.selectStep(OPEN_STEPS.first())
-        pause()
-        val seen = mutableListOf(ToolWindowUi.selectedStep()!!.order)
-        repeat(5) {
+        val walk = OPEN_STEPS.take(6)
+        ToolWindowUi.selectStep(walk.first())
+        val seen = mutableListOf(selectedOrderUntil(walk.first()))
+        for (next in walk.drop(1)) {
             ToolWindowUi.pressToolWindowAction(*NEXT)
-            pause()
-            seen += ToolWindowUi.selectedStep()!!.order
+            seen += selectedOrderUntil(next)
         }
         check("in By file Next walks the step numbers", seen == OPEN_STEPS.take(6), "$seen vs ${OPEN_STEPS.take(6)}")
     }
@@ -158,6 +159,12 @@ class GuidedLayoutTest : SandboxScenario("guided_layout") {
     }
 
     private fun topLevelSteps(shape: List<ShapeNode>): List<Int> = shape.flatMap { it.steps }
+
+    private fun shapeUntil(what: String, sectionPrefix: String = "Guided", done: (List<ShapeNode>) -> Boolean): List<ShapeNode> =
+        readUntil(what, read = { ToolWindowUi.guidedShape(sectionPrefix) }, done = done)
+
+    private fun selectedOrderUntil(order: Int): Int? =
+        readUntil("step $order selected", read = { ToolWindowUi.selectedStep()!!.order }) { it == order }
 
     private fun toolWindowShot(name: String) = ToolWindowUi.screenshotToolWindow(shots.resolve("$name.png"))
 
@@ -199,7 +206,5 @@ class GuidedLayoutTest : SandboxScenario("guided_layout") {
         )
 
         val NEXT = arrayOf("Next Step", "Next Occurrence")
-
-        fun pause() = Thread.sleep(1_500)
     }
 }
