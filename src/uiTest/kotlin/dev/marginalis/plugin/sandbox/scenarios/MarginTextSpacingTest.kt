@@ -3,6 +3,7 @@ package dev.marginalis.plugin.sandbox.scenarios
 import dev.marginalis.plugin.sandbox.Agent
 import dev.marginalis.plugin.sandbox.SandboxScenario
 import dev.marginalis.plugin.sandbox.SandboxUi
+import dev.marginalis.plugin.sandbox.readUntil
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
@@ -20,7 +21,7 @@ class MarginTextSpacingTest : SandboxScenario("margin_text_spacing") {
     @Order(1)
     fun singleEnter() = case("single_enter") {
         val thread = posted("Alphaline first\nBravoline second")
-        val boxes = SandboxUi.wordBoxes(thread, listOf("Alphaline", "Bravoline"))
+        val boxes = laidOut(thread, listOf("Alphaline", "Bravoline"))
         check("a single Enter starts a new line", boxes["Bravoline"].top >= boxes["Alphaline"].bottom, boxes)
         SandboxUi.screenshotThread(thread, shots.resolve("spacing-single-enter.png"))
     }
@@ -29,7 +30,7 @@ class MarginTextSpacingTest : SandboxScenario("margin_text_spacing") {
     @Order(2)
     fun hardBreakGuard() = case("hard_break_guard") {
         val thread = posted("Alphaline first  \nBravoline second")
-        val boxes = SandboxUi.wordBoxes(thread, listOf("Alphaline", "Bravoline"))
+        val boxes = laidOut(thread, listOf("Alphaline", "Bravoline"))
         val breaks = Regex("<br").findAll(boxes.html.orEmpty()).count()
         check("two trailing spaces still give exactly one break", breaks == 1, boxes.html)
     }
@@ -38,7 +39,7 @@ class MarginTextSpacingTest : SandboxScenario("margin_text_spacing") {
     @Order(3)
     fun extraBlankLines() = case("extra_blank_lines") {
         val thread = posted("Alphablank one\n\nBravoblank two\n\n\nCharlieblank three")
-        val boxes = SandboxUi.wordBoxes(thread, listOf("Alphablank", "Bravoblank", "Charlieblank"))
+        val boxes = laidOut(thread, listOf("Alphablank", "Bravoblank", "Charlieblank"))
         val oneBlank = boxes["Bravoblank"].top - boxes["Alphablank"].bottom
         val twoBlank = boxes["Charlieblank"].top - boxes["Bravoblank"].bottom
         val line = boxes["Alphablank"].bottom - boxes["Alphablank"].top
@@ -53,7 +54,7 @@ class MarginTextSpacingTest : SandboxScenario("margin_text_spacing") {
     @Order(4)
     fun paragraphs() = case("paragraphs") {
         val thread = posted("Alphapara one.\n\nBravopara two.\n\nCharliepara three.")
-        val boxes = SandboxUi.wordBoxes(thread, listOf("Alphapara", "Bravopara", "Charliepara"))
+        val boxes = laidOut(thread, listOf("Alphapara", "Bravopara", "Charliepara"))
         val gap = boxes["Bravopara"].top - boxes["Alphapara"].bottom
         check("paragraphs are set apart", gap >= MIN_GAP_PX, "gap ${px(gap)}")
         val first = boxes["Alphapara"].top - boxes["Alphapara"].paneTop
@@ -65,7 +66,7 @@ class MarginTextSpacingTest : SandboxScenario("margin_text_spacing") {
     @Order(5)
     fun lists() = case("lists") {
         val thread = posted("Alphaintro text:\n\n- Bravoitem one\n- Charlieitem two\n\nDeltaoutro text.")
-        val boxes = SandboxUi.wordBoxes(thread, listOf("Alphaintro", "Bravoitem", "Charlieitem", "Deltaoutro"))
+        val boxes = laidOut(thread, listOf("Alphaintro", "Bravoitem", "Charlieitem", "Deltaoutro"))
         val above = boxes["Bravoitem"].top - boxes["Alphaintro"].bottom
         check("a list is set off from the text above", above >= MIN_GAP_PX, "gap ${px(above)}")
         val between = boxes["Charlieitem"].top - boxes["Bravoitem"].bottom
@@ -79,16 +80,21 @@ class MarginTextSpacingTest : SandboxScenario("margin_text_spacing") {
     @Order(6)
     fun leadingListGuard() = case("leading_list_guard") {
         val thread = posted("- Alphalead item\n- Bravolead item")
-        val boxes = SandboxUi.wordBoxes(thread, listOf("Alphalead"))
+        val boxes = laidOut(thread, listOf("Alphalead"))
         val first = boxes["Alphalead"].top - boxes["Alphalead"].paneTop
         check("a message starting with a list has no gap on top", first <= 3, "${px(first)} above it")
     }
 
-    private fun posted(body: String): String {
-        val thread = Agent.agentStartsProjectThread(body)
-        Thread.sleep(2_000)
-        return thread
-    }
+    private fun posted(body: String): String = Agent.agentStartsProjectThread(body)
+
+    /**
+     * Where the words sit once the panel has laid itself out. Waits for the layout, not for a check's condition: a pane
+     * measured before it has its width wraps its text, and a wrapped line passes for a line break or a gap.
+     */
+    private fun laidOut(thread: String, words: List<String>): SandboxUi.WordBoxes =
+        readUntil("the thread's words laid out in its panel", read = { SandboxUi.panelView(thread) to SandboxUi.wordBoxes(thread, words) }) { (view, boxes) ->
+            view.valid && view.showing && view.height >= view.preferredHeight && boxes.boxes.keys.containsAll(words)
+        }.second
 
     private fun px(value: Double) = "${value}px"
 

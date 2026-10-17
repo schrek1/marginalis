@@ -3,6 +3,7 @@ package dev.marginalis.plugin.sandbox.scenarios
 import dev.marginalis.plugin.sandbox.Agent
 import dev.marginalis.plugin.sandbox.SandboxScenario
 import dev.marginalis.plugin.sandbox.SandboxUi
+import dev.marginalis.plugin.sandbox.readUntil
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
@@ -73,8 +74,9 @@ class ApiReplyRerendersTest : SandboxScenario("api_reply_rerenders") {
     }
 
     private fun expectReplyShown(case: String, threadId: String, reply: String) {
-        settle()
-        val view = SandboxUi.panelView(threadId)
+        val view = readUntil("$case: the reply shown in a panel grown to fit it", read = { SandboxUi.panelView(threadId) }) { view ->
+            reply in view.texts && view.height >= view.preferredHeight
+        }
         shot(case)
         check("$case: the open thread renders the agent's reply", reply in view.texts, view.texts)
         check("$case: the panel grows to fit it", view.height >= view.preferredHeight, "height ${view.height} < preferred ${view.preferredHeight}")

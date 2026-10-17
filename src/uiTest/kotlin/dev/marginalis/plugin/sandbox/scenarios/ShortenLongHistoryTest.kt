@@ -3,6 +3,7 @@ package dev.marginalis.plugin.sandbox.scenarios
 import dev.marginalis.plugin.sandbox.Agent
 import dev.marginalis.plugin.sandbox.SandboxScenario
 import dev.marginalis.plugin.sandbox.SandboxUi
+import dev.marginalis.plugin.sandbox.readUntil
 import org.junit.jupiter.api.Test
 
 /**
@@ -21,37 +22,50 @@ class ShortenLongHistoryTest : SandboxScenario("shorten_long_history") {
         val thread = Agent.agentAddsLineThread(FILE, 1, BODIES.first())
         BODIES.drop(1).forEach { body -> Agent.agentReplies(thread, body) }
         SandboxUi.openThreadInEditor(thread, FILE)
-        settle()
+        val unread = shownUntil(thread, BODIES)
         shot("1-unread")
-        check("an unread long thread shows every message", shown(thread) == BODIES, shown(thread))
+        check("an unread long thread shows every message", unread == BODIES, unread)
         check("an unread long thread hides nothing", historyLinks(thread).isEmpty(), historyLinks(thread))
 
         SandboxUi.userReads(thread)
+        // Time for the read to hide messages under the reader, which it must not.
         settle()
         check("reading does not hide messages under the reader", shown(thread) == BODIES, shown(thread))
-        check("a read thread that is still open offers to shorten", historyAction(thread) == SHORTEN, historyAction(thread))
+        val offeredAfterReading = historyActionUntil(thread, SHORTEN)
+        check("a read thread that is still open offers to shorten", offeredAfterReading == SHORTEN, offeredAfterReading)
 
         reopen(thread)
-        shot("2-read-reopened")
         val shortened = listOf(BODIES[0], BODIES[5], BODIES[6])
-        check("a read long thread shows the first and the last two", shown(thread) == shortened, shown(thread))
-        check("the four between hide behind one link", historyLinks(thread) == listOf(HIDDEN), historyLinks(thread))
+        val reopened = shownUntil(thread, shortened)
+        shot("2-read-reopened")
+        check("a read long thread shows the first and the last two", reopened == shortened, reopened)
+        val links = readUntil("the hidden middle's link", read = { historyLinks(thread) }) { it == listOf(HIDDEN) }
+        check("the four between hide behind one link", links == listOf(HIDDEN), links)
 
         clickLink(thread, HIDDEN)
-        settle()
+        val full = shownUntil(thread, BODIES)
         shot("3-full-history")
-        check("the link shows the full history", shown(thread) == BODIES, shown(thread))
-        check("the full history offers to shorten", historyAction(thread) == SHORTEN, historyAction(thread))
+        check("the link shows the full history", full == BODIES, full)
+        val offeredInFull = historyActionUntil(thread, SHORTEN)
+        check("the full history offers to shorten", offeredInFull == SHORTEN, offeredInFull)
 
         reopen(thread)
-        check("the full history stays on the next visit", shown(thread) == BODIES, shown(thread))
+        val revisited = shownUntil(thread, BODIES)
+        check("the full history stays on the next visit", revisited == BODIES, revisited)
 
         SandboxUi.pressPanelAction(thread, SHORTEN)
-        settle()
+        val shortenedAgain = shownUntil(thread, shortened)
         shot("4-shortened")
-        check("Shorten history hides the middle again", shown(thread) == shortened, shown(thread))
-        check("a shortened thread offers the full history again", historyAction(thread) == FULL, historyAction(thread))
+        check("Shorten history hides the middle again", shortenedAgain == shortened, shortenedAgain)
+        val offeredWhenShortened = historyActionUntil(thread, FULL)
+        check("a shortened thread offers the full history again", offeredWhenShortened == FULL, offeredWhenShortened)
     }
+
+    private fun shownUntil(threadId: String, expected: List<String>): List<String> =
+        readUntil("the thread shows ${expected.size} of its messages", read = { shown(threadId) }) { it == expected }
+
+    private fun historyActionUntil(threadId: String, expected: String): String? =
+        readUntil("the thread header offers $expected", read = { historyAction(threadId) }) { it == expected }
 
     private fun shown(threadId: String): List<String> {
         val texts = SandboxUi.panelView(threadId).texts
@@ -105,7 +119,6 @@ class ShortenLongHistoryTest : SandboxScenario("shorten_long_history") {
         settle()
         SandboxUi.openInEditor(FILE)
         SandboxUi.openThreadInEditor(threadId, FILE)
-        settle()
     }
 
     private companion object {

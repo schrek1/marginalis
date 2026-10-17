@@ -6,6 +6,7 @@ import dev.marginalis.plugin.sandbox.Sandbox
 import dev.marginalis.plugin.sandbox.SandboxScenario
 import dev.marginalis.plugin.sandbox.SandboxUi
 import dev.marginalis.plugin.sandbox.ToolWindowUi
+import dev.marginalis.plugin.sandbox.readUntil
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Order
@@ -51,7 +52,8 @@ class LiveByDefaultTest : SandboxScenario("live_by_default") {
         val thread = Agent.agentStartsProjectThread("Thread to switch off")
         Thread.sleep(1_000)
         SandboxUi.toggleThreadLive(thread)
-        check("a thread's own switch turns it off under the default", !SandboxUi.isLive(thread))
+        val live = readUntil("the thread switched off", read = { SandboxUi.isLive(thread) }) { live -> !live }
+        check("a thread's own switch turns it off under the default", !live)
 
         val quiet = wakeAfterReply(thread, "Switched off", QUIET_WAIT_SECONDS)
         check("a thread switched off stays quiet", quiet.reason == "timeout", quiet)
