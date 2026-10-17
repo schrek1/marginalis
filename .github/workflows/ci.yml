@@ -38,6 +38,9 @@ jobs:
           java-version: "25"
       - uses: gradle/actions/setup-gradle@v4
         with:
+          # The only job that writes the Gradle cache: every job writing its own dependencies and transforms (2-4 GB
+          # each, a new hash per push) went past the repository's 10 GB, and the entries evicted each other. The
+          # other jobs restore this job's entry.
           cache-read-only: ${{ github.event_name != 'push' }}
       - name: Install a virtual display
         # Margin tab tests that need an active IDE window skip themselves
@@ -86,7 +89,7 @@ jobs:
           java-version: "25"
       - uses: gradle/actions/setup-gradle@v4
         with:
-          cache-read-only: ${{ github.event_name != 'push' }}
+          cache-read-only: true
       - name: Sandbox scenarios
         env:
           MARGINALIS_SANDBOX_RUNTIME: ${{ github.workspace }}/build/sandbox-runtime
@@ -113,7 +116,7 @@ jobs:
           java-version: "25"
       - uses: gradle/actions/setup-gradle@v4
         with:
-          cache-read-only: ${{ github.event_name != 'push' }}
+          cache-read-only: true
       - name: Run IntelliJ Plugin Verifier
         run: ./gradlew verifyPlugin --console=plain
       - uses: actions/upload-artifact@v4
