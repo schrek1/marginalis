@@ -13,6 +13,10 @@ class MarginEditorProvider : FileEditorProvider, DumbAware {
 
     override fun accept(project: Project, file: VirtualFile): Boolean = file === MarginFile
 
+    // accept() reads nothing; under the default read action a pending write elsewhere makes the platform wait 30 s
+    // and then blame Marginalis for "Cannot check provider".
+    override fun acceptRequiresReadAction(): Boolean = false
+
     override fun createEditor(project: Project, file: VirtualFile): FileEditor = MarginEditor(project)
 
     override fun getEditorTypeId(): String = "marginalis-project-tab"
