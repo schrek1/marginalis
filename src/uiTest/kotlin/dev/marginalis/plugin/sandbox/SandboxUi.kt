@@ -541,8 +541,14 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
     // --- Margin (project) tab -----------------------------------------------------------------------------------
 
     fun openMarginTab(threadId: String) {
-        // A project thread the agent just posted opens the tab behind the file in front, which comes back to the front
-        // a moment later; a reveal inside that moment loses to it. A person never clicks that fast, so wait it out.
+        // A project thread the agent just posted opens the tab behind the file in front: the tab is selected before its
+        // editor exists, then the file comes back to the front. A reveal in that window loses to the file; it lasts a
+        // moment on a desktop and seconds on a CI runner (the plugin side is MARG-96), so wait it out.
+        awaitUntil("the Margin tab done opening behind the file in front", Duration.ofSeconds(30)) {
+            val state = obj(js(MARGIN + EDITOR_STATE))
+            val opening = state.get("selected").asString == "Margin" && !state.get("marginOpen").asBoolean
+            !opening && !state.get("openBehindQueued").asBoolean
+        }
         settleEditorSelection()
         println("INFO  before the reveal: ${js(MARGIN + EDITOR_STATE)}")
         js(MARGIN + "projectTab().reveal(project, store.getThreads().byId('$threadId'), null); String(true)")
