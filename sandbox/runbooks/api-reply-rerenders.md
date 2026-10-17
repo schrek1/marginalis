@@ -1,7 +1,6 @@
 # An open thread shows the agent's reply
 
 - **Key:** MARG-14 (schrek1/marginalis#14)
-- **Tags:** smoke, regression
 - **Scenario:** `ApiReplyRerendersTest`
 
 ## Protects

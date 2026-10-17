@@ -1,7 +1,6 @@
 # Tables and strikethrough in message bodies
 
 - **Key:** MARG-19 (schrek1/marginalis#19)
-- **Tags:** smoke, regression
 - **Scenario:** `StablePrsTest.tables`
 
 ## Protects

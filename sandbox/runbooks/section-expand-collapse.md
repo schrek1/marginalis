@@ -1,7 +1,6 @@
 # Expand and Collapse in the tool window
 
 - **Key:** MARG-25 (schrek1/marginalis#25)
-- **Tags:** regression
 - **Scenario:** `SectionExpandCollapseTest`
 
 ## Protects

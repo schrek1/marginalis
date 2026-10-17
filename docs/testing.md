@@ -47,6 +47,9 @@ CI, whatever the monitor does, and nothing appears on your desktop. The IDE insi
   runs six sandboxes side by side, the scenario classes longest first; `-Pmarginalis.sandbox.jobs=N` changes the
   count.
 - **One scenario while you work:** `./gradlew uiSandboxTest --tests '*EnvelopeOnlyWhileUnreadTest'`.
+- **A quick check of the core:** `./gradlew uiSandboxTest -Pmarginalis.sandbox.tags=core` runs only the scenarios
+  tagged `@Tag("core")`, the critical flows (`sandbox/runbooks/README.md` → Tags). The value is a JUnit tag
+  expression. Without the property every scenario runs, as CI does.
 - **One case of a scenario:** `./gradlew uiSandboxTest --tests '*StablePrsTest.zoom'`. A case may build on the
   threads earlier cases of its class posted, so run one alone only where the class says it stands alone, as
   `StablePrsTest` does.

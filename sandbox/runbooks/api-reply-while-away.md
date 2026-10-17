@@ -1,7 +1,6 @@
 # A thread you left open shows the reply that came while you were away
 
 - **Key:** MARG-50 (schrek1/marginalis#50)
-- **Tags:** regression
 - **Scenario:** `ApiReplyWhileAwayTest`
 
 ## Protects

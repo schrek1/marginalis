@@ -1,7 +1,6 @@
 # A long thread shortens its read history
 
 - **Key:** MARG-12 (schrek1/marginalis#12)
-- **Tags:** regression
 - **Scenario:** `ShortenLongHistoryTest`
 
 ## Protects

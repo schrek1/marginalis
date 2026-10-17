@@ -1,7 +1,6 @@
 # The Margin tab reads oldest first, with a Sort menu per project
 
 - **Key:** MARG-27 (schrek1/marginalis#27)
-- **Tags:** smoke, regression
 - **Scenario:** `ProjectTabOrderTest`
 
 ## Protects

@@ -1,7 +1,6 @@
 # Live by default
 
 - **Key:** MARG-22 (schrek1/marginalis#22)
-- **Tags:** smoke, regression
 - **Scenario:** `LiveByDefaultTest`
 
 ## Protects

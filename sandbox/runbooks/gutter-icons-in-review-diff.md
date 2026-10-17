@@ -1,7 +1,6 @@
 # Thread icons in pull request review diffs
 
 - **Key:** MARG-20 (schrek1/marginalis#20)
-- **Tags:** smoke, regression
 - **Scenario:** `StablePrsTest.reviewDiffIcons`
 
 ## Protects

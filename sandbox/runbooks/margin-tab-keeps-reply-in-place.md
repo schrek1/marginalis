@@ -1,7 +1,6 @@
 # The reply you are typing in the Margin tab stays put while other threads change
 
 - **Key:** MARG-45 (schrek1/marginalis#45)
-- **Tags:** regression
 - **Scenario:** `MarginTabKeepsReplyInPlaceTest`
 
 ## Protects

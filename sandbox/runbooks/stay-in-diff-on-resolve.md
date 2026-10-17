@@ -1,7 +1,6 @@
 # Steps in the same file stay in the editor you are reading
 
 - **Key:** MARG-18 (schrek1/marginalis#18)
-- **Tags:** smoke, regression
 - **Scenario:** `StablePrsTest.stayInDiff`
 
 ## Protects

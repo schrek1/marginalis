@@ -1,7 +1,6 @@
 # Tool window arrows keep their place and walk Guided steps by number
 
 - **Key:** MARG-24 (schrek1/marginalis#24)
-- **Tags:** smoke, regression
 - **Scenario:** `ToolwindowStepNavigationTest`
 
 ## Protects

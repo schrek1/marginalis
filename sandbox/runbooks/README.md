@@ -9,7 +9,6 @@ branch brings its runbook and its scenario with it.
 # <what the user gets>
 
 - **Key:** MARG-N (schrek1/marginalis#N)
-- **Tags:** smoke, regression
 - **Scenario:** `<KotlinClass>` or `<KotlinClass>.<testMethod>`
 
 ## Protects      the behaviours, as the user sees them
@@ -23,11 +22,12 @@ one case of a class names its test method too.
 
 ## Tags
 
-The tags describe a runbook; no command selects scenarios by them.
+A tag lives on the scenario class as JUnit `@Tag` (or on one test method, where a runbook covers one case), never
+in the runbook: its `Scenario:` line points at the class, so there is one copy to keep. A new tag comes only with a
+command or job that selects by it.
 
-- `regression`: every runbook. The full run is the sandbox half of the stable gate.
-- `smoke`: a quick check that a build works at all: the agent loop, the editor, the tool window and the
-  Margin tab.
+- `core`: the critical flows (MARG-42): the agent ↔ user loop, the user starting a thread, anchoring that follows
+  edits, threads surviving an IDE restart. `-Pmarginalis.sandbox.tags=core` runs them alone; CI runs every scenario.
 
 ## Running
 
@@ -35,6 +35,7 @@ From the checkout under test:
 
 ```
 ./gradlew uiSandboxTest                                         # every scenario
+./gradlew uiSandboxTest -Pmarginalis.sandbox.tags=core          # the critical flows alone
 ./gradlew uiSandboxTest --tests '*<KotlinClass>'                # one runbook's automated part
 ./gradlew uiSandboxTest --tests '*<KotlinClass>.<testMethod>'   # one case of a class
 ```
