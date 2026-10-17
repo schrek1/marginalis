@@ -118,15 +118,26 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
 
     // --- tool window and editors --------------------------------------------------------------------------------
 
+    /**
+     * Shows the Marginalis tool window and returns once it has been on screen for a second. On a busy machine the IDE
+     * restores its own tool window layout late and puts the Project view over it; it is then shown again, as a user
+     * would click it again.
+     */
     fun showToolWindow() {
-        js(
-            """
-            var window = com.intellij.openapi.wm.ToolWindowManager.getInstance(project).getToolWindow('Marginalis');
-            window.show();
-            if (window.getComponent().getWidth() < 300) window.stretchWidth(450 - window.getComponent().getWidth());
-            String(true)
-            """,
-        )
+        var shownSince: Long? = null
+        awaitUntil("the Marginalis tool window on screen for a second", Duration.ofSeconds(60), Duration.ofMillis(250)) {
+            val shown = js(
+                """
+                var window = com.intellij.openapi.wm.ToolWindowManager.getInstance(project).getToolWindow('Marginalis');
+                if (!window.isVisible()) window.show();
+                var component = window.getComponent();
+                if (window.isVisible() && component.isShowing() && component.getWidth() < 300) window.stretchWidth(450 - component.getWidth());
+                String(window.isVisible() && component.isShowing())
+                """,
+            ) == "true"
+            if (!shown) shownSince = null else if (shownSince == null) shownSince = System.nanoTime()
+            shownSince?.let { since -> System.nanoTime() - since >= Duration.ofSeconds(1).toNanos() } ?: false
+        }
     }
 
     fun threadPanel(threadId: String): ComponentFixture =

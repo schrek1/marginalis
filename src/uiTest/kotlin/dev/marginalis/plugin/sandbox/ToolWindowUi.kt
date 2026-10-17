@@ -428,6 +428,7 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
         }
 
     fun screenshotToolWindow(target: Path) {
+        SandboxUi.showToolWindow()
         val xpath = "//div[@class='MarginalisToolWindowPanel' or @javaclass='dev.marginalis.plugin.ui.toolwindow.MarginalisToolWindowPanel']"
         // The robot's hierarchy misses the panel for a moment while the tool window relays out; on the floor IDE in a
         // container that moment ran past 5 s. Longer, the tool window is off screen, which the user would notice.
