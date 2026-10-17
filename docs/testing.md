@@ -85,6 +85,15 @@ and the scenarios about 10 min. The job keeps the JUnit results, each scenario's
 and the shots as the `e2e-reports` artifact. The runner is a Linux host, where files a container writes into a bind
 mount stay root's: the harness hands them back to the runner's user (`MARGINALIS_HOST_OWNER`, `rsync --chown`).
 
+Measured on 2026-10-17: 10 runs out of 10 green on one commit, 12.3–17.7 min each. The runner is much slower than a
+desktop, and getting there showed where a scenario must wait for a condition rather than for time:
+- a pressed button returns once its action ran;
+- a value read after an asynchronous change goes through `readUntil`;
+- the Margin tab is revealed only once it is done opening behind the file in front;
+- the tool window counts as shown once it stays on screen.
+
+A failure there is a bug to diagnose from the artifact, never a reason to rerun the job until it passes.
+
 ## Adding a scenario
 
 1. Write the feature's runbook (`sandbox/runbooks/README.md` has the format); its `Scenario` line names the class.
