@@ -40,3 +40,4 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-96 | Open Thread on a project thread the agent just started always brings the Margin tab to the front | `fix/MARG-96-reveal-wins` | — | — | `ab808b8` |
 | MARG-85 | Core tests no longer flake on Windows: threads created in the same instant keep their arrival order | `fix/MARG-85-deterministic-order` | — | — | `e31b1e0` |
 | MARG-83 | Stable releases are built in CI and served to every machine from one plugin repository on GitHub Pages | `feat/MARG-83-ci-releases` | — | — | `fe26212` |
+| MARG-92 | Sandbox failure paths: each scenario starts from the default app settings, and a restart never starts from an older project copy | `fix/MARG-92-sandbox-failure-paths` | — | — | `ca42e7b` |
