@@ -120,6 +120,9 @@ object Sandbox {
     /** Records what the calling thread's sandbox is doing: a thread dump in its IDE log and a shot of its frame. */
     fun recordDiagnostics(what: String): String = current.get()?.recordDiagnostics(what) ?: "no sandbox on this thread to diagnose"
 
+    /** Caps the CPU share of the sandbox's container, to widen a timing window as a busy machine does; null lifts it. */
+    fun limitCpus(cpus: Double?) = sandbox.limitCpus(cpus)
+
     /** Restarts the sandbox; a Docker sandbox keeps its container, so its port, IDE config and caches stay. */
     fun restart(fresh: Boolean, prepare: () -> Unit = {}) {
         sandbox.stop(release = false)
@@ -168,6 +171,13 @@ object Sandbox {
             ide = process
             println("sandbox starting ($launch${if (launch == Launch.DOCKER) ", ${if (prebuilt != null) "prebuilt" else "built in the container"}" else ""}), log $logFile")
             awaitUp(process)
+        }
+
+        fun limitCpus(cpus: Double?) {
+            val name = checkNotNull(container) { "a CPU cap needs a Docker sandbox" }
+            // `--cpus 0` keeps the old cap; the machine's whole count lifts it.
+            val limit = cpus?.toString() ?: checkNotNull(dockerOutput("info", "--format", "{{.NCPU}}")).trim()
+            docker("update", "--cpus", limit, name, check = true)
         }
 
         fun stop(release: Boolean) {
