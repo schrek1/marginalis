@@ -490,6 +490,46 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
             )
         }
 
+    /** Edits the file's document as typing does: one undoable command, through the editor's document. */
+    private fun editDocument(file: String, change: String) {
+        js(
+            EDITORS + """
+            var document = textEditorOf('$file').getDocument();
+            com.intellij.openapi.application.ApplicationManager.getApplication().invokeAndWait(new java.lang.Runnable({ run: function () {
+                com.intellij.openapi.command.WriteCommandAction.runWriteCommandAction(project, new java.lang.Runnable({ run: function () {
+                    $change
+                } }));
+            } }));
+            String(true)
+            """,
+        )
+    }
+
+    /** Inserts `text` (ending in a line break) before 1-based `line`. */
+    fun insertBeforeLine(file: String, line: Int, text: String) =
+        editDocument(file, "document.insertString(document.getLineStartOffset(${line - 1}), ${lit(text)});")
+
+    /** Erases 1-based `line` together with the line break before it, so nothing of the line is left. */
+    fun eraseLine(file: String, line: Int) =
+        editDocument(file, "document.deleteString(document.getLineEndOffset(${line - 2}), document.getLineEndOffset(${line - 1}));")
+
+    /** Replaces the whole text, as a rewrite of the file does. */
+    fun rewriteFile(file: String, text: String) = editDocument(file, "document.setText(${lit(text)});")
+
+    /** 1-based `line` of the file as the IDE's document holds it, open in an editor or not. */
+    fun lineText(file: String, line: Int): String = js(
+        EDITORS + """
+        String(read(function () {
+            var document = com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().getDocument(projectFile('$file'));
+            return document.getText(new com.intellij.openapi.util.TextRange(
+                document.getLineStartOffset(${line - 1}), document.getLineEndOffset(${line - 1})));
+        }))
+        """,
+    )
+
+    /** The document's text as the editor holds it now. */
+    fun documentText(file: String): String = js(EDITORS + "String(read(function () { return textEditorOf('$file').getDocument().getText(); }))")
+
     /** Runs a plugin action in the file's editor, as its context menu or shortcut does there. */
     fun runEditorAction(file: String, actionId: String) {
         val token = js(

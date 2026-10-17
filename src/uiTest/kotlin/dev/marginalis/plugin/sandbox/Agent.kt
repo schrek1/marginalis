@@ -13,7 +13,6 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
-import kotlin.io.path.readLines
 
 /** The agent's side of a sandbox scenario: the plugin's REST API, called as an agent calls it. */
 object Agent {
@@ -94,7 +93,9 @@ object Agent {
         return JsonParser.parseString(response.body()).asJsonObject
     }
 
-    private fun anchorOf(file: String, line: Int) = Sandbox.project.resolve(file).readLines(StandardCharsets.UTF_8)[line - 1]
+    // The line as the IDE holds it, as an agent reads the file it sees: the host folder lags behind the IDE's copy
+    // and its unsaved edits.
+    private fun anchorOf(file: String, line: Int) = SandboxUi.lineText(file, line)
 
     private fun threadId(response: JsonObject): String =
         response.get("thread_id")?.asString ?: error("no thread_id in $response")
