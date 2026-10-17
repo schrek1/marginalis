@@ -516,8 +516,20 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
         // A project thread the agent just posted opens the tab behind the file in front, which comes back to the front
         // a moment later; a reveal inside that moment loses to it. A person never clicks that fast, so wait it out.
         settleEditorSelection()
+        println("INFO  before the reveal: ${js(MARGIN + EDITOR_STATE)}")
         js(MARGIN + "projectTab().reveal(project, store.getThreads().byId('$threadId'), null); String(true)")
+        awaitUntil("the Margin tab in front after the reveal") {
+            obj(js(MARGIN + EDITOR_STATE)).get("selected").asString == "Margin"
+        }
     }
+
+    private const val EDITOR_STATE = """
+        var editors = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project);
+        var files = editors.getSelectedFiles();
+        var tabState = service('dev.marginalis.plugin.ui.tab.ProjectTabState');
+        String(JSON.stringify({ selected: files.length ? String(files[0].getName()) : '', marginOpen: marginTabOpen(),
+                                openBehindQueued: fieldOf(tabState, 'openBehindQueued').get() }))
+        """
 
     /** Waits until the editor in front has not changed for `quiet`, at most `limit`. */
     fun settleEditorSelection(quiet: Duration = Duration.ofMillis(500), limit: Duration = Duration.ofSeconds(5)) {
