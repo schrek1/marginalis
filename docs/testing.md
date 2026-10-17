@@ -27,10 +27,12 @@ per check. Each feature has one scenario, a JUnit class on Remote-Robot in
 `src/uiTest/kotlin/dev/marginalis/plugin/sandbox/scenarios/`, and a runbook in `sandbox/runbooks/`. Gradle runs
 them as `uiSandboxTest`.
 
-The sandbox IDE is IntelliJ IDEA 2026.2, the IDE in daily use; the platform floor (2025.2) keeps its compile, platform
-tests and Plugin Verifier in CI's `build` and `verify`. The floor runs on JBR 21, where updating any plugin with Swing UI
-without a restart can fail on a platform thread that keeps its class loader, so scenarios run on JBR 25. On
-the same machine the suite took as long on 2026.2 as on 2025.2 (265–270 s vs 263–266 s, 2 rounds each, 2026-10-17).
+The sandbox IDE is JetBrains' open-source IntelliJ IDEA 2026.2, the platform in daily use, without licensing; the
+platform floor (2025.2) keeps its compile, platform tests and Plugin Verifier in CI's `build` and `verify`. The floor
+runs on JBR 21, where updating any plugin with Swing UI without a restart can fail on a platform thread that keeps its
+class loader, so scenarios run on JBR 25. Measured 2026-10-17: on a desktop the suite takes as long as on 2025.2
+(265–271 s vs 263–266 s, 2 rounds each); on CI's free runner `e2e` takes about 3 minutes longer (16.6 vs 13.4 min,
+one run each: 0.8 min for the extra download, the rest more CPU per scenario).
 
 ### Running the suite
 

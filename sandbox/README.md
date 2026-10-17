@@ -71,23 +71,26 @@ python robot.py screenshot out.png --frame               # the sandbox frame, pa
 ### Docker mode (any OS, a fixed screen)
 
 UI work depends on the window size: a sleeping monitor makes Windows report 640x480 and clamps the frame until
-thread panels get no width. In Docker the sandbox IDE runs on a virtual 2560x1440 screen (Xvfb). The IDE is
-IntelliJ IDEA 2026.2 (`sandboxIde` in `init.gradle`), the IDE in daily use, not the plugin's 2025.2 floor that the
-build compiles and verifies against: up to 2025.3 the IDE runs on JBR 21, where a platform thread can keep any
-plugin's class loader, so an update without a restart cannot be tested there.
+thread panels get no width. In Docker the sandbox IDE runs on a virtual 2560x1440 screen (Xvfb). The prebuilt
+sandboxes run JetBrains' open-source IntelliJ IDEA 2026.2 (`sandboxIde` in `init.gradle`, from the
+JetBrains/intellij-community releases), the platform in daily use, not the plugin's 2025.2 floor that the build
+compiles and verifies against: up to 2025.3 the IDE runs on JBR 21, where a platform thread can keep any plugin's
+class loader, so an update without a restart cannot be tested there. The open-source build has no licensing: the
+unified distribution asked for a subscription on CI runners and blocked the scenarios. Run mode (the IDE through
+Gradle) still runs the floor.
 
 - `MARGINALIS_SANDBOX_DOCKER=1 python sandbox.py start` builds the image from `Dockerfile` (Xvfb, JDK 25) and runs
   container `marginalis-sandbox-<robot port>` with the checkout mounted read-only. The robot port is published as
   is, the IDE's REST port as `robot port + 10000`, clear of the host's IDEs on 63342+. Build output, IDE config and
-  the Gradle home stay in per-container Docker volumes (a new Gradle home starts as a copy of the build
+  the Gradle home stay in per-container Docker volumes (in run mode a new Gradle home starts as a copy of the build
   container's, which holds the downloaded IDE). The IDE works on a copy of the test project on the container's
   disk; the host folder `marginalis-sandbox-<robot port>/project` is the copy prepared before a start and read back
   after a stop. Containers on different robot ports run side by side.
 - **One build, many sandboxes:** `MARGINALIS_SANDBOX_DOCKER=1 MARGINALIS_SANDBOX_PREBUILT=<folder> python
   sandbox.py build` builds the checkout once and leaves its plugins (Marginalis and robot-server) in the folder. A
   sandbox started with the same `MARGINALIS_SANDBOX_PREBUILT` runs the IDE straight from them, without Gradle: it is
-  up in about 10 s instead of a minute. The build also records which IDE it downloaded (`<folder>/ide`), and the
-  sandbox runs that IDE from the build container's Gradle home, mounted read-only. `./gradlew uiSandboxTest` does the
+  up in about 10 s instead of a minute. The build also downloads the sandbox IDE once per version into the build
+  container's Gradle home and records where (`<folder>/ide`); the sandbox runs it from there, mounted read-only. `./gradlew uiSandboxTest` does the
   same through `sandboxPrebuilt`.
 - **Ports:** robot 8082 by default, REST robot + 10000. Both stay below Windows' dynamic port range (49152 and up),
   where services take ports at random. The Kotlin suite claims 8100 and up, clear of these.
@@ -116,7 +119,7 @@ The generic rules (no OS input, hover-only header actions, forced saves before s
 `retrieveAny` decoding, painted screenshots) live in the `intellij-plugin-sandbox-testing` skill — read it
 before changing `robot.py`, `sandbox_ui.py` or `sandbox.py`. Marginalis-specific:
 
-- robot-server 0.11.23 (the latest, May 2024) works with IntelliJ 2026.2.3; the sandbox runs in free mode
-  ("Unlock Ultimate"), no license dialog.
+- robot-server 0.11.23 (the latest, May 2024) works with IntelliJ 2026.2. The open-source build has no license
+  dialog; the unified distribution opened "Manage Subscriptions" on CI runners, though not locally.
 - Marginalis REST: `project` is the project's *name* (`project`), not its path; `comment_wait` returns at once
   with `reason: "live"` on a live wake, so a "nothing wakes" check is a short `timeout` (6 s).
