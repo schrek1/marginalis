@@ -37,3 +37,4 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-63 | The sandbox scenarios as a Kotlin suite run by Gradle, as stable as the Python one, which it will replace (part 2) | `feat/MARG-63-kotlin-suites` | — | — | `8117435` |
 | MARG-63 | The stable gate runs the Kotlin suite; the Python scenarios retire, sandbox.py stays for demos (part 3) | `chore/MARG-63-gate-on-kotlin` | — | — | `0a5361e` |
 | MARG-38 | Every pull request runs the sandbox scenarios in CI, on the free runner: Linux file ownership fixed and the waits that a slow machine needs | `feat/MARG-38-ci-e2e` | — | — | `fe39057` |
+| MARG-96 | Open Thread on a project thread the agent just started always brings the Margin tab to the front | `fix/MARG-96-reveal-wins` | — | — | `ab808b8` |
