@@ -377,8 +377,37 @@ object Sandbox {
                 quick.screenshot(shot, quick.findOne("//div[@class='IdeFrameImpl']"))
                 "frame $shot"
             }.getOrElse { "no frame shot (${it::class.simpleName}: ${it.message})" }
-            return "thread dump ${if (dumped) "in $logFile" else "not taken"}; $shotNote".also { println("DIAG  $what: $it") }
+            return "thread dump ${if (dumped) "in $logFile" else "not taken"}; $shotNote; ${otherWindows()}".also { println("DIAG  $what: $it") }
         }
+
+        // A dialog the IDE opened on its own (a first-start or promotion prompt) blocks the user's steps, and a shot of
+        // the frame does not show it. Read off the EDT, which the dialog's modal loop holds.
+        private fun otherWindows(): String = runCatching {
+            Robot(robotPort, Duration.ofSeconds(15)).callJs(
+                """
+                function texts(c, out) {
+                    if (c instanceof javax.swing.AbstractButton || c instanceof javax.swing.JLabel || c instanceof javax.swing.text.JTextComponent) {
+                        var text = c.getText();
+                        if (text != null && String(text).trim().length > 0) {
+                            out.push(String(text).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 200));
+                        }
+                    }
+                    var children = c.getComponents ? c.getComponents() : [];
+                    for (var i = 0; i < children.length; i++) texts(children[i], out);
+                    return out;
+                }
+                var windows = java.awt.Window.getWindows();
+                var shown = [];
+                for (var i = 0; i < windows.length; i++) {
+                    var window = windows[i];
+                    if (!window.isShowing() || window instanceof com.intellij.openapi.wm.impl.IdeFrameImpl) continue;
+                    var title = window.getTitle ? String(window.getTitle()) : '';
+                    shown.push(window.getClass().getName() + ' "' + title + '": ' + texts(window, []).join(' | '));
+                }
+                String(shown.length == 0 ? 'no other window' : 'other windows: ' + shown.join(' ;; '))
+                """,
+            )
+        }.getOrElse { "windows not read (${it::class.simpleName}: ${it.message})" }
 
         private fun threadDump(): Boolean = when (launch) {
             Launch.DOCKER -> container?.let { docker("exec", it, "pkill", "-QUIT", "-f", "com.intellij.idea.Main") == 0 } ?: false
