@@ -18,6 +18,17 @@ plugins=/work/runtime/ide/plugins_runIdeForUiTests
 rm -f /work/runtime/ide/config_runIdeForUiTests/.lock /work/runtime/ide/config_runIdeForUiTests/.port \
       /work/runtime/ide/system_runIdeForUiTests/.lock /work/runtime/ide/system_runIdeForUiTests/.port
 
+# The volume outlives its container, and the next scenario that claims the port gets it: app settings a scenario
+# changed and could not restore would carry over. A new container starts from the defaults; its own restarts keep them.
+if [ -n "${MARGINALIS_SANDBOX_APP_CONFIG_PER_CONTAINER:-}" ]; then
+  owner=/work/runtime/ide/app-config-owner
+  if [ "$(cat "$owner" 2>/dev/null)" != "$HOSTNAME" ]; then
+    rm -rf /work/runtime/ide/config_runIdeForUiTests/options
+    mkdir -p /work/runtime/ide
+    echo "$HOSTNAME" > "$owner"
+  fi
+fi
+
 # The test project runs from the container's own disk: on the host folder (9p from Windows) file operations stalled
 # the IDE and it got no file-change events. The host folder is the copy the harness prepares and reads back.
 if [ -d /project-host ]; then

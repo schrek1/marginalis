@@ -354,7 +354,11 @@ def stop() -> None:
         except (OSError, robot.RobotError) as error:
             # A hung IDE never answers; the kill below still has to run.
             print(f"saving the sandbox's settings failed ({type(error).__name__}); killing it")
-        pull_project()
+    # Also with the robot down: the IDE may have written the project since the last copy, and the next start seeds
+    # the container from the host folder.
+    pull_project()
+    if robot_up():
+        import robot
         try:
             robot.run_js("com.intellij.openapi.application.ApplicationManager.getApplication().exit(true, true, false)",
                          edt=True)
