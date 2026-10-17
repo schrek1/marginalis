@@ -45,3 +45,4 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-43 | Sandbox scenarios: a core tag runs the critical flows alone | `feat/MARG-43-core-tag` | — | — | `2bd8f09` |
 | MARG-103 | Sandbox scenarios fail on errors the plugin logs | `feat/MARG-103-fail-on-plugin-errors` | — | — | `febd7d0` |
 | MARG-117 | A stalled IDE no longer blames Marginalis: the Margin tab's editor provider takes no read lock | `fix/MARG-117-provider-no-read-lock` | — | — | `510f774` |
+| MARG-119 | Sandbox scenarios run the plugin users get, without the test libraries | `fix/MARG-119-sandbox-runs-the-shipped-plugin` | — | — | `b57fcc3` |
