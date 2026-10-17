@@ -43,6 +43,8 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-92 | Sandbox failure paths: each scenario starts from the default app settings, and a restart never starts from an older project copy | `fix/MARG-92-sandbox-failure-paths` | — | — | `ca42e7b` |
 | MARG-101 | CI keeps its Gradle cache under the 10 GB limit: only the build job writes it | `fix/MARG-101-ci-cache-one-writer` | — | — | `fe9eafa` |
 | MARG-43 | Sandbox scenarios: a core tag runs the critical flows alone | `feat/MARG-43-core-tag` | — | — | `2bd8f09` |
+| MARG-103 | Sandbox scenarios fail on errors the plugin logs | `feat/MARG-103-fail-on-plugin-errors` | — | — | `febd7d0` |
+| MARG-117 | A stalled IDE no longer blames Marginalis: the Margin tab's editor provider takes no read lock | `fix/MARG-117-provider-no-read-lock` | — | — | `510f774` |
 | MARG-104 | E2E scenario: the agent and the user take turns in the margin | `feat/MARG-104-agent-user-loop` | — | — | `bfcdc6b` |
 | MARG-105 | E2E scenario: what the user left in the margin survives an IDE restart | `feat/MARG-105-threads-survive-restart` | — | — | `7378c33` |
 | MARG-106 | E2E scenario: the user starts a thread on a line, a selection or a whole file | `feat/MARG-106-user-starts-thread` | — | — | `e749dc4` |

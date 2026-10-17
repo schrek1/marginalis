@@ -59,8 +59,15 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.opentest4j:opentest4j:1.3.0")
     testImplementation("com.tngtech.archunit:archunit:1.5.1")
+    // Without its Kotlin and coroutines: the IDE under test brings its own, and the older copies Kotest names would
+    // shadow them on the test classpath (NoSuchMethodError in the plugin reload tests).
+    testImplementation("io.kotest:kotest-assertions-core:5.9.1") {
+        exclude(group = "org.jetbrains.kotlin")
+        exclude(group = "org.jetbrains.kotlinx")
+    }
 
     "uiTestImplementation"("org.junit.jupiter:junit-jupiter:5.13.4")
+    "uiTestImplementation"("io.kotest:kotest-assertions-core:5.9.1")
     "uiTestRuntimeOnly"("org.junit.platform:junit-platform-launcher:1.13.4")
     "uiTestImplementation"("org.kodein.di:kodein-di-jvm:7.26.1")
     "uiTestImplementation"("org.jetbrains.kotlin:kotlin-stdlib:2.4.0")
