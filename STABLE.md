@@ -45,3 +45,4 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-43 | Sandbox scenarios: a core tag runs the critical flows alone | `feat/MARG-43-core-tag` | — | — | `2bd8f09` |
 | MARG-104 | E2E scenario: the agent and the user take turns in the margin | `feat/MARG-104-agent-user-loop` | — | — | `bfcdc6b` |
 | MARG-105 | E2E scenario: what the user left in the margin survives an IDE restart | `feat/MARG-105-threads-survive-restart` | — | — | `7378c33` |
+| MARG-106 | E2E scenario: the user starts a thread on a line, a selection or a whole file | `feat/MARG-106-user-starts-thread` | — | — | `e749dc4` |
