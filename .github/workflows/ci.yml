@@ -75,6 +75,11 @@ jobs:
     # Fewer sandboxes than on a desktop (4 vCPU, 16 GB); docs/testing.md has the measured settings.
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # TEMPORARY: five identical samples to measure stability; removed before review.
+    strategy:
+      fail-fast: false
+      matrix:
+        sample: [1, 2, 3, 4, 5]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -89,7 +94,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: e2e-reports
+          name: e2e-reports-${{ matrix.sample }}
           path: |
             build/test-results/uiSandboxTest/
             build/sandbox-runtime/*/run.log
