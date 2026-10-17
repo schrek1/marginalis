@@ -61,6 +61,7 @@ dependencies {
     testImplementation("com.tngtech.archunit:archunit:1.5.1")
 
     "uiTestImplementation"("org.junit.jupiter:junit-jupiter:5.13.4")
+    "uiTestImplementation"("io.kotest:kotest-assertions-core:5.9.1")
     "uiTestRuntimeOnly"("org.junit.platform:junit-platform-launcher:1.13.4")
     "uiTestImplementation"("org.kodein.di:kodein-di-jvm:7.26.1")
     "uiTestImplementation"("org.jetbrains.kotlin:kotlin-stdlib:2.4.0")

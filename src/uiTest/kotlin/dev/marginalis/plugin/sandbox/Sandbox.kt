@@ -97,6 +97,9 @@ object Sandbox {
     val robot: Robot get() = sandbox.robot
     val project: Path get() = sandbox.project
 
+    /** The sandbox IDE's console log; a Docker sandbox's holds every start of its container, restarts included. */
+    val ideLog: Path get() = sandbox.logFile
+
     /** The built-in server port of the IDE that has the sandbox project open. */
     val marginalisPort: Int get() = sandbox.marginalisPort
 
@@ -138,7 +141,7 @@ object Sandbox {
         var robot = Robot(robotPort)
             private set
         val project: Path = dir.resolve("project")
-        private val logFile = dir.resolve("run.log")
+        val logFile: Path = dir.resolve("run.log")
 
         /** The claimed container: created by the first start, kept over restarts, removed by a releasing stop. */
         private var container: String? = null

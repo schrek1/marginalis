@@ -115,6 +115,9 @@ A failure there is a bug to diagnose from the artifact, never a reason to rerun 
    plain calls to the steps, and `check(name, passed, detail)` per behaviour. A case fails when one of its checks
    does, or when it throws. Cases run in order on one sandbox, so a later case may build on an earlier one's
    threads; `Sandbox.restart(fresh = ...)` gives a case a new project or a persisted state.
+   After the last case every scenario checks its IDE log: an `ERROR` / `SEVERE` entry that passes through
+   `dev.marginalis` (the user's "IDE error occurred") fails the class, with the entry in the failure. Such an error
+   gets its own issue and a fix; the check is never loosened for it.
 4. The agent's side is `Agent`, the user's `SandboxUi`, `ToolWindowUi` and `ReviewDiffUi`, larger thread sets
    `fixtures/Walkthroughs.kt`. Add a missing step there rather than inline JavaScript in the scenario.
 5. Every wait for a condition goes through `Waits.kt` (`waitUntil`, `awaitUntil`, `awaitValue`, `readUntil`):
