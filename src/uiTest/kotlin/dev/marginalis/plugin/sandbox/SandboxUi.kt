@@ -490,6 +490,71 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
             )
         }
 
+    /** Runs a plugin action in the file's editor, as its context menu or shortcut does there. */
+    fun runEditorAction(file: String, actionId: String) {
+        val token = js(
+            EDITORS + """
+            var editor = textEditorOf('$file');
+            var action = com.intellij.openapi.actionSystem.ActionManager.getInstance().getAction(${lit(actionId)});
+            if (action == null) throw 'no action ' + ${lit(actionId)};
+            var context = com.intellij.openapi.actionSystem.impl.SimpleDataContext.builder()
+                .add(com.intellij.openapi.actionSystem.CommonDataKeys.EDITOR, editor)
+                .add(com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT, project)
+                .add(com.intellij.openapi.actionSystem.CommonDataKeys.VIRTUAL_FILE, projectFile('$file'))
+                .build();
+            var event = com.intellij.openapi.actionSystem.AnActionEvent.createEvent(
+                action, context, action.getTemplatePresentation().clone(),
+                'EditorPopup', com.intellij.openapi.actionSystem.ActionUiKind.POPUP, null);
+            action.update(event);
+            if (!event.getPresentation().isEnabledAndVisible()) throw 'action ' + ${lit(actionId)} + ' is off in ' + '$file';
+            String(performLater(action, event))
+            """,
+        )
+        awaitActionRan(actionId, token)
+    }
+
+    /** Selects `text` on 1-based `line` of the file's editor, the caret at its end, as a drag over it would. */
+    fun selectText(file: String, line: Int, text: String) {
+        js(
+            EDITORS + """
+            var editor = textEditorOf('$file');
+            var document = editor.getDocument();
+            var start = read(function () { return document.getLineStartOffset(${line - 1}); });
+            var lineText = read(function () { return document.getText(new com.intellij.openapi.util.TextRange(start, document.getLineEndOffset(${line - 1}))); });
+            var column = lineText.indexOf(${lit(text)});
+            if (column < 0) throw 'no ' + ${lit(text)} + ' on line $line of $file';
+            asUser(function () {
+                editor.getCaretModel().moveToOffset(start + column + ${text.length});
+                editor.getSelectionModel().setSelection(start + column, start + column + ${text.length});
+            });
+            String(true)
+            """,
+        )
+    }
+
+    /** The thread of the draft panel on screen: a panel whose thread the store does not hold yet. */
+    fun openDraftId(): String =
+        awaitValue("a draft panel on screen") {
+            Sandbox.robot.findAll("//div[@javaclass='dev.marginalis.plugin.ui.ThreadPanel']")
+                .map { panel -> js("String(threadOf(component).getId())", panel) }
+                .firstOrNull { id -> js("String(store.getThreads().byId('$id') == null)") == "true" }
+        }
+
+    /** Types the body into an open draft's composer and presses its send button. */
+    fun userSubmitsDraft(threadId: String, body: String) {
+        js(
+            FIND + """
+            var area = find(component, function (c) { return c instanceof com.intellij.ui.EditorTextField; });
+            if (area == null) throw 'no composer in the draft';
+            area.setText(${lit(body)});
+            var send = find(component, function (c) { return c instanceof com.intellij.ui.components.JBOptionButton; });
+            send.doClick();
+            String(true)
+            """,
+            threadPanel(threadId),
+        )
+    }
+
     /** Opens the composer with the real "Reply…" link, types the body into it and presses the send button. */
     fun userReplies(threadId: String, body: String) {
         js(
