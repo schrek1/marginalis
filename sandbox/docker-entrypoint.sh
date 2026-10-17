@@ -6,7 +6,9 @@
 set -euo pipefail
 mode="${MARGINALIS_SANDBOX_MODE:-run}"
 
-if [ ! -d /root/.gradle/caches ] && [ -d /gradle-seed/caches ]; then
+# Run mode builds with Gradle and needs a Gradle home of its own; a prebuilt sandbox runs its IDE straight from the
+# seed, and copying the seed (every IDE in it, gigabytes) cost each new container minutes.
+if [ "$mode" = run ] && [ ! -d /root/.gradle/caches ] && [ -d /gradle-seed/caches ]; then
   cp -a /gradle-seed/. /root/.gradle/
   find /root/.gradle -name '*.lock' -delete
 fi

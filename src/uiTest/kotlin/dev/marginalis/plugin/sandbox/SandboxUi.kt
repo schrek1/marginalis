@@ -784,16 +784,25 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
         ),
     )
 
+    private const val SORT_BUTTON = """
+function sortButton() {
+    return find(fieldOf(marginPanel(), 'root'), function (c) {
+        return c instanceof com.intellij.openapi.actionSystem.impl.ActionButton
+            && String(c.getAction().getClass().getSimpleName()) == 'ProjectTabSortMenu';
+    });
+}
+"""
+
     /** Picks an entry of the Margin tab's Sort menu, through the toolbar button's own action group. */
     fun chooseMarginSort(label: String) {
+        // The toolbar fills its buttons in after the tab shows, on a slow machine seconds later.
+        awaitUntil("the Margin tab shows its Sort button", Duration.ofSeconds(30)) {
+            marginJs(FIND + SORT_BUTTON + "String(sortButton() != null)") == "true"
+        }
         val escaped = lit(label)
         marginJs(
-            FIND + """
-            var root = fieldOf(marginPanel(), 'root');
-            var button = find(root, function (c) {
-                return c instanceof com.intellij.openapi.actionSystem.impl.ActionButton
-                    && String(c.getAction().getClass().getSimpleName()) == 'ProjectTabSortMenu';
-            });
+            FIND + SORT_BUTTON + """
+            var button = sortButton();
             if (button == null) throw 'no Sort button in the Margin tab';
             var group = button.getAction();
             var context = com.intellij.ide.DataManager.getInstance().getDataContext(button);
