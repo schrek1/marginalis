@@ -118,6 +118,8 @@ class ThreadStore {
         return AutoCloseable { removeListener(listener) }
     }
 
+    val listenerCount: Int get() = listeners.size
+
     fun watch(id: String, onChange: (CommentThread?) -> Unit): AutoCloseable =
         observe { changed -> if (changed.id == id) onChange(byId(id)) }
 

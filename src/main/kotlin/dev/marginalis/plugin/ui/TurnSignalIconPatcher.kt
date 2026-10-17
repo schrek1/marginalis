@@ -3,6 +3,7 @@ package dev.marginalis.plugin.ui
 import com.intellij.ide.FileIconPatcher
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
+import org.jetbrains.annotations.TestOnly
 import javax.swing.Icon
 
 class TurnSignalIconPatcher : FileIconPatcher {
@@ -19,6 +20,11 @@ class TurnSignalIconPatcher : FileIconPatcher {
 
         fun withdraw() {
             withdrawn = true
+        }
+
+        @TestOnly
+        internal fun reinstate() {
+            withdrawn = false
         }
     }
 }

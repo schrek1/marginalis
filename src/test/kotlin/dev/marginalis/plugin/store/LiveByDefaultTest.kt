@@ -7,6 +7,7 @@ import com.intellij.util.xmlb.XmlSerializer
 import com.intellij.util.xmlb.XmlSerializerUtil
 import dev.marginalis.plugin.settings.MarginalisSettings
 import dev.marginalis.plugin.testing.Agent
+import dev.marginalis.plugin.testing.AllowReflection
 import dev.marginalis.plugin.ui.toolwindow.ToolWindowTestCase
 
 class LiveByDefaultTest : ToolWindowTestCase() {
@@ -130,6 +131,7 @@ class LiveByDefaultTest : ToolWindowTestCase() {
         assertFalse(reopened.enabled)
     }
 
+    @AllowReflection("the storage name and file are what keeps the choice apart from other settings; only the @State annotation states them")
     fun testTheChoiceIsKeptInTheWorkspaceFileUnderItsOwnName() {
         val storage = LiveDefault::class.java.getAnnotation(State::class.java)
 

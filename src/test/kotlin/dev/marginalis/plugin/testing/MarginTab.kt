@@ -85,7 +85,7 @@ class MarginTab(private val project: Project, private val disposable: Disposable
         project.putUserData(FileEditorManagerKeys.ALLOW_IN_LIGHT_PROJECT, true)
         editors = FileEditorManagerImpl(project, (project as ComponentManagerEx).getCoroutineScope().childScope("Margin tab under test"))
         project.replaceService(FileEditorManager::class.java, editors, disposable)
-        FileEditorManagerImpl::class.java.getDeclaredMethod("processFileUpdateRequests").apply { isAccessible = true }.invoke(editors)
+        startTabTitleAndIconUpdates()
         Disposer.register(disposable) {
             editors.closeAllFiles()
             EditorHistoryManager.getInstance(project).removeAllFiles()
@@ -98,6 +98,11 @@ class MarginTab(private val project: Project, private val disposable: Disposable
             rootPane.setBounds(0, 0, 1200, 900)
         }
         settle()
+    }
+
+    @AllowReflection("A headless IDE never starts the editor manager's tab title and icon updates, and no public API starts them")
+    private fun startTabTitleAndIconUpdates() {
+        FileEditorManagerImpl::class.java.getDeclaredMethod("processFileUpdateRequests").apply { isAccessible = true }.invoke(editors)
     }
 
     fun open(): MarginTab {

@@ -14,7 +14,7 @@ object PluginUnload {
     fun forUpdate(of: IdeaPluginDescriptor = marginalis, whileUnloaded: () -> Unit = {}): Throwable? = try {
         runCatching { MarginalisUnloadListener().beforePluginUnload(of, true) }.exceptionOrNull().also { whileUnloaded() }
     } finally {
-        TurnSignalIconPatcher::class.java.getDeclaredField("withdrawn").apply { isAccessible = true }.setBoolean(null, false)
+        TurnSignalIconPatcher.reinstate()
         MarginFile.isValid = true
     }
 }

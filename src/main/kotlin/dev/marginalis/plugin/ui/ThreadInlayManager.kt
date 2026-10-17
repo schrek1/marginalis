@@ -1,10 +1,12 @@
 package dev.marginalis.plugin.ui
 
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.Inlay
 import com.intellij.openapi.editor.ex.EditorEx
+import com.intellij.openapi.editor.ex.util.EditorUtil
 import com.intellij.openapi.editor.impl.EditorEmbeddedComponentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
@@ -18,9 +20,9 @@ import dev.marginalis.plugin.store.MarginalisStore
 object ThreadInlayManager {
 
     private val OPEN_INLAYS = Key.create<MutableMap<String, Pair<Inlay<*>, ThreadPanel>>>("marginalis.open.inlays")
-    private val LISTENER_INSTALLED = Key.create<Boolean>("marginalis.store.listener")
+    private val STORE_SUBSCRIPTION = Key.create<Disposable>("marginalis.store.subscription")
 
-    /** Set on editors that show a thread's file at other line numbers than the file itself, such as a review diff. */
+    /** Set on editors that show a thread's file at other line numbers than the file itself, such as a review diff; null means the thread isn't shown there, so no panel opens. */
     val THREAD_LINE = Key.create<(CommentThread) -> Int?>("marginalis.thread.line")
 
     fun toggle(project: Project, editor: Editor, thread: CommentThread) {
@@ -63,6 +65,7 @@ object ThreadInlayManager {
             open.remove(thread.id)
         }
 
+        val line = lineOf(project, editor, thread)?.coerceAtMost(editor.document.lineCount - 1) ?: return null
         val panel = ThreadPanel(
             project,
             editor,
@@ -72,11 +75,6 @@ object ThreadInlayManager {
             hostWidth = { inlayWidth(editor) },
         )
         val aboveFirstLine = thread.isFileLevel
-        val line = (
-            editor.getUserData(THREAD_LINE)?.invoke(thread)
-                ?: MarginalisStore.getInstance(project).syncLine(thread)
-                ?: 0
-            ).coerceAtMost(editor.document.lineCount - 1)
         val offset =
             if (aboveFirstLine) editor.document.getLineStartOffset(0)
             else editor.document.getLineEndOffset(line.coerceAtLeast(0))
@@ -106,6 +104,11 @@ object ThreadInlayManager {
         return panel
     }
 
+    private fun lineOf(project: Project, editor: Editor, thread: CommentThread): Int? {
+        val threadLine = editor.getUserData(THREAD_LINE)
+        return if (threadLine != null) threadLine(thread) else MarginalisStore.getInstance(project).syncLine(thread) ?: 0
+    }
+
     private fun close(editor: Editor, threadId: String) {
         val open = editor.getUserData(OPEN_INLAYS) ?: return
         open.remove(threadId)?.let { (inlay, _) -> Disposer.dispose(inlay) }
@@ -119,7 +122,7 @@ object ThreadInlayManager {
         for (editor in EditorFactory.getInstance().allEditors) {
             editor.getUserData(OPEN_INLAYS)?.values?.forEach { (inlay, _) -> Disposer.dispose(inlay) }
             editor.putUserData(OPEN_INLAYS, null)
-            editor.putUserData(LISTENER_INSTALLED, null)
+            editor.getUserData(STORE_SUBSCRIPTION)?.let(Disposer::dispose)
             editor.putUserData(THREAD_LINE, null)
         }
     }
@@ -130,10 +133,9 @@ object ThreadInlayManager {
     }
 
     private fun installStoreListener(project: Project, editor: Editor) {
-        if (editor.getUserData(LISTENER_INSTALLED) == true) return
-        editor.putUserData(LISTENER_INSTALLED, true)
+        if (editor.getUserData(STORE_SUBSCRIPTION) != null) return
         val store = MarginalisStore.getInstance(project)
-        store.threads.addListener { thread ->
+        val listening = store.threads.observe { thread ->
             ApplicationManager.getApplication().invokeLater {
                 if (editor.isDisposed) return@invokeLater
                 if (store.threads.byId(thread.id) == null || thread.status is ThreadStatus.Resolved) {
@@ -141,5 +143,11 @@ object ThreadInlayManager {
                 }
             }
         }
+        val subscription = Disposable {
+            listening.close()
+            editor.putUserData(STORE_SUBSCRIPTION, null)
+        }
+        editor.putUserData(STORE_SUBSCRIPTION, subscription)
+        EditorUtil.disposeWithEditor(editor, subscription)
     }
 }

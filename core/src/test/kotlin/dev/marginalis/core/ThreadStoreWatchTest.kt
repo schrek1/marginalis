@@ -4,6 +4,7 @@ import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeSameInstanceAs
 import kotlin.test.Test
 
@@ -12,6 +13,17 @@ class ThreadStoreWatchTest {
     private val agent = Author.Agent("Claude")
 
     private fun thread() = CommentThread(file = "a.py", line = 3, anchorText = "def f():")
+
+    @Test
+    fun `closing an observer takes it off the store`() {
+        val store = ThreadStore()
+        val observer = store.observe {}
+        store.listenerCount shouldBe 1
+
+        observer.close()
+
+        store.listenerCount shouldBe 0
+    }
 
     @Test
     fun `a watcher hears its own thread change`() {
