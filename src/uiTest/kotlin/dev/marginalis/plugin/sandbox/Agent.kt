@@ -13,7 +13,6 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
-import kotlin.io.path.readLines
 
 /** The agent's side of a sandbox scenario: the plugin's REST API, called as an agent calls it. */
 object Agent {
@@ -22,7 +21,7 @@ object Agent {
     private val identity = mapOf("author_name" to "Claude", "author_id" to "claude-sandbox")
     private val gson = GsonBuilder().disableHtmlEscaping().create()
     private val http = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build()
-    private val since = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'.000Z'").withZone(ZoneOffset.UTC)
+    private val since = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").withZone(ZoneOffset.UTC)
 
     private val apiBase get() = "http://127.0.0.1:${Sandbox.marginalisPort}/api/marginalis"
 
@@ -77,20 +76,26 @@ object Agent {
         return parsed(http.send(request, HttpResponse.BodyHandlers.ofString()), route)
     }
 
-    /** Blocks like an agent's `comment_wait` from now on; returns the wake or the timeout. */
+    /**
+     * Blocks like an agent's `comment_wait`; returns the wake or the timeout. Its `since` is the last round the agent
+     * was woken by, as the guide tells agents: the host's clock is not the IDE's, so a `since` of "now" can fall before
+     * a round that already woke it, which would then wake it again at once. Before any round, `since` is now.
+     */
     fun agentWaits(timeoutSeconds: Int): JsonObject =
         apiGet(
             "comment_wait",
-            mapOf("since" to since.format(Instant.now()), "timeout" to timeoutSeconds.toString()),
+            mapOf("since" to (Sandbox.lastRoundAt ?: since.format(Instant.now())), "timeout" to timeoutSeconds.toString()),
             Duration.ofSeconds(timeoutSeconds + 30L),
-        )
+        ).also { wake -> wake.get("handed_back_at")?.takeUnless { it.isJsonNull }?.let { Sandbox.lastRoundAt = it.asString } }
 
     private fun parsed(response: HttpResponse<String>, route: String): JsonObject {
         check(response.statusCode() < 400) { "$route answered ${response.statusCode()}: ${response.body()}" }
         return JsonParser.parseString(response.body()).asJsonObject
     }
 
-    private fun anchorOf(file: String, line: Int) = Sandbox.project.resolve(file).readLines(StandardCharsets.UTF_8)[line - 1]
+    // The line as the IDE holds it, as an agent reads the file it sees: the host folder lags behind the IDE's copy
+    // and its unsaved edits.
+    private fun anchorOf(file: String, line: Int) = SandboxUi.lineText(file, line)
 
     private fun threadId(response: JsonObject): String =
         response.get("thread_id")?.asString ?: error("no thread_id in $response")

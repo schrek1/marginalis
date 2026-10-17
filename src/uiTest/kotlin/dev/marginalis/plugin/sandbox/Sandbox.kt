@@ -100,6 +100,13 @@ object Sandbox {
     /** The sandbox IDE's console log; a Docker sandbox's holds every start of its container, restarts included. */
     val ideLog: Path get() = sandbox.logFile
 
+    /** The `handed_back_at` of the last round that woke the agent in this sandbox; the next `comment_wait` waits after it. */
+    var lastRoundAt: String?
+        get() = sandbox.lastRoundAt
+        set(value) {
+            sandbox.lastRoundAt = value
+        }
+
     /** The built-in server port of the IDE that has the sandbox project open. */
     val marginalisPort: Int get() = sandbox.marginalisPort
 
@@ -147,6 +154,9 @@ object Sandbox {
         private var container: String? = null
         private var ide: Process? = null
         private var cachedPort: Int? = null
+
+        @Volatile
+        var lastRoundAt: String? = null
 
         /** The last stop could not copy the IDE's project back, so the host folder may hold an older state. */
         private var hostProjectStale = false
