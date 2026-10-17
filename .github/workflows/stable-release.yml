@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.pages.outputs.page_url }}updatePlugins.xml
+      url: ${{ steps.pages.outputs.base_url }}/updatePlugins.xml
     steps:
       - uses: actions/checkout@v4
         with:
