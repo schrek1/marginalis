@@ -57,11 +57,17 @@ if [ "$mode" = build ]; then
   [ -f "$distribution" ] || { echo "no distribution zip $distribution" >&2; exit 1; }
   rm -rf /prebuilt/plugins/marginalis
   (cd /prebuilt/plugins && jar xf "$distribution")
-  # The IDE runIdeForUiTests downloaded (sandbox/init.gradle names its version), relative to the Gradle home.
+  # The sandbox IDE: JetBrains' open-source IntelliJ IDEA build, which has no licensing (the unified distribution asks
+  # for a subscription on CI runners). Downloaded once per version into the Gradle home, recorded relative to it.
   sandbox_ide=$(sed -n "s/^def sandboxIde = '\([^']*\)'.*/\1/p" sandbox/init.gradle)
-  ide=$(grep -l "\"version\": \"$sandbox_ide\"" /root/.gradle/caches/*/transforms/*/transformed/idea*/product-info.json | head -1)
-  [ -n "$ide" ] || { echo "no IntelliJ IDEA $sandbox_ide in the Gradle home" >&2; exit 1; }
-  dirname "${ide#/root/.gradle/}" > /prebuilt/ide
+  ide_home=/root/.gradle/sandbox-ide/idea-$sandbox_ide
+  if [ ! -x "$ide_home/bin/idea.sh" ]; then
+    rm -rf "$ide_home.part" && mkdir -p "$ide_home.part"
+    curl -fsSL "https://github.com/JetBrains/intellij-community/releases/download/idea/$sandbox_ide/idea-$sandbox_ide.tar.gz" \
+      | tar xz --strip-components=1 -C "$ide_home.part"
+    mv "$ide_home.part" "$ide_home"
+  fi
+  echo "sandbox-ide/idea-$sandbox_ide" > /prebuilt/ide
   # Set by the harness on a Linux host, where files root writes into a bind mount stay root's.
   if [ -n "${MARGINALIS_HOST_OWNER:-}" ]; then
     chown -R "$MARGINALIS_HOST_OWNER" /prebuilt/plugins
