@@ -145,6 +145,9 @@ object Sandbox {
         private var ide: Process? = null
         private var cachedPort: Int? = null
 
+        /** The last stop could not copy the IDE's project back, so the host folder may hold an older state. */
+        private var hostProjectStale = false
+
         private val projectInIde: String get() = if (launch == Launch.DOCKER) "/work/runtime/project" else project.toString().replace('\\', '/')
         private val idePorts: List<Int> get() = if (launch == Launch.DOCKER) listOf(robotPort + 10000) else (63342..63361).toList()
 
@@ -159,7 +162,14 @@ object Sandbox {
             cachedPort = null
             if (launch == Launch.ATTACH) return awaitUp(process = null)
             Files.createDirectories(dir)
+            // The container seeds its project from the host folder: an older copy there would replace the IDE's newer
+            // state and the scenario would check the wrong thing, so it fails here instead.
+            check(fresh || !hostProjectStale) {
+                "the last stop could not copy the IDE's project back to the host; a restart that keeps the project " +
+                    "would start from an older copy (see $logFile)"
+            }
             if (fresh || !project.exists()) freshProject()
+            hostProjectStale = false
             prepare()
             val process = when (launch) {
                 Launch.DOCKER -> startContainer()
@@ -201,7 +211,11 @@ object Sandbox {
                         """,
                     )
                 }.onFailure { println("saving the sandbox's settings failed: $it") }
-                pullProject()
+            }
+            // Also with the robot down: the IDE may have written the project since the last copy, and the next start
+            // seeds the container from the host folder.
+            pullProject()
+            if (robotUp()) {
                 // The IDE closes the connection before answering.
                 runCatching { robot.runJs("com.intellij.openapi.application.ApplicationManager.getApplication().exit(true, true, false)", edt = true) }
             }
@@ -267,6 +281,7 @@ object Sandbox {
                 listOf(
                     "create", "--name", name,
                     "-p", "127.0.0.1:$port:$CONTAINER_ROBOT_PORT", "-p", "127.0.0.1:${port + 10000}:$CONTAINER_REST_PORT",
+                    "-e", "MARGINALIS_SANDBOX_APP_CONFIG_PER_CONTAINER=1",
                 ) + source + listOf(
                     // The entrypoint copies it onto the container's own disk, where the IDE gets file events and
                     // no 9p stalls; the stop copies the IDE's state back.
@@ -326,11 +341,15 @@ object Sandbox {
         }
 
         private fun pullProject() {
-            if (launch == Launch.DOCKER && containerRunning()) {
+            if (launch != Launch.DOCKER) return
+            val pulled = if (containerRunning()) {
                 val chown = hostOwner?.let { owner -> listOf("--chown=$owner") }.orEmpty()
-                val pulled = docker("exec", container!!, "rsync", "-a", "--delete", *chown.toTypedArray(), "$CONTAINER_PROJECT/", "/project-host/")
-                if (pulled != 0) println("copying the IDE's project back to the host failed ($pulled)")
+                docker("exec", container!!, "rsync", "-a", "--delete", *chown.toTypedArray(), "$CONTAINER_PROJECT/", "/project-host/")
+            } else {
+                -1
             }
+            hostProjectStale = pulled != 0
+            if (hostProjectStale) println("the IDE's project could not be copied back to the host (${if (pulled < 0) "container not running" else "rsync exit $pulled"})")
         }
 
         /** A thread dump in the IDE log and a shot of the frame, for a wait that timed out. */
