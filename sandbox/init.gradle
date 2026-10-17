@@ -5,11 +5,19 @@
 def runtime = System.getenv('MARGINALIS_SANDBOX_RUNTIME') ?: 'D:/OSOBNI/programming/marginalis-sandbox-runtime'
 def robotPort = System.getenv('MARGINALIS_ROBOT_PORT') ?: '8082'
 def robotVersion = '0.11.23'
+def sandboxIde = '2026.2'
 
 gradle.rootProject { project ->
     project.pluginManager.withPlugin('org.jetbrains.intellij.platform') {
         def testing = project.extensions.getByName('intellijPlatformTesting')
         testing.runIde.register('runIdeForUiTests') { params ->
+            // The IDE the user runs, not the plugin's 2025.2 floor (CI's build and verify jobs keep that): up to 2025.3
+            // the IDE runs on JBR 21, where a platform thread can keep any plugin's class loader, so an update without
+            // a restart cannot be tested there.
+            // An init script compiles without the plugin's classes; its parameters' class loader has them.
+            def platformType = params.getClass().classLoader.loadClass('org.jetbrains.intellij.platform.gradle.IntelliJPlatformType')
+            params.type.set(Enum.valueOf(platformType, 'IntellijIdea'))
+            params.version.set(sandboxIde)
             // Shared across worktrees, so first-run state (license, trust) is paid once per machine.
             params.sandboxDirectory.set(project.file("$runtime/ide"))
             params.plugins { plugins -> plugins.robotServerPlugin(robotVersion) }

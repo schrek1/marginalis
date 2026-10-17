@@ -31,14 +31,15 @@ function threadOf(panel) {
     field.setAccessible(true);
     return field.get(panel);
 }
-// The robot's EDT scripts hold no lock, and 2025.2 (the floor) then refuses model and caret reads, and caret moves.
-// Take the lock around just those calls: around a whole script, opening an editor waits on background reads it holds
-// back. An int computed in `read` comes back as a JS double, so callers take `| 0`.
+// The robot's EDT scripts hold no lock, and the IDE then refuses model and caret reads, and caret moves. Take the lock
+// around just those calls: around a whole script, opening an editor waits on background reads it holds back. An int
+// computed in `read` comes back as a JS double, so callers take `| 0`. `asUser` takes a plain Computable: 2026.2
+// renamed the ThrowableComputable overload of WriteIntentReadAction.compute.
 function read(compute) {
     return com.intellij.openapi.application.ReadAction.compute(new com.intellij.openapi.util.ThrowableComputable({ compute: compute }));
 }
 function asUser(run) {
-    return com.intellij.openapi.application.WriteIntentReadAction.compute(new com.intellij.openapi.util.ThrowableComputable({ compute: run }));
+    return com.intellij.openapi.application.WriteIntentReadAction.compute(new com.intellij.openapi.util.Computable({ compute: run }));
 }
 // An action runs as its own EDT event, with the locks a click gives it. A robot script is a raw EDT event of its own
 // and can overtake the application's invokeLater queue on a busy IDE, so the action records under the returned token

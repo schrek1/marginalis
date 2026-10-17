@@ -71,8 +71,10 @@ python robot.py screenshot out.png --frame               # the sandbox frame, pa
 ### Docker mode (any OS, a fixed screen)
 
 UI work depends on the window size: a sleeping monitor makes Windows report 640x480 and clamps the frame until
-thread panels get no width. In Docker the sandbox IDE runs on a virtual 2560x1440 screen (Xvfb), with the floor IDE
-(IntelliJ Community from the build) as CI uses it.
+thread panels get no width. In Docker the sandbox IDE runs on a virtual 2560x1440 screen (Xvfb). The IDE is
+IntelliJ IDEA 2026.2 (`sandboxIde` in `init.gradle`), the IDE in daily use, not the plugin's 2025.2 floor that the
+build compiles and verifies against: up to 2025.3 the IDE runs on JBR 21, where a platform thread can keep any
+plugin's class loader, so an update without a restart cannot be tested there.
 
 - `MARGINALIS_SANDBOX_DOCKER=1 python sandbox.py start` builds the image from `Dockerfile` (Xvfb, JDK 25) and runs
   container `marginalis-sandbox-<robot port>` with the checkout mounted read-only. The robot port is published as
@@ -84,7 +86,9 @@ thread panels get no width. In Docker the sandbox IDE runs on a virtual 2560x144
 - **One build, many sandboxes:** `MARGINALIS_SANDBOX_DOCKER=1 MARGINALIS_SANDBOX_PREBUILT=<folder> python
   sandbox.py build` builds the checkout once and leaves its plugins (Marginalis and robot-server) in the folder. A
   sandbox started with the same `MARGINALIS_SANDBOX_PREBUILT` runs the IDE straight from them, without Gradle: it is
-  up in about 10 s instead of a minute. `./gradlew uiSandboxTest` does the same through `sandboxPrebuilt`.
+  up in about 10 s instead of a minute. The build also records which IDE it downloaded (`<folder>/ide`), and the
+  sandbox runs that IDE from the build container's Gradle home, mounted read-only. `./gradlew uiSandboxTest` does the
+  same through `sandboxPrebuilt`.
 - **Ports:** robot 8082 by default, REST robot + 10000. Both stay below Windows' dynamic port range (49152 and up),
   where services take ports at random. The Kotlin suite claims 8100 and up, clear of these.
 - **Linux / CI without Docker:** install `xvfb` and JDK 25, then `sandbox/run-ide-xvfb.sh` with

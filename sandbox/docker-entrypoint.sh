@@ -57,6 +57,11 @@ if [ "$mode" = build ]; then
   [ -f "$distribution" ] || { echo "no distribution zip $distribution" >&2; exit 1; }
   rm -rf /prebuilt/plugins/marginalis
   (cd /prebuilt/plugins && jar xf "$distribution")
+  # The IDE runIdeForUiTests downloaded (sandbox/init.gradle names its version), relative to the Gradle home.
+  sandbox_ide=$(sed -n "s/^def sandboxIde = '\([^']*\)'.*/\1/p" sandbox/init.gradle)
+  ide=$(grep -l "\"version\": \"$sandbox_ide\"" /root/.gradle/caches/*/transforms/*/transformed/idea*/product-info.json | head -1)
+  [ -n "$ide" ] || { echo "no IntelliJ IDEA $sandbox_ide in the Gradle home" >&2; exit 1; }
+  dirname "${ide#/root/.gradle/}" > /prebuilt/ide
   # Set by the harness on a Linux host, where files root writes into a bind mount stay root's.
   if [ -n "${MARGINALIS_HOST_OWNER:-}" ]; then
     chown -R "$MARGINALIS_HOST_OWNER" /prebuilt/plugins
@@ -75,8 +80,10 @@ if [ "$mode" = run ]; then
   exec bash sandbox/run-ide-xvfb.sh
 fi
 
-ide=$(ls -d /root/.gradle/caches/*/transforms/*/transformed/ideaIC-* 2>/dev/null | head -1)
-[ -n "$ide" ] || { echo "no IntelliJ distribution in the Gradle home: run one sandbox in run mode first" >&2; exit 1; }
+# Straight from the build container's Gradle home: a sandbox's own copy of it dates from the sandbox's first start and
+# may hold an older IDE only.
+ide="/gradle-seed/$(cat /prebuilt/ide 2>/dev/null)"
+[ -x "$ide/bin/idea.sh" ] || { echo "no sandbox IDE at $ide: run ./gradlew sandboxPrebuilt" >&2; exit 1; }
 rm -rf "$plugins" && mkdir -p "$plugins" && cp -a /prebuilt/plugins/. "$plugins"/
 ide_dir=/work/runtime/ide
 cat > /tmp/idea.properties <<EOF
