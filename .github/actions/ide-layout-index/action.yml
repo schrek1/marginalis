@@ -1,0 +1,42 @@
+# The IntelliJ Platform Gradle plugin sometimes drops the bundled Java plugin from its index of the IDE
+# (JetBrains/intellij-platform-gradle-plugin#2192, fixed after 2.19.0): the first Gradle run of a job indexes the IDE,
+# and a jar closed under that read leaves `com.intellij.java` out. Every job that runs Gradle takes a checked index,
+# restored from the cache or built and checked here.
+name: IDE layout index
+description: Restores the checked index of the IDE's bundled plugins, or builds one that holds the Java plugin.
+inputs:
+  save:
+    description: Cache an index this job had to build (the build job of a push only, the cache's one writer).
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - id: restore
+      uses: actions/cache/restore@v6
+      with:
+        path: .intellijPlatform/layoutIndex
+        key: ide-layout-index-${{ hashFiles('build.gradle.kts', 'settings.gradle.kts', 'gradle/wrapper/gradle-wrapper.properties') }}
+    - name: Index the IDE's bundled plugins
+      if: steps.restore.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        for attempt in 1 2 3; do
+          ./gradlew dependencies --configuration compileClasspath --console=plain -q > /dev/null
+          complete=true
+          for index in .intellijPlatform/layoutIndex/*.json; do
+            if ! jq -e 'any(.entries[]; .id == "com.intellij.java")' "$index" > /dev/null; then
+              echo "Attempt $attempt: $index lacks the Java plugin; rebuilding it."
+              rm -f "$index"
+              complete=false
+            fi
+          done
+          [ "$complete" = true ] && exit 0
+        done
+        echo "The IDE index still lacks the Java plugin after 3 attempts."
+        exit 1
+    # A restored index is already in the cache under this key; saving it again only fails with a warning.
+    - if: inputs.save == 'true' && steps.restore.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: .intellijPlatform/layoutIndex
+        key: ide-layout-index-${{ hashFiles('build.gradle.kts', 'settings.gradle.kts', 'gradle/wrapper/gradle-wrapper.properties') }}

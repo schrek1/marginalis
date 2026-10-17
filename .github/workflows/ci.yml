@@ -51,36 +51,11 @@ jobs:
         # Margin tab tests that need an active IDE window skip themselves
         # without a display.
         run: sudo apt-get install -y xvfb
-      # The IntelliJ Platform Gradle plugin sometimes drops the bundled Java
-      # plugin from its index of the IDE (JetBrains/intellij-platform-gradle-plugin#2192,
-      # fixed after 2.19.0), and the platform tests then run without Java. A
-      # checked index is cached from main, so pull requests skip that race.
-      - uses: actions/cache/restore@v6
+      # Without the Java plugin in the IDE index, the platform tests run without Java.
+      - uses: ./.github/actions/ide-layout-index
         with:
-          path: .intellijPlatform/layoutIndex
-          key: ide-layout-index-${{ hashFiles('build.gradle.kts', 'settings.gradle.kts', 'gradle/wrapper/gradle-wrapper.properties') }}
-      - name: Index the IDE's bundled plugins
-        run: |
-          for attempt in 1 2 3; do
-            ./gradlew dependencies --configuration compileClasspath --console=plain -q > /dev/null
-            complete=true
-            for index in .intellijPlatform/layoutIndex/*.json; do
-              if ! jq -e 'any(.entries[]; .id == "com.intellij.java")' "$index" > /dev/null; then
-                echo "Attempt $attempt: $index lacks the Java plugin; rebuilding it."
-                rm -f "$index"
-                complete=false
-              fi
-            done
-            [ "$complete" = true ] && exit 0
-          done
-          echo "The IDE index still lacks the Java plugin after 3 attempts."
-          exit 1
-      - uses: actions/cache/save@v6
-        # schreko_stable too: the fork's pull requests go into it and read its caches.
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/schreko_stable')
-        with:
-          path: .intellijPlatform/layoutIndex
-          key: ide-layout-index-${{ hashFiles('build.gradle.kts', 'settings.gradle.kts', 'gradle/wrapper/gradle-wrapper.properties') }}
+          # schreko_stable too: the fork's pull requests go into it and read its caches.
+          save: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/schreko_stable') }}
       - name: Build plugin
         # `build` alone runs checks but does not produce the distributable
         # zip — `buildPlugin` does.
@@ -112,6 +87,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: true
+      - uses: ./.github/actions/ide-layout-index
       - name: Sandbox scenarios
         env:
           MARGINALIS_SANDBOX_RUNTIME: ${{ github.workspace }}/build/sandbox-runtime
@@ -138,6 +114,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: true
+      - uses: ./.github/actions/ide-layout-index
       - name: Run IntelliJ Plugin Verifier
         run: ./gradlew verifyPlugin --console=plain
       - uses: actions/upload-artifact@v7

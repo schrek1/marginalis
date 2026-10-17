@@ -68,6 +68,8 @@ jobs:
         if: steps.plan.outputs.release == 'true'
         with:
           cache-read-only: true
+      - uses: ./.github/actions/ide-layout-index
+        if: steps.plan.outputs.release == 'true'
       - name: Build plugin
         if: steps.plan.outputs.release == 'true'
         env:
