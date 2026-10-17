@@ -1,0 +1,61 @@
+# Stable release of the fork: a `<upstream>-schreko.N` tag on schreko_stable -> the plugin built against the
+# platform floor, a GitHub Release with the zip, and the stable channel's updatePlugins.xml on GitHub Pages.
+# Every IDE subscribes once to https://schrek1.github.io/marginalis/updatePlugins.xml.
+# (`v*` tags belong to release.yml, which publishes to the Marketplace.)
+name: Stable release
+
+on:
+  push:
+    tags: ["*-schreko.*"]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: stable-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.pages.outputs.page_url }}updatePlugins.xml
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The release notes compare STABLE.md with the previous stable tag.
+          fetch-depth: 0
+      - name: Tag is the newest stable release on schreko_stable
+        # Pages holds one updatePlugins.xml: an older tag pushed late must not replace the newer release there.
+        run: |
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/schreko_stable
+          newest=$(git tag -l '*-schreko.*' | grep -E -- '-schreko\.[0-9]+$' | sort -t. -k4,4n | tail -1)
+          [ "$newest" = "$GITHUB_REF_NAME" ] || { echo "$GITHUB_REF_NAME is not the newest stable tag ($newest)"; exit 1; }
+      - name: Release notes and plugin repository
+        run: python3 scripts/stable_channel.py "$GITHUB_REF_NAME" "$GITHUB_REPOSITORY" site
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+      - name: Build plugin
+        run: |
+          sed -i -E "s/^version = \"[^\"]*\"/version = \"$GITHUB_REF_NAME\"/" build.gradle.kts
+          ./gradlew buildPlugin --console=plain
+          test -f "build/distributions/marginalis-$GITHUB_REF_NAME.zip"
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/distributions/marginalis-${{ github.ref_name }}.zip
+          body_path: site/release-notes.md
+      - uses: actions/configure-pages@v5
+        id: pages
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - uses: actions/deploy-pages@v4
