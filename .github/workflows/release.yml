@@ -37,8 +37,17 @@ jobs:
             exit 0
           fi
           ./gradlew publishPlugin --console=plain
+      # The release opens with the version's changelog section. Credit links
+      # like [@name](https://github.com/name) become bare @name mentions,
+      # which GitHub links and notifies; the Marketplace keeps the links.
+      - name: Release notes from the changelog
+        run: |
+          ./gradlew getChangelog --project-version="${GITHUB_REF_NAME#v}" --no-header --no-links --console=plain -q \
+            | sed -E 's#\[@([A-Za-z0-9-]+)\]\(https://github\.com/[A-Za-z0-9-]+\)#@\1#g' > build/release-notes.md
+          test -s build/release-notes.md
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: build/distributions/*.zip
+          body_path: build/release-notes.md
           generate_release_notes: true

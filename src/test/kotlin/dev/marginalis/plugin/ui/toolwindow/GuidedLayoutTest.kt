@@ -9,6 +9,7 @@ import com.intellij.openapi.util.JDOMUtil
 import com.intellij.testFramework.TestActionEvent
 import com.intellij.util.xmlb.XmlSerializer
 import dev.marginalis.core.GuidedLayout
+import dev.marginalis.plugin.testing.AllowReflection
 import dev.marginalis.plugin.testing.WalkthroughFixture
 import javax.swing.tree.TreePath
 
@@ -158,6 +159,7 @@ class GuidedLayoutTest : ToolWindowTestCase() {
         assertEquals(GuidedLayout.BY_FILE, reopened.layout)
     }
 
+    @AllowReflection("the storage name and file are what keeps the choice apart from other settings; only the @State annotation states them")
     fun testTheChoiceIsKeptInTheWorkspaceFileUnderItsOwnName() {
         val storage = GuidedLayoutSetting::class.java.getAnnotation(State::class.java)
 

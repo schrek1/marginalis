@@ -9,9 +9,6 @@ History before 0.1.19 lives in git tags.
 
 ### Added
 
-- Messages render GitHub-flavoured Markdown: tables, ~~strikethrough~~
-  and task lists. A wide table scrolls sideways instead of squeezing the
-  text around it, and plain web addresses are links.
 - Line breaks you type in a comment now show up after you send it: a
   single Enter inside a paragraph is a new line, and a second blank line
   between paragraphs stays an empty line instead of collapsing.
@@ -53,16 +50,6 @@ History before 0.1.19 lives in git tags.
   greyed out: it picks the thread on your caret's line in the diff, or
   the diff's file. While you are writing a reply, it picks the thread
   you are replying to, in an editor, a diff or the Margin tab.
-- Stepping through the Marginalis tool window with Next and Previous no
-  longer loses its place: the selection survives the tree refreshing,
-  so the next press continues from the step you are on instead of the
-  first one.
-- In a Guided section, First, Previous, Next and Last Step in the tool
-  window follow the step numbers, as the arrows in a thread's header do,
-  instead of the folder-and-file order the tree shows them in.
-- Thread icons now show in the gutter of a pull or merge request review
-  diff too, and in any other diff that shows a file from a commit. Click
-  one to open the thread right there in the diff.
 - A guided walkthrough you follow in a pull or merge request review diff
   stays in that diff. Resolve, Previous and Next switch the diff to the
   next step's file when the review contains it, scroll to the step and
@@ -78,16 +65,40 @@ History before 0.1.19 lives in git tags.
   press, up to its section and then every section. Collapse folds
   everything inside, as IntelliJ's Collapse All does. Folders you fold
   stay folded when the tree refreshes.
-- Find any thread in the Marginalis tool window in one click: "Select in
-  Marginalis" in the thread's header opens the tool window on it, and
-  "Select Opened Thread" in the tool window picks the thread on the line
-  your caret is on, or the file when that line has none.
 - A walkthrough in the Marginalis tool window now reads in step order, the
   way Next and Previous walk it. Steps in a row in the same file fold
   under that file, and steps in a row about the whole project under a
   Project node. The Guided Layout menu in the tool window header
   switches to the folder tree as before, or to one node per file, and
   each project remembers its choice.
+- A thread you left open shows the agent's reply when you come back to
+  it. A reply that arrived while its file, or the Margin tab, was in a
+  background tab used to stay hidden until something else changed on
+  the thread.
+- The Margin tab shows only when there is something in it. A project
+  without project threads opens without it, and the tab appears with
+  the first one. It no longer pins itself, and a tab left empty stays
+  closed after a restart.
+- The reply you are typing in the Margin tab stays where it is when an
+  agent posts into another thread above it, and keeps your cursor. The
+  same goes for a new project thread you are writing. Reading without
+  a draft, the card at the top of your view stays put too.
+
+## [0.2.3] - 2026-10-16
+
+Thanks to [@schrek1](https://github.com/schrek1) for the fixes and features in this release.
+
+### Added
+
+- Messages render GitHub-flavoured Markdown: tables, ~~strikethrough~~
+  and task lists. A wide table scrolls sideways instead of squeezing the
+  text around it, and plain web addresses are links.
+- Thread icons now show in the gutter of a pull or merge request review
+  diff too, and in any other diff that shows a file from a commit. Click
+  one to open the thread right there in the diff.
+
+### Fixed
+
 - Marginalis now runs on 2025.2 versions of JetBrains IDEs. Until now those versions couldn't load
   it, even though the Marketplace listed them as supported.
 - Walking through steps in the same file keeps you in the editor you are reading, a pull request's
@@ -104,18 +115,6 @@ History before 0.1.19 lives in git tags.
 - In a Guided section, First, Previous, Next and Last Step in the tool
   window follow the step numbers, as the arrows in a thread's header do,
   instead of the folder-and-file order the tree shows them in.
-- A thread you left open shows the agent's reply when you come back to
-  it. A reply that arrived while its file, or the Margin tab, was in a
-  background tab used to stay hidden until something else changed on
-  the thread.
-- The Margin tab shows only when there is something in it. A project
-  without project threads opens without it, and the tab appears with
-  the first one. It no longer pins itself, and a tab left empty stays
-  closed after a restart.
-- The reply you are typing in the Margin tab stays where it is when an
-  agent posts into another thread above it, and keeps your cursor. The
-  same goes for a new project thread you are writing. Reading without
-  a draft, the card at the top of your view stays put too.
 
 ## [0.2.2] - 2026-10-04
 

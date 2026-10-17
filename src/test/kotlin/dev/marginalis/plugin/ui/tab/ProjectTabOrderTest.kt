@@ -5,6 +5,7 @@ import com.intellij.openapi.components.StoragePathMacros
 import com.intellij.openapi.util.JDOMUtil
 import com.intellij.util.xmlb.XmlSerializer
 import dev.marginalis.core.ProjectTabOrder
+import dev.marginalis.plugin.testing.AllowReflection
 
 class ProjectTabOrderTest : MarginTabTestCase() {
 
@@ -79,6 +80,7 @@ class ProjectTabOrderTest : MarginTabTestCase() {
         assertEquals(ProjectTabOrder.NEWEST_FIRST, reopened.order)
     }
 
+    @AllowReflection("the storage name and file are what keeps the choice apart from other settings; only the @State annotation states them")
     fun testTheSortChoiceIsKeptInTheWorkspaceFileUnderItsOwnName() {
         val storage = ProjectTabSort::class.java.getAnnotation(State::class.java)
 

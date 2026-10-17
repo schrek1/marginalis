@@ -74,7 +74,8 @@ is running the plugin:
   agreed item.
 - Issue labels — apply on filing, keep current: `api` (the agent-facing
   HTTP contract and served guide) and `ux` (the in-IDE experience) are
-  areas, both when a change spans them; `qol` marks friction removers
+  areas, both when a change spans them; `diff` narrows `ux` to thread
+  icons and panels in diff and review views; `qol` marks friction removers
   on what already works (batchable between feature releases), as
   opposed to new capability; `refine` means a design conversation with
   the user must settle before code — never start a `refine` issue

@@ -19,7 +19,7 @@ plugins {
 }
 
 group = "dev.marginalis"
-version = "0.2.2"
+version = "0.2.3"
 
 // Stamp the build version into a resource ping can serve: the platform's
 // plugin-manager lookups (PluginManagerCore.getPlugin AND
@@ -58,6 +58,7 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.opentest4j:opentest4j:1.3.0")
+    testImplementation("com.tngtech.archunit:archunit:1.5.1")
 
     "uiTestImplementation"("org.junit.jupiter:junit-jupiter:5.13.4")
     "uiTestRuntimeOnly"("org.junit.platform:junit-platform-launcher:1.13.4")
@@ -79,6 +80,10 @@ dependencies {
         // as a real plugin dependency instead of bundling our own copy of an
         // IDE package, per the Marketplace verifier.
         bundledPlugin("org.intellij.plugins.markdown")
+        // The review diff's file list (ReviewDiffFileList.java): compiled against, so the Plugin
+        // Verifier checks those calls on every IDE; the IDE provides both modules at runtime.
+        bundledModule("intellij.platform.collaborationTools")
+        bundledModule("intellij.platform.vcs.impl")
         // Default: compile against the oldest supported target (the honest
         // floor; CI uses this). Environments that can't reach the JetBrains
         // CDN — like the tenant sandbox — set `marginalis.localIde` in their
@@ -274,6 +279,25 @@ val sandboxRunLocked by tasks.registering {
             if (orphans.isNotEmpty()) {
                 logger.lifecycle("removing sandbox containers an earlier run left behind: ${orphans.joinToString()}")
                 ProcessBuilder(listOf("docker", "rm", "-f") + orphans).redirectErrorStream(true).start().waitFor()
+            }
+        }
+    }
+}
+
+tasks.test {
+    systemProperty("marginalis.rootProjectName", rootProject.name)
+}
+
+allprojects {
+    val guarded = this
+    plugins.withType<JavaBasePlugin> {
+        guarded.extensions.getByType<SourceSetContainer>().configureEach {
+            val kind = if (name == SourceSet.MAIN_SOURCE_SET_NAME) "production" else "test"
+            val property = "marginalis.ownClasses.$kind.$name.${guarded.path}"
+            val classesDirs = output.classesDirs
+            rootProject.tasks.named<Test>("test") {
+                inputs.files(classesDirs).withPropertyName(property)
+                jvmArgumentProviders.add(CommandLineArgumentProvider { listOf("-D$property=${classesDirs.asPath}") })
             }
         }
     }
