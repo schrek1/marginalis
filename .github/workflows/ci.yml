@@ -146,3 +146,16 @@ jobs:
           name: plugin-verifier-reports
           path: build/reports/pluginVerifier
           if-no-files-found: ignore
+
+  release:
+    # A green push to schreko_stable is the release (stable-release.yml decides whether there is one to make). It runs
+    # inside this run because a tag pushed with GITHUB_TOKEN would start no other workflow.
+    needs: [build, e2e, verify]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/schreko_stable'
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+      issues: write
+      pull-requests: write
+    uses: ./.github/workflows/stable-release.yml
