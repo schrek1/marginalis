@@ -27,6 +27,13 @@ per check. Each feature has one scenario, a JUnit class on Remote-Robot in
 `src/uiTest/kotlin/dev/marginalis/plugin/sandbox/scenarios/`, and a runbook in `sandbox/runbooks/`. Gradle runs
 them as `uiSandboxTest`.
 
+The sandbox IDE is JetBrains' open-source IntelliJ IDEA 2026.2, the platform in daily use, without licensing; the
+platform floor (2025.2) keeps its compile, platform tests and Plugin Verifier in CI's `build` and `verify`. The floor
+runs on JBR 21, where updating any plugin with Swing UI without a restart can fail on a platform thread that keeps its
+class loader, so scenarios run on JBR 25. Measured 2026-10-17: on a desktop the suite takes as long as on 2025.2
+(265–271 s vs 263–266 s, 2 rounds each); on CI's free runner `e2e` takes about 3 minutes longer (16.6 vs 13.4 min,
+one run each: 0.8 min for the extra download, the rest more CPU per scenario).
+
 ### Running the suite
 
 Docker gives every sandbox a virtual 2560x1440 screen, so scenarios behave the same on Windows, macOS, Linux and in
@@ -131,7 +138,7 @@ A failure there is a bug to diagnose from the artifact, never a reason to rerun 
 
 - **User steps never touch the OS mouse or keyboard.** The steps press buttons through their own actions and set
   text on the components.
-- **Locks on the floor IDE.** The robot runs EDT scripts without the lock a real click holds, and 2025.2 refuses
+- **Locks in the sandbox IDE.** The robot runs EDT scripts without the lock a real click holds, and the IDE refuses
   model reads and caret moves there. Wrap just that call: `read(function () { ... })` for a read,
   `asUser(function () { ... })` for a caret move. Never wrap a whole script: opening an editor under a lock waits on
   background reads the lock holds back, and the IDE hangs.

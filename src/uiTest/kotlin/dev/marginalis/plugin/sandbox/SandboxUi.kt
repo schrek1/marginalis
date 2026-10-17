@@ -31,14 +31,15 @@ function threadOf(panel) {
     field.setAccessible(true);
     return field.get(panel);
 }
-// The robot's EDT scripts hold no lock, and 2025.2 (the floor) then refuses model and caret reads, and caret moves.
-// Take the lock around just those calls: around a whole script, opening an editor waits on background reads it holds
-// back. An int computed in `read` comes back as a JS double, so callers take `| 0`.
+// The robot's EDT scripts hold no lock, and the IDE then refuses model and caret reads, and caret moves. Take the lock
+// around just those calls: around a whole script, opening an editor waits on background reads it holds back. An int
+// computed in `read` comes back as a JS double, so callers take `| 0`. `asUser` takes a plain Computable: 2026.2
+// renamed the ThrowableComputable overload of WriteIntentReadAction.compute.
 function read(compute) {
     return com.intellij.openapi.application.ReadAction.compute(new com.intellij.openapi.util.ThrowableComputable({ compute: compute }));
 }
 function asUser(run) {
-    return com.intellij.openapi.application.WriteIntentReadAction.compute(new com.intellij.openapi.util.ThrowableComputable({ compute: run }));
+    return com.intellij.openapi.application.WriteIntentReadAction.compute(new com.intellij.openapi.util.Computable({ compute: run }));
 }
 // An action runs as its own EDT event, with the locks a click gives it. A robot script is a raw EDT event of its own
 // and can overtake the application's invokeLater queue on a busy IDE, so the action records under the returned token
@@ -783,16 +784,25 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
         ),
     )
 
+    private const val SORT_BUTTON = """
+function sortButton() {
+    return find(fieldOf(marginPanel(), 'root'), function (c) {
+        return c instanceof com.intellij.openapi.actionSystem.impl.ActionButton
+            && String(c.getAction().getClass().getSimpleName()) == 'ProjectTabSortMenu';
+    });
+}
+"""
+
     /** Picks an entry of the Margin tab's Sort menu, through the toolbar button's own action group. */
     fun chooseMarginSort(label: String) {
+        // The toolbar fills its buttons in after the tab shows, on a slow machine seconds later.
+        awaitUntil("the Margin tab shows its Sort button", Duration.ofSeconds(30)) {
+            marginJs(FIND + SORT_BUTTON + "String(sortButton() != null)") == "true"
+        }
         val escaped = lit(label)
         marginJs(
-            FIND + """
-            var root = fieldOf(marginPanel(), 'root');
-            var button = find(root, function (c) {
-                return c instanceof com.intellij.openapi.actionSystem.impl.ActionButton
-                    && String(c.getAction().getClass().getSimpleName()) == 'ProjectTabSortMenu';
-            });
+            FIND + SORT_BUTTON + """
+            var button = sortButton();
             if (button == null) throw 'no Sort button in the Margin tab';
             var group = button.getAction();
             var context = com.intellij.ide.DataManager.getInstance().getDataContext(button);

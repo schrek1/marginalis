@@ -4,7 +4,7 @@ FROM eclipse-temurin:25-jdk
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      xvfb rsync socat procps fontconfig fonts-dejavu-core \
+      xvfb rsync socat procps fontconfig fonts-dejavu-core curl ca-certificates \
       libxext6 libxrender1 libxtst6 libxi6 libxrandr2 libfreetype6 \
  && rm -rf /var/lib/apt/lists/*
 
