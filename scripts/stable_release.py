@@ -73,9 +73,13 @@ def merged_prs(previous: str, sha: str) -> list[int]:
     return numbers
 
 
-def fork_issue(pr: dict) -> int | None:
-    found = re.search(r"Fork issue: MARG-\d+ \(#(\d+)\)", pr.get("body") or "") or re.match(r"MARG-(\d+): ", pr["title"])
-    return int(found.group(1)) if found else None
+def fork_issues(pr: dict) -> list[int]:
+    """The issues a PR names on its `Fork issue(s):` line (one PR may carry several), else the `MARG-N:` of its title."""
+    line = re.search(r"^Fork issues?: (.+)$", pr.get("body") or "", flags=re.M)
+    if line:
+        return [int(number) for number in re.findall(r"MARG-\d+ \(#(\d+)\)", line.group(1))]
+    title = re.match(r"MARG-(\d+): ", pr["title"])
+    return [int(title.group(1))] if title else []
 
 
 class Actions:
@@ -110,8 +114,7 @@ def follow_up(sha: str, outcome: str, version: str, reason: str, run_url: str, d
                 }.get(outcome, f"The release failed: {run_url}. Nothing was tagged; the fix goes forward.")
     if in_stable:
         for number in prs:
-            issue = fork_issue(json.loads(gh("pr", "view", str(number), "--repo", REPO, "--json", "title,body")))
-            if issue is not None:
+            for issue in fork_issues(json.loads(gh("pr", "view", str(number), "--repo", REPO, "--json", "title,body"))):
                 tell_issue(actions, issue, in_stable)
     if prs:
         pr = prs[-1]
