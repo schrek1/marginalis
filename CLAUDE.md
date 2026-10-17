@@ -8,6 +8,8 @@ is the shipped record and decision log.
 
 ## Building
 
+- The tools a machine needs (JDK, Docker, `gh`, actionlint, …) are in
+  `docs/dev-tools.md`; a tool the work starts to rely on goes in there.
 - How to test a change, from unit tests to the sandbox scenarios in
   Docker, is in `docs/testing.md`: read it before writing or running
   tests. New tests assert with Kotest matchers (`shouldBe`,
