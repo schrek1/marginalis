@@ -256,6 +256,55 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
             ),
         ).asJsonArray.map { it.asInt }
 
+    /** 0-based lines of the thread gutter icons in the file's own editor (the document's markers). */
+    fun editorIconLines(file: String): List<Int> =
+        JsonParser.parseString(
+            js(
+                EDITORS + """
+                var editor = textEditorOf('$file');
+                var lines = [];
+                var highlighters = editor.getFilteredDocumentMarkupModel().getAllHighlighters();
+                for (var i = 0; i < highlighters.length; i++) {
+                    var renderer = highlighters[i].getGutterIconRenderer();
+                    if (renderer != null && renderer.getClass().getSimpleName() == 'ThreadGutterIconRenderer') {
+                        var offset = highlighters[i].getStartOffset();
+                        lines.push(read(function () { return editor.getDocument().getLineNumber(offset); }) | 0);
+                    }
+                }
+                lines.sort(function (a, b) { return a - b; });
+                String(JSON.stringify(lines))
+                """,
+            ),
+        ).asJsonArray.map { it.asInt }
+
+    /** Clicks the thread gutter icon on 0-based `line` of the file's editor: the icon's own click action runs. */
+    fun clickThreadIcon(file: String, line: Int) {
+        val token = js(
+            EDITORS + """
+            var editor = textEditorOf('$file');
+            var highlighters = editor.getFilteredDocumentMarkupModel().getAllHighlighters();
+            var renderer = null;
+            for (var i = 0; i < highlighters.length && renderer == null; i++) {
+                var candidate = highlighters[i].getGutterIconRenderer();
+                var offset = highlighters[i].getStartOffset();
+                if (candidate != null && candidate.getClass().getSimpleName() == 'ThreadGutterIconRenderer'
+                    && read(function () { return editor.getDocument().getLineNumber(offset); }) == $line) renderer = candidate;
+            }
+            if (renderer == null) throw 'no thread icon on line $line of $file';
+            var action = renderer.getClickAction();
+            var context = com.intellij.openapi.actionSystem.impl.SimpleDataContext.builder()
+                .add(com.intellij.openapi.actionSystem.CommonDataKeys.EDITOR, editor)
+                .add(com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT, project)
+                .build();
+            var event = com.intellij.openapi.actionSystem.AnActionEvent.createEvent(
+                action, context, action.getTemplatePresentation().clone(),
+                'MarginalisSandbox', com.intellij.openapi.actionSystem.ActionUiKind.NONE, null);
+            String(performLater(action, event))
+            """,
+        )
+        awaitActionRan("open the thread from its gutter icon", token)
+    }
+
     /** Puts 0-based `topLine` at the top of the file's editor, without animation. */
     fun scrollEditorTo(file: String, topLine: Int) {
         js(
@@ -346,20 +395,32 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
     }
 
     /** Presses the thread header's own ⚡ ("Live: …" when on, "Go Live: …" when off) with its Swing `click()`. */
+    /**
+     * Presses the thread header's Live toggle once its own update enables it (live needs the agent waiting): the
+     * toolbar repaints its text asynchronously, so the button is found by its action, not by what it last showed.
+     */
     fun toggleThreadLive(threadId: String) {
-        js(
-            FIND + """
-            var button = find(component, function (c) {
-                if (!(c instanceof com.intellij.openapi.actionSystem.impl.ActionButton)) return false;
-                var text = c.getPresentation().getText();
-                return text != null && (text.startsWith('Live:') || text.startsWith('Go Live:'));
-            });
-            button.click();
-            String(true)
-            """,
-            threadPanel(threadId),
-        )
+        val enabled = readUntil("the Live toggle of $threadId turns on", read = { liveToggle(threadId, press = false) == "enabled" }) { it }
+        check(enabled) { "the Live toggle of $threadId stayed off: no agent it could go live with is waiting" }
+        awaitActionRan("Live", liveToggle(threadId, press = true))
     }
+
+    private fun liveToggle(threadId: String, press: Boolean): String = js(
+        FIND + """
+        var button = find(component, function (c) {
+            return c instanceof com.intellij.openapi.actionSystem.impl.ActionButton
+                && c.getAction().getClass().getName().indexOf('liveAction') >= 0;
+        });
+        if (button == null) throw 'no Live toggle in the thread header';
+        var action = button.getAction();
+        var event = com.intellij.openapi.actionSystem.AnActionEvent.createEvent(
+            action, com.intellij.ide.DataManager.getInstance().getDataContext(button), button.getPresentation().clone(),
+            'MarginalisSandbox', com.intellij.openapi.actionSystem.ActionUiKind.NONE, null);
+        action.update(event);
+        ${if (press) "String(performLater(action, event))" else "String(event.getPresentation().isEnabled() ? 'enabled' : 'disabled')"}
+        """,
+        threadPanel(threadId),
+    )
 
     fun liveByDefault(): Boolean = js("String(store.getLiveByDefault())") == "true"
 
@@ -428,6 +489,111 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
                 horizontalBarVisible = pane.get("horizontalBarVisible").asBoolean,
             )
         }
+
+    /** Edits the file's document as typing does: one undoable command, through the editor's document. */
+    private fun editDocument(file: String, change: String) {
+        js(
+            EDITORS + """
+            var document = textEditorOf('$file').getDocument();
+            com.intellij.openapi.application.ApplicationManager.getApplication().invokeAndWait(new java.lang.Runnable({ run: function () {
+                com.intellij.openapi.command.WriteCommandAction.runWriteCommandAction(project, new java.lang.Runnable({ run: function () {
+                    $change
+                } }));
+            } }));
+            String(true)
+            """,
+        )
+    }
+
+    /** Inserts `text` (ending in a line break) before 1-based `line`. */
+    fun insertBeforeLine(file: String, line: Int, text: String) =
+        editDocument(file, "document.insertString(document.getLineStartOffset(${line - 1}), ${lit(text)});")
+
+    /** Erases 1-based `line` together with the line break before it, so nothing of the line is left. */
+    fun eraseLine(file: String, line: Int) =
+        editDocument(file, "document.deleteString(document.getLineEndOffset(${line - 2}), document.getLineEndOffset(${line - 1}));")
+
+    /** Replaces the whole text, as a rewrite of the file does. */
+    fun rewriteFile(file: String, text: String) = editDocument(file, "document.setText(${lit(text)});")
+
+    /** 1-based `line` of the file as the IDE's document holds it, open in an editor or not. */
+    fun lineText(file: String, line: Int): String = js(
+        EDITORS + """
+        String(read(function () {
+            var document = com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().getDocument(projectFile('$file'));
+            return document.getText(new com.intellij.openapi.util.TextRange(
+                document.getLineStartOffset(${line - 1}), document.getLineEndOffset(${line - 1})));
+        }))
+        """,
+    )
+
+    /** The document's text as the editor holds it now. */
+    fun documentText(file: String): String = js(EDITORS + "String(read(function () { return textEditorOf('$file').getDocument().getText(); }))")
+
+    /** Runs a plugin action in the file's editor, as its context menu or shortcut does there. */
+    fun runEditorAction(file: String, actionId: String) {
+        val token = js(
+            EDITORS + """
+            var editor = textEditorOf('$file');
+            var action = com.intellij.openapi.actionSystem.ActionManager.getInstance().getAction(${lit(actionId)});
+            if (action == null) throw 'no action ' + ${lit(actionId)};
+            var context = com.intellij.openapi.actionSystem.impl.SimpleDataContext.builder()
+                .add(com.intellij.openapi.actionSystem.CommonDataKeys.EDITOR, editor)
+                .add(com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT, project)
+                .add(com.intellij.openapi.actionSystem.CommonDataKeys.VIRTUAL_FILE, projectFile('$file'))
+                .build();
+            var event = com.intellij.openapi.actionSystem.AnActionEvent.createEvent(
+                action, context, action.getTemplatePresentation().clone(),
+                'EditorPopup', com.intellij.openapi.actionSystem.ActionUiKind.POPUP, null);
+            action.update(event);
+            if (!event.getPresentation().isEnabledAndVisible()) throw 'action ' + ${lit(actionId)} + ' is off in ' + '$file';
+            String(performLater(action, event))
+            """,
+        )
+        awaitActionRan(actionId, token)
+    }
+
+    /** Selects `text` on 1-based `line` of the file's editor, the caret at its end, as a drag over it would. */
+    fun selectText(file: String, line: Int, text: String) {
+        js(
+            EDITORS + """
+            var editor = textEditorOf('$file');
+            var document = editor.getDocument();
+            var start = read(function () { return document.getLineStartOffset(${line - 1}); });
+            var lineText = read(function () { return document.getText(new com.intellij.openapi.util.TextRange(start, document.getLineEndOffset(${line - 1}))); });
+            var column = lineText.indexOf(${lit(text)});
+            if (column < 0) throw 'no ' + ${lit(text)} + ' on line $line of $file';
+            asUser(function () {
+                editor.getCaretModel().moveToOffset(start + column + ${text.length});
+                editor.getSelectionModel().setSelection(start + column, start + column + ${text.length});
+            });
+            String(true)
+            """,
+        )
+    }
+
+    /** The thread of the draft panel on screen: a panel whose thread the store does not hold yet. */
+    fun openDraftId(): String =
+        awaitValue("a draft panel on screen") {
+            Sandbox.robot.findAll("//div[@javaclass='dev.marginalis.plugin.ui.ThreadPanel']")
+                .map { panel -> js("String(threadOf(component).getId())", panel) }
+                .firstOrNull { id -> js("String(store.getThreads().byId('$id') == null)") == "true" }
+        }
+
+    /** Types the body into an open draft's composer and presses its send button. */
+    fun userSubmitsDraft(threadId: String, body: String) {
+        js(
+            FIND + """
+            var area = find(component, function (c) { return c instanceof com.intellij.ui.EditorTextField; });
+            if (area == null) throw 'no composer in the draft';
+            area.setText(${lit(body)});
+            var send = find(component, function (c) { return c instanceof com.intellij.ui.components.JBOptionButton; });
+            send.doClick();
+            String(true)
+            """,
+            threadPanel(threadId),
+        )
+    }
 
     /** Opens the composer with the real "Reply…" link, types the body into it and presses the send button. */
     fun userReplies(threadId: String, body: String) {

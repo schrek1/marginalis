@@ -283,6 +283,22 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
     )
 
     /** Per Guided section title: the prefix each step shows in the tree, e.g. `(1/5)`, in tree order. */
+    /** The ids of every thread the tool window's tree holds, folded sections included, each once. */
+    fun treeThreadIds(): Set<String> =
+        JsonParser.parseString(
+            js(
+                TREE + """
+                var nodes = marginalisTree().getModel().getRoot().preorderEnumeration();
+                var ids = {};
+                while (nodes.hasMoreElements()) {
+                    var thread = threadOfNode(nodes.nextElement());
+                    if (thread != null) ids[String(thread.getId())] = true;
+                }
+                String(JSON.stringify(Object.keys(ids)))
+                """,
+            ),
+        ).asJsonArray.map { it.asString }.toSet()
+
     fun stepPrefixes(): Map<String, List<String>> {
         val raw = obj(
             js(

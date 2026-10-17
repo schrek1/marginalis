@@ -45,4 +45,9 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-43 | Sandbox scenarios: a core tag runs the critical flows alone | `feat/MARG-43-core-tag` | — | — | `2bd8f09` |
 | MARG-103 | Sandbox scenarios fail on errors the plugin logs | `feat/MARG-103-fail-on-plugin-errors` | — | — | `febd7d0` |
 | MARG-117 | A stalled IDE no longer blames Marginalis: the Margin tab's editor provider takes no read lock | `fix/MARG-117-provider-no-read-lock` | — | — | `510f774` |
+| MARG-98 | Stable releases itself once CI is green on a merge | `feat/MARG-98-release-on-green-ci` | — | — | `0e28007` |
+| MARG-104 | E2E scenario: the agent and the user take turns in the margin | `feat/MARG-104-agent-user-loop` | — | — | `bfcdc6b` |
+| MARG-105 | E2E scenario: what the user left in the margin survives an IDE restart | `feat/MARG-105-threads-survive-restart` | — | — | `7378c33` |
+| MARG-106 | E2E scenario: the user starts a thread on a line, a selection or a whole file | `feat/MARG-106-user-starts-thread` | — | — | `e749dc4` |
+| MARG-107 | E2E scenario: a thread follows its code while the user edits | `feat/MARG-107-anchoring-through-edits` | — | — | `f538111` |
 | MARG-119 | Sandbox scenarios run the plugin users get, without the test libraries | `fix/MARG-119-sandbox-runs-the-shipped-plugin` | — | — | `b57fcc3` |

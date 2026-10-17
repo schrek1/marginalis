@@ -1,61 +1,125 @@
-# Stable release of the fork: a `<upstream>-schreko.N` tag on schreko_stable -> the plugin built against the
-# platform floor, a GitHub Release with the zip, and the stable channel's updatePlugins.xml on GitHub Pages.
+# Stable release of the fork: a green push to schreko_stable releases itself (ci.yml's `release` job calls this
+# workflow). `scripts/stable_release.py plan` decides: the next `<upstream>-schreko.N`, or a skip (no plugin change, not
+# the newest merge). A release builds the plugin against the platform floor, creates the tag with the GitHub Release
+# that carries the zip, and publishes the stable channel's updatePlugins.xml on GitHub Pages; a red run tags nothing.
+# Then the fork issues of the merges since the previous release, and the merged PR, are told what came of it.
 # Every IDE subscribes once to https://schrek1.github.io/marginalis/updatePlugins.xml.
 # (`v*` tags belong to release.yml, which publishes to the Marketplace.)
 name: Stable release
 
 on:
-  push:
-    tags: ["*-schreko.*"]
-
-permissions:
-  contents: write
-  pages: write
-  id-token: write
-
-concurrency:
-  group: stable-release
-  cancel-in-progress: false
+  workflow_call:
+    inputs:
+      force:
+        description: Release even when nothing the plugin is built from changed
+        type: boolean
+        default: false
+  # The manual fallback: `stable.py release` dispatches it on schreko_stable.
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Release even when nothing the plugin is built from changed
+        type: boolean
+        default: false
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    # One at a time; a newer merge waiting replaces an older one, whose commits its release includes anyway.
+    concurrency:
+      group: stable-release
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.pages.outputs.base_url }}/updatePlugins.xml
+    outputs:
+      release: ${{ steps.plan.outputs.release }}
+      version: ${{ steps.plan.outputs.version }}
+      reason: ${{ steps.plan.outputs.reason }}
     steps:
       - uses: actions/checkout@v4
         with:
-          # The release notes compare STABLE.md with the previous stable tag.
+          # The plan and the release notes compare with the previous stable tag.
           fetch-depth: 0
-      - name: Tag is the newest stable release on schreko_stable
-        # Pages holds one updatePlugins.xml: an older tag pushed late must not replace the newer release there.
+      - name: Plan
+        id: plan
         run: |
-          git merge-base --is-ancestor "$GITHUB_SHA" origin/schreko_stable
-          newest=$(git tag -l '*-schreko.*' | grep -E -- '-schreko\.[0-9]+$' | sort -t. -k4,4n | tail -1)
-          [ "$newest" = "$GITHUB_REF_NAME" ] || { echo "$GITHUB_REF_NAME is not the newest stable tag ($newest)"; exit 1; }
+          [ "$GITHUB_REF" = refs/heads/schreko_stable ] || { echo "stable releases come from schreko_stable only, not $GITHUB_REF"; exit 1; }
+          force=""; [ "${{ inputs.force }}" = true ] && force=--force
+          python3 scripts/stable_release.py plan "$GITHUB_SHA" $force | tee -a "$GITHUB_OUTPUT"
       - name: Release notes and plugin repository
-        run: python3 scripts/stable_channel.py "$GITHUB_REF_NAME" "$GITHUB_REPOSITORY" site
+        if: steps.plan.outputs.release == 'true'
+        env:
+          VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          # A local tag only, for the notes; the GitHub Release below creates the real one once the build succeeded.
+          git tag "$VERSION" "$GITHUB_SHA"
+          python3 scripts/stable_channel.py "$VERSION" "$GITHUB_REPOSITORY" site
       - uses: actions/setup-java@v4
+        if: steps.plan.outputs.release == 'true'
         with:
           distribution: temurin
           java-version: "25"
       - uses: gradle/actions/setup-gradle@v4
+        if: steps.plan.outputs.release == 'true'
         with:
           cache-read-only: true
       - name: Build plugin
+        if: steps.plan.outputs.release == 'true'
+        env:
+          VERSION: ${{ steps.plan.outputs.version }}
         run: |
-          sed -i -E "s/^version = \"[^\"]*\"/version = \"$GITHUB_REF_NAME\"/" build.gradle.kts
+          sed -i -E "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" build.gradle.kts
           ./gradlew buildPlugin --console=plain
-          test -f "build/distributions/marginalis-$GITHUB_REF_NAME.zip"
-      - name: Create GitHub Release
+          test -f "build/distributions/marginalis-$VERSION.zip"
+      - name: Create GitHub Release and its tag
+        if: steps.plan.outputs.release == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          files: build/distributions/marginalis-${{ github.ref_name }}.zip
+          tag_name: ${{ steps.plan.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          files: build/distributions/marginalis-${{ steps.plan.outputs.version }}.zip
           body_path: site/release-notes.md
       - uses: actions/configure-pages@v5
+        if: steps.plan.outputs.release == 'true'
         id: pages
       - uses: actions/upload-pages-artifact@v3
+        if: steps.plan.outputs.release == 'true'
         with:
           path: site
       - uses: actions/deploy-pages@v4
+        if: steps.plan.outputs.release == 'true'
+
+  follow-up:
+    needs: release
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Tell the fork issues and the merged PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESULT: ${{ needs.release.result }}
+          RELEASE: ${{ needs.release.outputs.release }}
+          VERSION: ${{ needs.release.outputs.version }}
+          REASON: ${{ needs.release.outputs.reason }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          case "$RESULT/$RELEASE" in
+            success/true) outcome=success ;;
+            success/*) outcome=skipped ;;
+            cancelled/*) outcome=cancelled ;;
+            *) outcome=failure ;;
+          esac
+          python3 scripts/stable_release.py follow-up "$GITHUB_SHA" --outcome "$outcome" \
+            --version "$VERSION" --reason "$REASON" --run-url "$RUN_URL"
