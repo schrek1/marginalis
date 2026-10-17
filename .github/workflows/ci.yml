@@ -47,6 +47,9 @@ jobs:
           # each, a new hash per push) went past the repository's 10 GB, and the entries evicted each other. The
           # other jobs restore this job's entry.
           cache-read-only: ${{ github.event_name != 'push' }}
+          # The default since v6, named to record the choice: its Terms of Use are free for a public repository, and
+          # `basic` neither cleans up nor deduplicates, which would take the cache past 10 GB again.
+          cache-provider: enhanced
       - name: Install a virtual display
         # Margin tab tests that need an active IDE window skip themselves
         # without a display.
