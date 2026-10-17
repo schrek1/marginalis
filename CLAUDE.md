@@ -10,7 +10,8 @@ is the shipped record and decision log.
 
 - How to test a change, from unit tests to the sandbox scenarios in
   Docker, is in `docs/testing.md`: read it before writing or running
-  tests.
+  tests. New tests assert with Kotest matchers (`shouldBe`,
+  `shouldContainExactly`, …), not `kotlin.test`'s `assertEquals`.
 - `./gradlew buildPlugin` → zip in `build/distributions/`;
   `./gradlew :core:test` runs the domain tests (`scripts/test-core.sh`
   runs them in a single JVM for environments where forked test workers
