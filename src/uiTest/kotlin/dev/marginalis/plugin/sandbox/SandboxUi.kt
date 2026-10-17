@@ -40,11 +40,18 @@ function read(compute) {
 function asUser(run) {
     return com.intellij.openapi.application.WriteIntentReadAction.compute(new com.intellij.openapi.util.ThrowableComputable({ compute: run }));
 }
-// An action runs as its own EDT event, with the locks a click gives it; later robot scripts queue behind it, so they
-// see its outcome.
+// An action runs as its own EDT event, with the locks a click gives it. A robot script is a raw EDT event of its own
+// and can overtake the application's invokeLater queue on a busy IDE, so the action records under the returned token
+// that it ran, for [SandboxUi.awaitActionRan].
 function performLater(action, event) {
+    var token = String(java.util.UUID.randomUUID());
     com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater(
-        new java.lang.Runnable({ run: function () { action.actionPerformed(event); } }));
+        new java.lang.Runnable({ run: function () {
+            var outcome = 'ok';
+            try { action.actionPerformed(event); } catch (error) { outcome = 'failed: ' + error; }
+            java.lang.System.getProperties().put('marginalis.sandbox.action.' + token, outcome);
+        } }));
+    return token;
 }
 """
 
@@ -299,7 +306,7 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
     /** Runs a button of the thread header (e.g. "Next Step") with that button's own data context. */
     fun pressPanelAction(threadId: String, text: String) {
         val escaped = lit(text)
-        js(
+        val token = js(
             FIND + """
             var button = find(component, function (c) {
                 return c instanceof com.intellij.openapi.actionSystem.impl.ActionButton
@@ -310,11 +317,21 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
             var event = com.intellij.openapi.actionSystem.AnActionEvent.createEvent(
                 action, com.intellij.ide.DataManager.getInstance().getDataContext(button), button.getPresentation().clone(),
                 'MarginalisSandbox', com.intellij.openapi.actionSystem.ActionUiKind.NONE, null);
-            performLater(action, event);
-            String(true)
+            String(performLater(action, event))
             """,
             threadPanel(threadId),
         )
+        awaitActionRan(text, token)
+    }
+
+    /** Waits until the action [performLater] queued under `token` has run; an action that threw fails the step. */
+    fun awaitActionRan(name: String, token: String) {
+        val key = "'marginalis.sandbox.action.$token'"
+        val outcome = awaitValue("the $name action ran", Duration.ofSeconds(30)) {
+            js("var outcome = java.lang.System.getProperties().remove($key); String(outcome == null ? '' : outcome)")
+                .takeIf { it.isNotEmpty() }
+        }
+        check(outcome == "ok") { "the $name action $outcome" }
     }
 
     /** Presses the thread header's own ⚡ ("Live: …" when on, "Go Live: …" when off) with its Swing `click()`. */
