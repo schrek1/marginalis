@@ -6,6 +6,7 @@ import dev.marginalis.plugin.sandbox.Sandbox
 import dev.marginalis.plugin.sandbox.SandboxScenario
 import dev.marginalis.plugin.sandbox.SandboxUi
 import dev.marginalis.plugin.sandbox.awaitUntil
+import dev.marginalis.plugin.sandbox.readUntil
 import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
 import java.nio.file.Files
@@ -27,6 +28,7 @@ class NoEmptyMarginTabTest : SandboxScenario("no_empty_margin_tab") {
     @Order(1)
     fun freshProjectOpensWithoutTheTab() = case("fresh_project_opens_without_the_tab") {
         settleAfterStart(threads = 0)
+        settle()
         shot("1-fresh-project")
         check("a fresh project without project threads opens without the Margin tab", !marginTab().open, marginTab())
     }
@@ -35,9 +37,8 @@ class NoEmptyMarginTabTest : SandboxScenario("no_empty_margin_tab") {
     @Order(2)
     fun firstProjectThreadBringsTheTab() = case("first_project_thread_brings_the_tab") {
         firstThread = Agent.agentStartsProjectThread("The first project thread.")
-        settle()
+        val tab = marginTabUntilOpen()
         shot("2-first-project-thread")
-        val tab = marginTab()
         check("the agent's first project thread opens the Margin tab", tab.open, tab)
         check("the Margin tab opened by a thread is not pinned", !tab.pinned, tab)
     }
@@ -52,6 +53,7 @@ class NoEmptyMarginTabTest : SandboxScenario("no_empty_margin_tab") {
         SandboxUi.saveProjectState()
         Sandbox.restart(fresh = false)
         settleAfterStart(threads = 1)
+        settle()
         shot("3-restart-after-empty-tab")
         check("a restart does not bring back an empty Margin tab", !marginTab().open, marginTab())
     }
@@ -69,8 +71,8 @@ class NoEmptyMarginTabTest : SandboxScenario("no_empty_margin_tab") {
             threadsFile.writeText(threadsOnDisk)
         }
         settleAfterStart(threads = 2)
+        val tab = marginTabUntilOpen()
         shot("4-first-open-with-a-project-thread")
-        val tab = marginTab()
         check("a project with an open project thread opens with the Margin tab", tab.open, tab)
         check("that Margin tab is not pinned", !tab.pinned, tab)
     }
@@ -101,8 +103,9 @@ class NoEmptyMarginTabTest : SandboxScenario("no_empty_margin_tab") {
             SandboxUi.js("String(com.intellij.ide.util.PropertiesComponent.getInstance(project).getBoolean('marginalis.projectTab.introduced'))") == "true"
         }
         awaitOrFail("$threads persisted threads in the store") { SandboxUi.js("String(store.getThreads().all().size())").toInt() >= threads }
-        settle()
     }
+
+    private fun marginTabUntilOpen(): MarginTab = readUntil("the Margin tab open", read = { marginTab() }) { it.open }
 
     private fun awaitOrFail(what: String, condition: () -> Boolean) = awaitUntil(what, Duration.ofSeconds(60), condition = condition)
 
@@ -115,6 +118,7 @@ class NoEmptyMarginTabTest : SandboxScenario("no_empty_margin_tab") {
     private companion object {
         const val THREADS_FILE = ".idea/marginalis.json"
 
+        /** Time for the startup decision to open a Margin tab that must stay shut. */
         fun settle() = Thread.sleep(3_000)
     }
 }
