@@ -1,10 +1,11 @@
 package dev.marginalis.core
 
+import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.types.shouldBeSameInstanceAs
 import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertNull
-import kotlin.test.assertSame
-import kotlin.test.assertTrue
 
 class ThreadStoreWatchTest {
 
@@ -22,8 +23,8 @@ class ThreadStoreWatchTest {
         watched.addMessage(Message(agent, "reply"))
         store.notifyChanged(watched)
 
-        assertEquals(1, heard.size)
-        assertSame(watched, heard.single())
+        heard shouldHaveSize 1
+        heard.single() shouldBeSameInstanceAs watched
     }
 
     @Test
@@ -35,7 +36,7 @@ class ThreadStoreWatchTest {
 
         store.add(thread())
 
-        assertTrue(heard.isEmpty())
+        heard.shouldBeEmpty()
     }
 
     @Test
@@ -47,8 +48,8 @@ class ThreadStoreWatchTest {
 
         store.remove(watched.id)
 
-        assertEquals(1, heard.size)
-        assertNull(heard.single())
+        heard shouldHaveSize 1
+        heard.single().shouldBeNull()
     }
 
     @Test
@@ -61,7 +62,7 @@ class ThreadStoreWatchTest {
 
         store.clear()
 
-        assertEquals(listOf<CommentThread?>(null), heard)
+        heard shouldContainExactly listOf(null)
     }
 
     @Test
@@ -74,7 +75,7 @@ class ThreadStoreWatchTest {
         watch.close()
         store.notifyChanged(watched)
 
-        assertTrue(heard.isEmpty())
+        heard.shouldBeEmpty()
     }
 
     @Test
@@ -86,7 +87,7 @@ class ThreadStoreWatchTest {
 
         store.add(draft)
 
-        assertSame(draft, heard.single())
+        heard.single() shouldBeSameInstanceAs draft
     }
 
     @Test
@@ -99,7 +100,7 @@ class ThreadStoreWatchTest {
         val second = thread().also(store::add)
         store.notifyChanged(first)
 
-        assertEquals(listOf(first, second, first), heard)
+        heard shouldContainExactly listOf(first, second, first)
     }
 
     @Test
@@ -111,6 +112,6 @@ class ThreadStoreWatchTest {
         observer.close()
         store.add(thread())
 
-        assertTrue(heard.isEmpty())
+        heard.shouldBeEmpty()
     }
 }
