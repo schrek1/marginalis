@@ -40,6 +40,10 @@ History before 0.1.19 lives in git tags.
 
 ### Fixed
 
+- A busy IDE no longer reports an error that blames Marginalis. When
+  the IDE was stuck for a while, for example during startup, opening a
+  file could show "IDE error occurred" naming Marginalis, although
+  nothing in Marginalis had gone wrong.
 - When an agent starts a project thread, the IDE no longer freezes for
   up to half a minute while the Margin tab opens for it.
 - Open Thread on a project thread the agent just started always brings
