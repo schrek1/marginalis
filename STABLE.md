@@ -50,3 +50,5 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-105 | E2E scenario: what the user left in the margin survives an IDE restart | `feat/MARG-105-threads-survive-restart` | — | — | `7378c33` |
 | MARG-106 | E2E scenario: the user starts a thread on a line, a selection or a whole file | `feat/MARG-106-user-starts-thread` | — | — | `e749dc4` |
 | MARG-107 | E2E scenario: a thread follows its code while the user edits | `feat/MARG-107-anchoring-through-edits` | — | — | `f538111` |
+| MARG-123 | CI actions on their Node.js 24 majors | `chore/MARG-123-ci-actions-node24` | — | — | `7d6f4ae` |
+| MARG-122 | Every CI job that runs Gradle takes a checked IDE index | `chore/MARG-123-ci-actions-node24` | — | — | `22ff681` |
