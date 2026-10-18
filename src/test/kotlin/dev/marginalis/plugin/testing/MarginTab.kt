@@ -38,7 +38,6 @@ import dev.marginalis.plugin.ui.tab.ConversationCard
 import dev.marginalis.plugin.ui.tab.MarginEditor
 import dev.marginalis.plugin.ui.tab.MarginFile
 import dev.marginalis.plugin.ui.tab.ProjectTab
-import dev.marginalis.plugin.ui.tab.ProjectTabState
 import dev.marginalis.plugin.ui.tab.ThreadCard
 import java.awt.BorderLayout
 import java.awt.Component
@@ -188,16 +187,11 @@ class MarginTab(private val project: Project, private val disposable: Disposable
     }
 
     fun close() {
-        settle()
         editors.closeFile(MarginFile)
         settle()
     }
 
     fun settle() {
-        // Opening the tab behind the selection runs as a coroutine whose editor is built off the EDT.
-        ProjectTabState.getInstance(project).opening?.let { opening ->
-            PlatformTestUtil.waitWithEventsDispatching("the Margin tab never finished opening", { opening.isCompleted }, 10)
-        }
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
         screen?.rootPane?.validate()
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()

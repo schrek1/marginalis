@@ -2,11 +2,9 @@ package dev.marginalis.plugin.ui.tab
 
 import com.intellij.ide.util.PropertiesComponent
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.EDT
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.ex.FileEditorManagerEx
 import com.intellij.openapi.fileEditor.impl.EditorHistoryManager
-import com.intellij.openapi.fileEditor.impl.FileEditorOpenOptions
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
 import dev.marginalis.core.CommentThread
@@ -14,8 +12,6 @@ import dev.marginalis.core.Message
 import dev.marginalis.core.ProjectTabStartup
 import dev.marginalis.core.ProjectTabStartup.Outcome
 import dev.marginalis.plugin.store.MarginalisStore
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 object ProjectTab {
 
@@ -98,19 +94,16 @@ object ProjectTab {
         }
     }
 
-    // A blocking open waits on the EDT, holding the write-intent lock, until the tab's editor exists. On 2025.x a
-    // background write action waiting for that lock (the project model loads at startup) holds the editor's read
-    // action back, and neither moves. The suspending open releases the EDT meanwhile. Unselected, the tab opens
-    // behind the file in front, and a reveal of the tab in between stays the user's choice.
     private fun openBehindSelection(project: Project, pin: Boolean) {
+        val editors = FileEditorManager.getInstance(project)
         val state = ProjectTabState.getInstance(project)
-        state.opening = state.scope.launch(Dispatchers.EDT) {
-            val editors = FileEditorManagerEx.getInstanceEx(project)
-            // With nothing in front the tab is the one to show.
-            val select = editors.selectedFiles.isEmpty()
-            editors.openFile(MarginFile, FileEditorOpenOptions().withSelectAsCurrent(select).withRequestFocus(false))
-            if (pin) pin(project)
-        }
+        val selected = editors.selectedFiles.firstOrNull()
+        val revealsBefore = state.revealCount()
+        // Opening the tab waits on the EDT until its editor exists and runs other events meanwhile; a reveal among
+        // them is the user's choice, which bringing the file back to the front would undo.
+        editors.openFile(MarginFile, false, true)
+        if (pin) pin(project)
+        if (state.revealCount() == revealsBefore) selected?.let { editors.openFile(it, false, true) }
     }
 
     private fun isPinned(project: Project): Boolean =
@@ -124,6 +117,7 @@ object ProjectTab {
     private fun deliver(project: Project, request: TabRequest) {
         val state = ProjectTabState.getInstance(project)
         state.cancelOpenBehind()
+        state.countReveal()
         state.request(request)
         val shown = FileEditorManager.getInstance(project).openFile(MarginFile, true, true).filterIsInstance<MarginEditor>()
         val pending = state.takeRequest() ?: return

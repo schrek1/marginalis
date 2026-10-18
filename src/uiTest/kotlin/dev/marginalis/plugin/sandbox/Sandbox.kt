@@ -441,13 +441,15 @@ object Sandbox {
         // The IDE restores its tool window layout during the project's startup; the Project view it shows then takes
         // the left side from a Marginalis tool window a scenario has just shown. And while the platform's own startup
         // write (the JPS global model reloaded from disk, about 4 s after the IDE answers) waits for the lock, a file
-        // opened on the EDT blocks the editor providers' reads until their 30 s timeout. Smart mode flickers on right
-        // after startup, so it must hold three samples in a row.
+        // opened on the EDT blocks the editor providers' reads until their 30 s timeout. The Margin tab's startup
+        // decision waits for the project's configuration and comes after the platform's post-startup mark; a scenario
+        // must not race it. Smart mode flickers on right after startup, so it must hold three samples in a row.
         private fun awaitProjectStartup() {
             var settledPolls = 0
             var noted = false
             awaitUntil(
-                "the project has started up, is out of dumb mode, has its global model from disk and no write pending, 3 s in a row",
+                "the project has started up, is out of dumb mode, has its global model from disk, no write pending and " +
+                    "the Margin tab's startup decision made, 3 s in a row",
                 Duration.ofSeconds(180), Duration.ofSeconds(1),
             ) {
                 // A read that fails counts as unsettled too.
@@ -480,12 +482,19 @@ object Sandbox {
                         } catch (e) {
                             globalModelUnavailable = String(e);
                         }
+                        // The decision marks a project introduced and clears the mark of a tab open at shutdown. Until
+                        // both hold, the decision is pending or could not open the tab anyway.
+                        var tabDecided = projects.length > 0 && (function (properties) {
+                            return properties.getBoolean('marginalis.projectTab.introduced')
+                                && !properties.isValueSet('marginalis.projectTab.reopen');
+                        })(com.intellij.ide.util.PropertiesComponent.getInstance(projects[0]));
                         String(JSON.stringify({
                             settled: projects.length > 0
                                 && com.intellij.ide.startup.StartupManagerEx.getInstanceEx(projects[0]).postStartupActivityPassed()
                                 && !com.intellij.openapi.project.DumbService.isDumb(projects[0])
                                 && !com.intellij.openapi.application.ApplicationManager.getApplication().isWriteActionPending()
-                                && globalModel,
+                                && globalModel
+                                && tabDecided,
                             globalModelUnavailable: globalModelUnavailable
                         }))
                         """,
