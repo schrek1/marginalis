@@ -69,3 +69,4 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-156 | A sandbox stop exits the IDE as a user's Exit does, instead of deadlocking it | `fix/MARG-156-shutdown-hang` | — | — | `bca818c` |
 | MARG-129 | CI e2e runs the sandbox scenarios in two shards, split by a committed map | `chore/MARG-129-e2e-shards` | — | — | `1c494f5` |
 | MARG-143 | A stable release ships the zip CI tested | `fix/MARG-143-release-ships-tested-zip` | — | — | `93dfc95` |
+| MARG-165 | CI plans the e2e shards from live run data in every run | `chore/MARG-165-plan-shards-live` | — | — | `49c0902` |
