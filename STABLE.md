@@ -62,3 +62,4 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-149 | The plugin's Overview lists the fork features newest first, under their release | `feat/MARG-149-overview-by-release` | — | — | `ef351e8` |
 | MARG-141 | Gradle 9.8.1, with the distribution's checksum | `chore/MARG-141-gradle-9-8-1` | — | — | `32faa3c` |
 | MARG-135 | Sandbox plugins come from the host's Gradle, the sandbox IDE from the image | `chore/MARG-135-ide-in-image` | — | — | `bc44b25` |
+| MARG-141 | CI builds the plugin once: package, then test, verify and e2e on its zip | `chore/MARG-141-job-graph` | — | — | `5ab8b5e` |
