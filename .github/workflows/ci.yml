@@ -12,8 +12,17 @@ on:
     # schreko_stable is the fork's integration branch: its pushes also fill the Gradle cache its pull requests read.
     branches: [main, schreko_stable]
   pull_request:
+  # The manual fallback for a stable release (`stable.py release` dispatches it on schreko_stable): the whole run, so the
+  # release still ships the zip this run tested.
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Release even when nothing the plugin is built from changed
+        type: boolean
+        default: false
 
-# A newer push to the same pull request makes its running checks obsolete.
+# A newer push to the same pull request makes its running checks obsolete. Runs on schreko_stable never overlap: the
+# next one plans its release only after the previous one has tagged its own.
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -22,10 +31,29 @@ concurrency:
 jobs:
   package:
     # The plugin is built once, and every later job tests that zip; a broken compile stops the run here. The one
-    # writer of the IDE index, so an index is built at most once per key.
+    # writer of the IDE index, so an index is built at most once per key. On schreko_stable it also plans the release
+    # and builds the zip under the release's version, so the release ships what test, verify and e2e checked.
     runs-on: ubuntu-24.04
+    outputs:
+      release: ${{ steps.plan.outputs.release }}
+      version: ${{ steps.plan.outputs.version }}
+      reason: ${{ steps.plan.outputs.reason }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The release plan compares with the previous stable tag.
+          fetch-depth: ${{ github.ref == 'refs/heads/schreko_stable' && github.event_name != 'pull_request' && '0' || '1' }}
+      - name: Release plan
+        id: plan
+        if: github.ref == 'refs/heads/schreko_stable' && github.event_name != 'pull_request'
+        run: |
+          force=""; [ "${{ inputs.force }}" = true ] && force=--force
+          python3 scripts/stable_release.py plan "$GITHUB_SHA" $force | tee -a "$GITHUB_OUTPUT"
+      - name: Release version
+        if: steps.plan.outputs.release == 'true'
+        env:
+          VERSION: ${{ steps.plan.outputs.version }}
+        run: sed -i -E "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" build.gradle.kts && grep -q "^version = \"$VERSION\"$" build.gradle.kts
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -206,10 +234,11 @@ jobs:
         run: python3 scripts/prune_gradle_caches.py "${{ github.repository }}" "${{ github.ref }}"
 
   release:
-    # A green push to schreko_stable is the release (stable-release.yml decides whether there is one to make). It runs
-    # inside this run because a tag pushed with GITHUB_TOKEN would start no other workflow.
+    # A green run on schreko_stable is the release, of the zip package built and this run tested (package's plan says
+    # whether there is one to make). It runs inside this run because a tag pushed with GITHUB_TOKEN would start no other
+    # workflow.
     needs: [package, test, e2e, verify]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/schreko_stable'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/schreko_stable'
     permissions:
       contents: write
       pages: write
@@ -217,3 +246,7 @@ jobs:
       issues: write
       pull-requests: write
     uses: ./.github/workflows/stable-release.yml
+    with:
+      release: ${{ needs.package.outputs.release == 'true' }}
+      version: ${{ needs.package.outputs.version }}
+      reason: ${{ needs.package.outputs.reason }}

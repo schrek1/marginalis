@@ -1,8 +1,9 @@
-# Stable release of the fork: a green push to schreko_stable releases itself (ci.yml's `release` job calls this
-# workflow). `scripts/stable_release.py plan` decides: the next `<upstream>-schreko.N`, or a skip (no plugin change, not
-# the newest merge). A release builds the plugin against the platform floor, creates the tag with the GitHub Release
-# that carries the zip, and publishes the stable channel's updatePlugins.xml on GitHub Pages; a red run tags nothing.
-# Then the fork issues of the merges since the previous release, and the merged PR, are told what came of it.
+# Stable release of the fork: a green run on schreko_stable releases itself (ci.yml's `release` job calls this
+# workflow). ci.yml's `package` plans it (`scripts/stable_release.py plan`: the next `<upstream>-schreko.N`, or a skip
+# when nothing the plugin is built from changed) and builds the zip under that version; test, verify and e2e check that
+# zip, and this workflow ships it: the tag with the GitHub Release that carries the zip, and the stable channel's
+# updatePlugins.xml on GitHub Pages. A red run tags nothing. Then the fork issues of the merges since the previous
+# release, and the merged PR, are told what came of it.
 # Every IDE subscribes once to https://schrek1.github.io/marginalis/updatePlugins.xml.
 # (`v*` tags belong to release.yml, which publishes to the Marketplace.)
 name: Stable release
@@ -10,23 +11,25 @@ name: Stable release
 on:
   workflow_call:
     inputs:
-      force:
-        description: Release even when nothing the plugin is built from changed
+      release:
+        description: Whether package's plan releases this commit
         type: boolean
-        default: false
-  # The manual fallback: `stable.py release` dispatches it on schreko_stable.
-  workflow_dispatch:
-    inputs:
-      force:
-        description: Release even when nothing the plugin is built from changed
-        type: boolean
-        default: false
+        required: true
+      version:
+        description: The release's version, the one package built the zip under
+        type: string
+        default: ""
+      reason:
+        description: Why the plan releases or skips
+        type: string
+        default: ""
 
 # The runner image is pinned: `ubuntu-latest` moved to Ubuntu 26, and that move is made on purpose (MARG-142).
 jobs:
   release:
+    if: inputs.release
     runs-on: ubuntu-24.04
-    # One at a time; a newer merge waiting replaces an older one, whose commits its release includes anyway.
+    # Belt and braces: ci.yml's concurrency already keeps runs on schreko_stable from overlapping.
     concurrency:
       group: stable-release
       cancel-in-progress: false
@@ -37,65 +40,43 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.pages.outputs.base_url }}/updatePlugins.xml
-    outputs:
-      release: ${{ steps.plan.outputs.release }}
-      version: ${{ steps.plan.outputs.version }}
-      reason: ${{ steps.plan.outputs.reason }}
     steps:
       - uses: actions/checkout@v7
         with:
-          # The plan and the release notes compare with the previous stable tag.
+          # The release notes compare with the previous stable tag.
           fetch-depth: 0
-      - name: Plan
-        id: plan
-        run: |
-          [ "$GITHUB_REF" = refs/heads/schreko_stable ] || { echo "stable releases come from schreko_stable only, not $GITHUB_REF"; exit 1; }
-          force=""; [ "${{ inputs.force }}" = true ] && force=--force
-          python3 scripts/stable_release.py plan "$GITHUB_SHA" $force | tee -a "$GITHUB_OUTPUT"
-      - name: Release notes and plugin repository
-        if: steps.plan.outputs.release == 'true'
+      - uses: actions/download-artifact@v8
+        with:
+          name: marginalis-plugin
+          path: build/package
+      - name: The tested zip, under a version not released yet
         env:
-          VERSION: ${{ steps.plan.outputs.version }}
+          VERSION: ${{ inputs.version }}
         run: |
-          # A local tag only, for the notes; the GitHub Release below creates the real one once the build succeeded.
+          zip="build/package/marginalis-$VERSION.zip"
+          [ -f "$zip" ] || { echo "package built $(ls build/package), not marginalis-$VERSION.zip"; exit 1; }
+          [ -z "$(git tag -l "$VERSION")" ] || { echo "$VERSION is already tagged; this run planned before it was"; exit 1; }
+          sha256sum "$zip"
+      - name: Release notes and plugin repository
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          # A local tag only, for the notes; the GitHub Release below creates the real one.
           git tag "$VERSION" "$GITHUB_SHA"
           python3 scripts/stable_channel.py "$VERSION" "$GITHUB_REPOSITORY" site
-      - uses: actions/setup-java@v6
-        if: steps.plan.outputs.release == 'true'
-        with:
-          distribution: temurin
-          java-version: "25"
-      - uses: gradle/actions/setup-gradle@v6
-        if: steps.plan.outputs.release == 'true'
-        with:
-          cache-read-only: true
-      - uses: ./.github/actions/ide-layout-index
-        if: steps.plan.outputs.release == 'true'
-      - name: Build plugin
-        if: steps.plan.outputs.release == 'true'
-        env:
-          VERSION: ${{ steps.plan.outputs.version }}
-        run: |
-          sed -i -E "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" build.gradle.kts
-          ./gradlew buildPlugin --console=plain
-          test -f "build/distributions/marginalis-$VERSION.zip"
       - name: Create GitHub Release and its tag
-        if: steps.plan.outputs.release == 'true'
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ steps.plan.outputs.version }}
-          target_commitish: ${{ github.sha }}
-          files: build/distributions/marginalis-${{ steps.plan.outputs.version }}.zip
-          body_path: site/release-notes.md
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: >-
+          gh release create "$VERSION" "build/package/marginalis-$VERSION.zip" --target "$GITHUB_SHA"
+          --title "$VERSION" --notes-file site/release-notes.md
       - uses: actions/configure-pages@v6
-        if: steps.plan.outputs.release == 'true'
         id: pages
       - uses: actions/upload-pages-artifact@v5
-        if: steps.plan.outputs.release == 'true'
         with:
           path: site
       - uses: actions/deploy-pages@v5
-        if: steps.plan.outputs.release == 'true'
 
   follow-up:
     needs: release
@@ -113,14 +94,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RESULT: ${{ needs.release.result }}
-          RELEASE: ${{ needs.release.outputs.release }}
-          VERSION: ${{ needs.release.outputs.version }}
-          REASON: ${{ needs.release.outputs.reason }}
+          RELEASE: ${{ inputs.release }}
+          VERSION: ${{ inputs.version }}
+          REASON: ${{ inputs.reason }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           case "$RESULT/$RELEASE" in
             success/true) outcome=success ;;
-            success/*) outcome=skipped ;;
+            skipped/false) outcome=skipped ;;
             cancelled/*) outcome=cancelled ;;
             *) outcome=failure ;;
           esac
