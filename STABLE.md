@@ -68,3 +68,4 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-158 | CI's latest IntelliJ IDEA is 2026.2.3 | `chore/MARG-158-latest-ide-2026-2-3` | — | — | `500c3b7` |
 | MARG-156 | A sandbox stop exits the IDE as a user's Exit does, instead of deadlocking it | `fix/MARG-156-shutdown-hang` | — | — | `bca818c` |
 | MARG-129 | CI e2e runs the sandbox scenarios in two shards, split by a committed map | `chore/MARG-129-e2e-shards` | — | — | `1c494f5` |
+| MARG-143 | A stable release ships the zip CI tested | `fix/MARG-143-release-ships-tested-zip` | — | — | `93dfc95` |
