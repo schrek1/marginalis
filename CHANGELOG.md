@@ -40,6 +40,10 @@ History before 0.1.19 lives in git tags.
 
 ### Fixed
 
+- Opening a project no longer freezes IntelliJ 2025.2 and 2025.3 for
+  minutes. When the Margin tab came back while the IDE was still loading
+  the project, both could wait for each other and the IDE stopped
+  responding.
 - A thread whose code an edit removed now always shows as orphaned. When
   a tool rewrote a file and a reply or another change to the thread came
   in before anything refreshed the list, the thread could stay open,

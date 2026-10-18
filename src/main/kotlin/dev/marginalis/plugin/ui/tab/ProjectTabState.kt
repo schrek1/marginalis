@@ -4,12 +4,17 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import dev.marginalis.core.CommentThread
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 @Service(Service.Level.PROJECT)
-class ProjectTabState {
+class ProjectTabState(val scope: CoroutineScope) {
+
+    /** The tab's last open behind the selection, which completes once its editor exists. */
+    @Volatile
+    var opening: Job? = null
 
     private val pending = AtomicReference<TabRequest?>()
 
@@ -24,12 +29,6 @@ class ProjectTabState {
     fun cancelOpenBehind() = openBehindQueued.set(false)
 
     fun takeOpenBehind(): Boolean = openBehindQueued.getAndSet(false)
-
-    private val reveals = AtomicInteger()
-
-    fun countReveal() = reveals.incrementAndGet()
-
-    fun revealCount(): Int = reveals.get()
 
     var draft: CommentThread? = null
         private set
