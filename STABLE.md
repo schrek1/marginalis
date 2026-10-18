@@ -53,4 +53,5 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-119 | Sandbox scenarios run the plugin users get, without the test libraries | `fix/MARG-119-sandbox-runs-the-shipped-plugin` | — | — | `b57fcc3` |
 | MARG-123 | CI actions on their Node.js 24 majors | `chore/MARG-123-ci-actions-node24` | — | — | `7d6f4ae` |
 | MARG-122 | Every CI job that runs Gradle takes a checked IDE index | `chore/MARG-123-ci-actions-node24` | — | — | `22ff681` |
+| MARG-131 | A thread whose code an edit removed stays orphaned | `fix/MARG-131-no-pin-after-edit` | — | — | `07fdd66` |
 | MARG-126 | Sandbox scenarios run on the open-source IntelliJ IDEA 2026.2 | `chore/MARG-126-sandbox-on-2026-2` | — | — | `0e653ec` |
