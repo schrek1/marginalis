@@ -22,9 +22,10 @@ on:
         type: boolean
         default: false
 
+# The runner image is pinned: `ubuntu-latest` moved to Ubuntu 26, and that move is made on purpose (MARG-142).
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # One at a time; a newer merge waiting replaces an older one, whose commits its release includes anyway.
     concurrency:
       group: stable-release
@@ -99,7 +100,7 @@ jobs:
   follow-up:
     needs: release
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       issues: write

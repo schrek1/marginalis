@@ -57,4 +57,5 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-126 | Sandbox scenarios run on the open-source IntelliJ IDEA 2026.2 | `chore/MARG-126-sandbox-on-2026-2` | — | — | `0e653ec` |
 | MARG-136 | The plugin compiles for the floor's Kotlin stdlib (API and language 2.2) | `fix/MARG-133-tab-open-without-blocking` | — | — | `26fb956` |
 | MARG-133 | The Margin tab comes back once the project's configuration is done | `fix/MARG-133-tab-open-without-blocking` | — | — | `aa1dbb6` |
+| MARG-141 | CI runs on ubuntu-24.04 until the move to Ubuntu 26 is made on purpose | `chore/MARG-141-pin-ubuntu-24-04` | — | — | `c3bb791` |
 | MARG-141 | Gradle 9.8.1, with the distribution's checksum | `chore/MARG-141-gradle-9-8-1` | — | — | `32faa3c` |
