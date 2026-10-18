@@ -136,7 +136,7 @@ jobs:
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 scripts/shard_map.py "${{ github.repository }}" --runs 10 --out build/e2e-plan/shards.json
+        run: python3 scripts/shard_map.py "schrek1/no-such-repo" --runs 10 --out build/e2e-plan/shards.json
       - uses: actions/upload-artifact@v7
         with:
           name: e2e-shard-map
