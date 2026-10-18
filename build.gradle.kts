@@ -1,4 +1,5 @@
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+import org.jetbrains.intellij.platform.gradle.tasks.PrepareSandboxTask
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
@@ -213,9 +214,8 @@ val sandboxJobs = if (System.getenv("MARGINALIS_ROBOT_PORT") != null) 1
     else providers.gradleProperty("marginalis.sandbox.jobs").orElse("6").get().toInt()
 
 // One sandbox run at a time on the machine, `sandbox/sandbox.py locked` experiments included: two runs side by side
-// saturate the CPU and their scenarios time out, and every Docker run builds in the same build container. The lock
-// holds the owner's pid and start time (the format sandbox/sandbox.py writes too). It is stale once that pid is gone, or, when the
-// owner cannot be read, after 2 h.
+// saturate the CPU and their scenarios time out. The lock holds the owner's pid and start time (the format
+// sandbox/sandbox.py writes too). It is stale once that pid is gone, or, when the owner cannot be read, after 2 h.
 val sandboxRunLock: java.nio.file.Path = layout.projectDirectory.asFile.toPath().parent.resolve("marginalis-sandbox-runs").resolve(".lock")
 val sandboxRunLockOwner = ProcessHandle.current().pid()
 
@@ -247,8 +247,8 @@ val sandboxRunUnlock = tasks.register("sandboxRunUnlock") {
 val sandboxRunLocked = tasks.register("sandboxRunLocked") {
     description = "Waits for the machine-wide sandbox run lock and takes it."
     group = "verification"
-    // A single Docker sandbox shares the build container's volumes with every run (sandboxPrebuilt).
-    onlyIf("the run builds in Docker or runs several sandboxes") { sandboxInDocker || sandboxJobs > 1 }
+    // A single sandbox outside Docker is one IDE on this machine, like any other.
+    onlyIf("the run uses Docker or runs several sandboxes") { sandboxInDocker || sandboxJobs > 1 }
     finalizedBy(sandboxRunUnlock)
     doLast {
         Files.createDirectories(sandboxRunLock.parent)
@@ -326,30 +326,25 @@ val sandboxImage = tasks.register<Exec>("sandboxImage") {
     commandLine("docker", "build", "-q", "-t", sandboxImageTag, layout.projectDirectory.dir("sandbox").asFile.absolutePath)
 }
 
-val sandboxPrebuilt = tasks.register<Exec>("sandboxPrebuilt") {
-    description = "Builds this checkout's plugins once in the sandbox image, for sandboxes that start straight from them."
+apply(from = "sandbox/ui-ide.gradle")
+
+// `-Pmarginalis.sandbox.pluginZip=<zip>` gives the sandboxes a plugin built elsewhere (CI's package job); by default
+// they get this checkout's own distribution, as users do.
+val sandboxPluginZip: Any = providers.gradleProperty("marginalis.sandbox.pluginZip").orNull?.let { file(it) }
+    ?: tasks.named<Zip>("buildPlugin").flatMap { it.archiveFile }
+
+val sandboxPrebuilt = tasks.register<Sync>("sandboxPrebuilt") {
+    description = "Gathers the plugins the sandboxes start with: the distribution zip, plus Remote Robot's server."
     group = "verification"
-    dependsOn(sandboxImage, sandboxRunLocked)
-    // The container's own Gradle build decides what is up to date.
-    outputs.upToDateWhen { false }
-    val output = sandboxPrebuiltDir.get().asFile
-    doFirst { output.mkdirs() }
-    // The container builds as root; on a Linux host the plugins it copies out stay root's unless handed back.
-    val hostOwner = if (System.getProperty("os.name").startsWith("Linux")) {
-        com.sun.security.auth.module.UnixSystem().let { user -> listOf("-e", "MARGINALIS_HOST_OWNER=${user.uid}:${user.gid}") }
-    } else {
-        emptyList()
+    // The testing sandbox adds the test dependencies to the plugin's lib; the sandbox runs what users get instead.
+    // The plugins directory is no output of the task, so the dependency is explicit.
+    val prepareSandbox = tasks.named<PrepareSandboxTask>("prepareSandbox_runIdeForUiTests")
+    dependsOn(prepareSandbox)
+    from(prepareSandbox.flatMap { it.sandboxPluginsDirectory }) {
+        exclude("marginalis/**")
     }
-    commandLine(
-        "docker", "run", "--rm", "-e", "MARGINALIS_SANDBOX_MODE=build", *hostOwner.toTypedArray(),
-        "--mount", "type=bind,source=${layout.projectDirectory.asFile.absolutePath},target=/src,readonly",
-        "--mount", "type=bind,source=${output.absolutePath},target=/prebuilt",
-        // The volumes sandbox.py's build container uses: its Gradle home seeds every sandbox's own.
-        "--mount", "type=volume,source=marginalis-sandbox-build-work,target=/work",
-        "--mount", "type=volume,source=marginalis-sandbox-build-gradle,target=/root/.gradle",
-        "--mount", "type=volume,source=marginalis-sandbox-build-gradle,target=/gradle-seed,readonly",
-        sandboxImageTag,
-    )
+    from(zipTree(sandboxPluginZip))
+    into(sandboxPrebuiltDir.map { it.dir("plugins") })
 }
 
 tasks.register<Test>("uiSandboxTest") {
@@ -357,7 +352,7 @@ tasks.register<Test>("uiSandboxTest") {
     group = "verification"
     dependsOn(sandboxRunLocked)
     if (sandboxInDocker) {
-        dependsOn(sandboxPrebuilt)
+        dependsOn(sandboxImage, sandboxPrebuilt)
         systemProperty("marginalis.sandbox.prebuilt", sandboxPrebuiltDir.get().asFile.absolutePath)
         systemProperty("marginalis.sandbox.image", sandboxImageTag)
     }

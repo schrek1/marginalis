@@ -40,7 +40,6 @@ object Sandbox {
 
     private enum class Launch { DOCKER, XVFB, ATTACH }
 
-    private const val GRADLE_SEED = "marginalis-sandbox-build-gradle"
     private const val CONTAINER_ROBOT_PORT = 8082
     private const val CONTAINER_REST_PORT = 63342
     private const val CONTAINER_PROJECT = "/work/runtime/project"
@@ -259,7 +258,7 @@ object Sandbox {
 
         /** Starts the claimed container again, or claims one; the returned process follows its log. */
         private fun startContainer(): Process {
-            // `sandboxPrebuilt` built the image already.
+            // `uiSandboxTest` built the image already (`sandboxImage`).
             if (prebuilt == null) docker("build", "-q", "-t", image, harness.toString(), check = true)
             val name = container?.also { docker("start", it, check = true) } ?: claimContainer()
             return ProcessBuilder("docker", "logs", "-f", name).redirectErrorStream(true).redirectOutput(logFile.toFile()).start()
@@ -287,9 +286,15 @@ object Sandbox {
         }
 
         private fun createArgs(name: String, port: Int): Array<String> {
+            // Run mode builds the checkout with Gradle, whose cache lives in the sandbox's own volume between starts: a
+            // cache shared with another running sandbox stalls the build, since Gradle hands its cache locks over
+            // loopback, which each container has to itself.
             val source = prebuilt
                 ?.let { listOf("-e", "MARGINALIS_SANDBOX_MODE=prebuilt", "--mount", "type=bind,source=$it,target=/prebuilt,readonly") }
-                ?: listOf("--mount", "type=bind,source=$featureDir,target=/src,readonly")
+                ?: listOf(
+                    "--mount", "type=bind,source=$featureDir,target=/src,readonly",
+                    "--mount", "type=volume,source=$name-gradle,target=/root/.gradle",
+                )
             return (
                 listOf(
                     "create", "--name", name,
@@ -299,13 +304,8 @@ object Sandbox {
                     // The entrypoint copies it onto the container's own disk, where the IDE gets file events and
                     // no 9p stalls; the stop copies the IDE's state back.
                     "--mount", "type=bind,source=$project,target=/project-host",
-                    // The IDE's config, its build output and the Gradle cache live in the sandbox's own volumes between
-                    // starts. A cache shared with another running sandbox stalls the build: Gradle hands its cache
-                    // locks over loopback, which each container has to itself. A new sandbox's cache starts as a copy
-                    // of the build container's, which holds the downloaded IDE (docker-entrypoint.sh).
+                    // The IDE's config, system and log directories live in the sandbox's own volume between starts.
                     "--mount", "type=volume,source=$name-work,target=/work",
-                    "--mount", "type=volume,source=$name-gradle,target=/root/.gradle",
-                    "--mount", "type=volume,source=$GRADLE_SEED,target=/gradle-seed,readonly",
                     image,
                 )
                 ).toTypedArray()
