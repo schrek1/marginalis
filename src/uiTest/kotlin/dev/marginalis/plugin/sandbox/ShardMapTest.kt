@@ -45,6 +45,16 @@ class ShardMapTest {
     }
 
     @Test
+    fun `a scenario is a top-level class of the scenarios package`() {
+        listOf(
+            "dev.marginalis.plugin.sandbox.scenarios.LiveByDefaultTest",
+            "dev.marginalis.plugin.sandbox.PluginErrorsTest",
+            "dev.marginalis.plugin.sandbox.scenarios.LiveByDefaultTest\$Steps",
+            "dev.marginalis.plugin.sandbox.scenarios.fixtures.Walkthroughs",
+        ).map(ShardMap::scenarioOf) shouldBe listOf("LiveByDefaultTest", null, null, null)
+    }
+
+    @Test
     fun `the scenario classes are found on the classpath`() {
         ShardMap.scenarioClasses() shouldContain "ApiReplyRerendersTest"
     }

@@ -59,18 +59,24 @@ data class ShardMap(val shards: Int, val scenarios: Map<String, Placement>) {
         )
 
         /** The simple names of the scenario classes, from the compiled scenarios package. */
-        fun scenarioClasses(): List<String> {
-            val loader = SandboxScenario::class.java.classLoader
-            val packageDir = Path.of(SandboxScenario::class.java.protectionDomain.codeSource.location.toURI())
-                .resolve("dev/marginalis/plugin/sandbox/scenarios")
-            return Files.list(packageDir).use { files ->
-                files.map { it.fileName.toString() }.toList()
-                    .filter { it.endsWith(".class") && '$' !in it }
-                    .map { it.removeSuffix(".class") }
-                    .filter { SandboxScenario::class.java.isAssignableFrom(Class.forName("dev.marginalis.plugin.sandbox.scenarios.$it", false, loader)) }
-                    .sorted()
-            }
+        fun scenarioClasses(): List<String> =
+            SandboxScenario::class.java.classLoader.getResources(SCENARIOS.replace('.', '/')).toList()
+                .filter { it.protocol == "file" }
+                .flatMap { packageDir -> Files.list(Path.of(packageDir.toURI())).use { files -> files.map { it.fileName.toString() }.toList() } }
+                .filter { it.endsWith(".class") }
+                .map { it.removeSuffix(".class") }
+                .filter(::isScenarioName)
+                .distinct()
+                .sorted()
+
+        /** A scenario class by its name: a top-level class of the scenarios package, not a Kotlin file facade. */
+        fun scenarioOf(className: String): String? = className.removePrefix("$SCENARIOS.").takeIf { simpleName ->
+            className.startsWith("$SCENARIOS.") && '.' !in simpleName && isScenarioName(simpleName)
         }
+
+        private fun isScenarioName(simpleName: String) = '$' !in simpleName && !simpleName.endsWith("Kt")
+
+        private const val SCENARIOS = "dev.marginalis.plugin.sandbox.scenarios"
     }
 }
 
@@ -100,8 +106,8 @@ class ShardFilter : PostDiscoveryFilter {
     // The launcher asks about the leaves, the test methods; a class left without methods is dropped with them.
     override fun apply(descriptor: TestDescriptor): FilterResult {
         if (map == null || shard == null) return FilterResult.included("no shard asked for")
-        val type = testClass(descriptor) ?: return FilterResult.included("not in a test class")
-        val scenario = type.simpleName.takeIf { SandboxScenario::class.java.isAssignableFrom(type) }
+        val className = testClassName(descriptor) ?: return FilterResult.included("not in a test class")
+        val scenario = ShardMap.scenarioOf(className)
         if (!map.runsOn(shard, scenario)) return FilterResult.excluded("runs on another shard")
         if (scenario != null && scenario !in map.scenarios && noted.add(scenario)) {
             note("$scenario is not in sandbox/shards.json; it ran on shard $shard. Rebuild the map (docs/testing.md).")
@@ -109,10 +115,10 @@ class ShardFilter : PostDiscoveryFilter {
         return FilterResult.included("runs on shard $shard")
     }
 
-    private fun testClass(descriptor: TestDescriptor): Class<*>? = when (val source = descriptor.source.orElse(null)) {
-        is ClassSource -> source.javaClass
-        is MethodSource -> source.javaClass
-        else -> descriptor.parent.orElse(null)?.let(::testClass)
+    private fun testClassName(descriptor: TestDescriptor): String? = when (val source = descriptor.source.orElse(null)) {
+        is ClassSource -> source.className
+        is MethodSource -> source.className
+        else -> descriptor.parent.orElse(null)?.let(::testClassName)
     }
 
     private fun note(text: String) {
