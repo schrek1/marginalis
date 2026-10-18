@@ -29,7 +29,7 @@ them as `uiSandboxTest`.
 
 The sandbox IDE is JetBrains' open-source IntelliJ IDEA of the latest release (2026.2, see
 [The latest IDE](#the-latest-ide)), the platform in daily use, without licensing; the platform floor (2025.2) keeps
-its compile and platform tests in CI's `build`, and the Plugin Verifier in `verify` checks both. The floor
+its compile and platform tests in CI's `package` and `test`, and the Plugin Verifier in `verify` checks both. The floor
 runs on JBR 21, where updating any plugin with Swing UI without a restart can fail on a platform thread that keeps its
 class loader, so scenarios run on JBR 25. Measured 2026-10-17: on a desktop the suite takes as long as on 2025.2
 (265–271 s vs 263–266 s, 2 rounds each); on CI's free runner `e2e` takes about 3 minutes longer (16.6 vs 13.4 min,
@@ -56,8 +56,9 @@ host's Gradle (`sandboxPrebuilt`).
 - **The whole set before a PR:** `./gradlew uiSandboxTest`. It builds the plugin with your Gradle and gathers it with
   Remote Robot's server into `build/sandbox-prebuilt` (`sandboxPrebuilt`, up to date when nothing changed), then runs
   six sandboxes side by side, the scenario classes longest first; `-Pmarginalis.sandbox.jobs=N` changes the count.
-  The sandboxes run the distribution zip, as users do; `-Pmarginalis.sandbox.pluginZip=<zip>` gives them one built
-  elsewhere. A local build follows `marginalis.localIde` when you set it; CI's `build` and `verify` keep guarding
+  The sandboxes run the distribution zip, as users do; `-Pmarginalis.pluginZip=<zip>` gives them (and the Plugin
+  Verifier) one built elsewhere, and the plugin is then not compiled. A local build follows `marginalis.localIde`
+  when you set it; CI's `package`, `test` and `verify` keep guarding
   the floor.
 - **One scenario while you work:** `./gradlew uiSandboxTest --tests '*EnvelopeOnlyWhileUnreadTest'`.
 - **A quick check of the core:** `./gradlew uiSandboxTest -Pmarginalis.sandbox.tags=core` runs only the scenarios
@@ -102,11 +103,12 @@ The Kotlin suite was measured at the default 6 sandboxes on 2026-10-16: about 4.
 
 ### In CI
 
-Every pull request runs the suite in the `e2e` job of `.github/workflows/ci.yml`. It runs on GitHub's free
-`ubuntu-latest` runner (4 vCPU, 16 GB) with 4 sandboxes: about 15 min, of which the plugin build takes about 2.5 min
-and the scenarios about 10 min. The job keeps the JUnit results, each scenario's IDE log, the timeout diagnostics
-and the shots as the `e2e-reports` artifact. The runner is a Linux host, where files a container writes into a bind
-mount stay root's: the harness hands them back to the runner's user (`MARGINALIS_HOST_OWNER`, `rsync --chown`).
+Every pull request runs the suite in the `e2e` job of `.github/workflows/ci.yml`. The `package` job builds the
+plugin zip once (and is the one writer of the IDE index cache); `test`, `verify` and `e2e` wait for it and work on
+that zip, so a broken compile stops the run after about two minutes. `e2e` runs on GitHub's free `ubuntu-24.04`
+runner (4 vCPU, 16 GB) with 4 sandboxes. It keeps the JUnit results, each scenario's IDE log, the timeout
+diagnostics and the shots as the `e2e-reports` artifact. The runner is a Linux host, where files a container writes
+into a bind mount stay root's: the harness hands them back to the runner's user (`rsync --chown`).
 
 Measured on 2026-10-17: 10 runs out of 10 green on one commit, 12.3–17.7 min each. The runner is much slower than a
 desktop, and getting there showed where a scenario must wait for a condition rather than for time:
@@ -121,7 +123,7 @@ A failure there is a bug to diagnose from the artifact, never a reason to rerun 
 
 CI checks two IDE versions: the floor (2025.2, `since-build` 252) and the latest released IntelliJ IDEA.
 
-- **The floor:** compile and the platform tests in `build`, the Plugin Verifier in `verify` (the IDE JetBrains
+- **The floor:** compile in `package`, the platform tests in `test`, the Plugin Verifier in `verify` (the IDE JetBrains
   recommends for the since-build range, the floor's latest bugfix build).
 - **The latest:** the Plugin Verifier in `verify` (the unified IntelliJ IDEA, which needs no licence for a headless
   check) and the sandbox scenarios in `e2e` (the open-source build of the same version).

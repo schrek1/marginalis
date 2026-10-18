@@ -1,5 +1,4 @@
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
-import org.jetbrains.intellij.platform.gradle.tasks.PrepareSandboxTask
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
@@ -342,23 +341,29 @@ val sandboxImage = tasks.register<Exec>("sandboxImage") {
 
 apply(from = "sandbox/ui-ide.gradle")
 
-// `-Pmarginalis.sandbox.pluginZip=<zip>` gives the sandboxes a plugin built elsewhere (CI's package job); by default
-// they get this checkout's own distribution, as users do.
-val sandboxPluginZip: Any = providers.gradleProperty("marginalis.sandbox.pluginZip").orNull?.let { file(it) }
+// `-Pmarginalis.pluginZip=<zip>` hands the sandboxes and the Plugin Verifier a plugin built elsewhere (CI's package
+// job), and this build then compiles nothing of the plugin; by default they get this checkout's own distribution.
+val pluginZip: Any = providers.gradleProperty("marginalis.pluginZip").orNull?.let { file(it) }
     ?: tasks.named<Zip>("buildPlugin").flatMap { it.archiveFile }
+
+val sandboxRobotServer = configurations.create("sandboxRobotServer") {
+    isCanBeConsumed = false
+    isTransitive = false
+}
+dependencies {
+    sandboxRobotServer("com.intellij.remoterobot:robot-server-plugin:$remoteRobotVersion@zip")
+}
 
 val sandboxPrebuilt = tasks.register<Sync>("sandboxPrebuilt") {
     description = "Gathers the plugins the sandboxes start with: the distribution zip, plus Remote Robot's server."
     group = "verification"
-    // The testing sandbox adds the test dependencies to the plugin's lib; the sandbox runs what users get instead.
-    // The plugins directory is no output of the task, so the dependency is explicit.
-    val prepareSandbox = tasks.named<PrepareSandboxTask>("prepareSandbox_runIdeForUiTests")
-    dependsOn(prepareSandbox)
-    from(prepareSandbox.flatMap { it.sandboxPluginsDirectory }) {
-        exclude("marginalis/**")
-    }
-    from(zipTree(sandboxPluginZip))
+    from(sandboxRobotServer.elements.map { zips -> zips.map { zipTree(it) } })
+    from(zipTree(pluginZip))
     into(sandboxPrebuiltDir.map { it.dir("plugins") })
+}
+
+tasks.named<org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask>("verifyPlugin") {
+    archiveFile.set(layout.file(provider { pluginZip as? File }).orElse(tasks.named<Zip>("buildPlugin").flatMap { it.archiveFile }))
 }
 
 tasks.register<Test>("uiSandboxTest") {
