@@ -37,7 +37,9 @@ one run each: 0.8 min for the extra download, the rest more CPU per scenario).
 ### Running the suite
 
 Docker gives every sandbox a virtual 2560x1440 screen, so scenarios behave the same on Windows, macOS, Linux and in
-CI, whatever the monitor does, and nothing appears on your desktop. The IDE inside is the platform floor.
+CI, whatever the monitor does, and nothing appears on your desktop. The IDE is a layer of the image
+(`SANDBOX_IDE` in `sandbox/Dockerfile`, checked against the release's SHA-256); the plugins come from the host's Gradle
+(`sandboxPrebuilt`).
 
 - **Needs:** Docker (Desktop on Windows and macOS, Engine on Linux). On Windows give WSL2 room for several IDEs in
   `%USERPROFILE%\.wslconfig`, then `wsl --shutdown` and start Docker again; memory is taken only while used:
@@ -48,11 +50,14 @@ CI, whatever the monitor does, and nothing appears on your desktop. The IDE insi
   [experimental]
   autoMemoryReclaim=gradual
   ```
-- **First run on a machine** builds the image and downloads the IDE (about 1.5 GB) into Docker volumes: a few
-  minutes, once.
-- **The whole set before a PR:** `./gradlew uiSandboxTest`. It builds the checkout once (`sandboxPrebuilt`), then
-  runs six sandboxes side by side, the scenario classes longest first; `-Pmarginalis.sandbox.jobs=N` changes the
-  count.
+- **First run on a machine** builds the image, IDE included (about 0.9 GB to download): a few minutes, once per IDE
+  version.
+- **The whole set before a PR:** `./gradlew uiSandboxTest`. It builds the plugin with your Gradle and gathers it with
+  Remote Robot's server into `build/sandbox-prebuilt` (`sandboxPrebuilt`, up to date when nothing changed), then runs
+  six sandboxes side by side, the scenario classes longest first; `-Pmarginalis.sandbox.jobs=N` changes the count.
+  The sandboxes run the distribution zip, as users do; `-Pmarginalis.sandbox.pluginZip=<zip>` gives them one built
+  elsewhere. A local build follows `marginalis.localIde` when you set it; CI's `build` and `verify` keep guarding
+  the floor.
 - **One scenario while you work:** `./gradlew uiSandboxTest --tests '*EnvelopeOnlyWhileUnreadTest'`.
 - **A quick check of the core:** `./gradlew uiSandboxTest -Pmarginalis.sandbox.tags=core` runs only the scenarios
   tagged `@Tag("core")`, the critical flows (`sandbox/runbooks/README.md` → Tags). The value is a JUnit tag

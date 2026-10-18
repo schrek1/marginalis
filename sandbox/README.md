@@ -72,8 +72,8 @@ python robot.py screenshot out.png --frame               # the sandbox frame, pa
 
 UI work depends on the window size: a sleeping monitor makes Windows report 640x480 and clamps the frame until
 thread panels get no width. In Docker the sandbox IDE runs on a virtual 2560x1440 screen (Xvfb). The prebuilt
-sandboxes run JetBrains' open-source IntelliJ IDEA 2026.2 (`sandboxIde` in `init.gradle`, from the
-JetBrains/intellij-community releases), the platform in daily use, not the plugin's 2025.2 floor that the build
+sandboxes run JetBrains' open-source IntelliJ IDEA 2026.2 (`SANDBOX_IDE` in `Dockerfile`, a layer of the image, from
+the JetBrains/intellij-community releases), the platform in daily use, not the plugin's 2025.2 floor that the build
 compiles and verifies against: up to 2025.3 the IDE runs on JBR 21, where a platform thread can keep any plugin's
 class loader, so an update without a restart cannot be tested there. The open-source build has no licensing: the
 unified distribution asked for a subscription on CI runners and blocked the scenarios. Run mode (the IDE through
@@ -82,16 +82,14 @@ Gradle) still runs the floor.
 - `MARGINALIS_SANDBOX_DOCKER=1 python sandbox.py start` builds the image from `Dockerfile` (Xvfb, JDK 25) and runs
   container `marginalis-sandbox-<robot port>` with the checkout mounted read-only. The robot port is published as
   is, the IDE's REST port as `robot port + 10000`, clear of the host's IDEs on 63342+. Build output, IDE config and
-  the Gradle home stay in per-container Docker volumes (in run mode a new Gradle home starts as a copy of the build
-  container's, which holds the downloaded IDE). The IDE works on a copy of the test project on the container's
+  the Gradle home stay in per-container Docker volumes. The IDE works on a copy of the test project on the container's
   disk; the host folder `marginalis-sandbox-<robot port>/project` is the copy prepared before a start and read back
   after a stop. Containers on different robot ports run side by side.
 - **One build, many sandboxes:** `MARGINALIS_SANDBOX_DOCKER=1 MARGINALIS_SANDBOX_PREBUILT=<folder> python
-  sandbox.py build` builds the checkout once and leaves its plugins (Marginalis and robot-server) in the folder. A
-  sandbox started with the same `MARGINALIS_SANDBOX_PREBUILT` runs the IDE straight from them, without Gradle: it is
-  up in about 10 s instead of a minute. The build also downloads the sandbox IDE once per version into the build
-  container's Gradle home and records where (`<folder>/ide`); the sandbox runs it from there, mounted read-only. `./gradlew uiSandboxTest` does the
-  same through `sandboxPrebuilt`.
+  sandbox.py build` builds the checkout once with this machine's Gradle (`init.gradle`, so any checkout works) and
+  leaves its plugins (the distribution's Marginalis and robot-server) in the folder. A sandbox started with the same
+  `MARGINALIS_SANDBOX_PREBUILT` runs the image's IDE straight from them, without Gradle: it is up in about 10 s
+  instead of a minute. `./gradlew uiSandboxTest` does the same through `sandboxPrebuilt`.
 - **Ports:** robot 8082 by default, REST robot + 10000. Both stay below Windows' dynamic port range (49152 and up),
   where services take ports at random. The Kotlin suite claims 8100 and up, clear of these.
 - **Linux / CI without Docker:** install `xvfb` and JDK 25, then `sandbox/run-ide-xvfb.sh` with
@@ -102,7 +100,8 @@ Gradle) still runs the floor.
 
 | file | what |
 |---|---|
-| `init.gradle` | registers `runIdeForUiTests`: shared sandbox dir, robot-server plugin 0.11.23, first-run dialogs off, opens the test project |
+| `ui-ide.gradle` | registers `runIdeForUiTests`: shared sandbox dir, robot-server plugin 0.11.23, first-run dialogs off, opens the test project; `build.gradle.kts` applies it |
+| `init.gradle` | applies `ui-ide.gradle` to a checkout whose build lacks it (an upstream-ready feature branch) |
 | `sandbox.py` | start / stop / status / build, port discovery, `locked` (the machine lock) |
 | `robot.py` | minimal HTTP client for robot-server: `call_js`, `run_js`, `find_all`, `screenshot` |
 | `sandbox_ui.py` | Marginalis steps: agent REST calls (`agent_starts_project_thread`, `agent_waits`), user UI steps (`user_replies`, `press_tool_window_action`, `toggle_thread_live`), store reads (`is_live`, `live_by_default`, `message_bodies`) |

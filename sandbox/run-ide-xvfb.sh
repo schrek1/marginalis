@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs the sandbox IDE on a virtual 2560x1440 screen, so UI scenarios see the same window size on any machine:
 # a Linux host or CI directly, any OS through the sandbox's Docker image (Dockerfile, docker-entrypoint.sh).
-# Needs Xvfb and a JDK 25 (the build's toolchain); MARGINALIS_SANDBOX_RUNTIME and MARGINALIS_ROBOT_PORT pass through to sandbox/init.gradle.
+# Needs Xvfb and a JDK 25 (the build's toolchain); MARGINALIS_SANDBOX_RUNTIME and MARGINALIS_ROBOT_PORT pass through to sandbox/ui-ide.gradle.
 set -euo pipefail
 
 display="${MARGINALIS_DISPLAY:-99}"

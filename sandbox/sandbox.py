@@ -44,7 +44,6 @@ CONTAINER = f"marginalis-sandbox-{ROBOT_PORT}"
 # other's entrypoint under running containers.
 IMAGE = "marginalis-sandbox:" + hashlib.sha256(b"".join(
     (HERE / name).read_bytes().replace(b"\r\n", b"\n") for name in ("Dockerfile", "docker-entrypoint.sh"))).hexdigest()[:12]
-BUILD_CONTAINER = "marginalis-sandbox-build"
 # Plugins built once by `sandbox.py build`; a sandbox started with this set runs the IDE without Gradle.
 PREBUILT = Path(os.environ["MARGINALIS_SANDBOX_PREBUILT"]) if os.environ.get("MARGINALIS_SANDBOX_PREBUILT") else None
 # Clear of the host's JetBrains IDEs (63342 and up) and of Windows' dynamic port range (49152 and up), where
@@ -133,25 +132,28 @@ def container_volumes(name: str) -> list[str]:
     return [
         "--mount", f"type=volume,source={name}-work,target=/work",
         # Gradle hands its cache locks between processes over loopback, which each container has to itself: one
-        # Gradle home per container, filled once from the build container's, which holds the downloaded IDE.
+        # Gradle home per container.
         "--mount", f"type=volume,source={name}-gradle,target=/root/.gradle",
-        "--mount", f"type=volume,source={BUILD_CONTAINER}-gradle,target=/gradle-seed,readonly",
     ]
 
 
-def build_in_docker(feature_dir: Path, prebuilt: Path) -> None:
-    """Builds the checkout once and leaves its plugins in `prebuilt`, for sandboxes started with
-    MARGINALIS_SANDBOX_PREBUILT pointing there."""
-    subprocess.run(["docker", "build", "-q", "-t", IMAGE, str(HERE)], check=True, stdout=subprocess.DEVNULL)
-    prebuilt.mkdir(parents=True, exist_ok=True)
-    subprocess.run([
-        "docker", "run", "--rm", "-e", "MARGINALIS_SANDBOX_MODE=build",
-        *(["-e", f"MARGINALIS_HOST_OWNER={HOST_OWNER}"] if HOST_OWNER else []),
-        "--mount", f"type=bind,source={feature_dir},target=/src,readonly",
-        "--mount", f"type=bind,source={prebuilt.resolve()},target=/prebuilt",
-        *container_volumes(BUILD_CONTAINER),
-        IMAGE,
-    ], check=True)
+def build_on_host(feature_dir: Path, prebuilt: Path) -> None:
+    """Builds the checkout's plugins with this machine's Gradle and leaves them in `prebuilt`, for sandboxes started
+    with MARGINALIS_SANDBOX_PREBUILT pointing there: what `./gradlew sandboxPrebuilt` gathers, for any checkout."""
+    staging = prebuilt / "staging"
+    env = dict(os.environ, JAVA_HOME=str(find_jdk21()), MARGINALIS_SANDBOX_RUNTIME=staging.resolve().as_posix())
+    gradlew = feature_dir / ("gradlew.bat" if os.name == "nt" else "gradlew")
+    subprocess.run([str(gradlew), "-q", "--init-script", str(HERE / "init.gradle"),
+                    "prepareSandbox_runIdeForUiTests", "buildPlugin"], cwd=feature_dir, env=env, check=True)
+    plugins = prebuilt / "plugins"
+    shutil.rmtree(plugins, ignore_errors=True)
+    # The testing sandbox adds the test dependencies to the plugin's lib; the sandbox runs what users get instead.
+    shutil.copytree(staging / "ide" / "plugins_runIdeForUiTests", plugins, ignore=shutil.ignore_patterns("marginalis"))
+    distributions = sorted((feature_dir / "build" / "distributions").glob("marginalis-*.zip"), key=lambda zip_file: zip_file.stat().st_mtime)
+    if not distributions:
+        sys.exit(f"no distribution zip in {feature_dir / 'build' / 'distributions'}")
+    shutil.unpack_archive(distributions[-1], plugins)
+    shutil.rmtree(staging)
     print(f"plugins built into {prebuilt}")
 
 
@@ -478,7 +480,7 @@ def main() -> None:
     elif args.command == "build":
         if not (DOCKER and PREBUILT):
             sys.exit("build needs MARGINALIS_SANDBOX_DOCKER=1 and MARGINALIS_SANDBOX_PREBUILT=<folder for the plugins>")
-        build_in_docker(args.feature_dir.resolve(), PREBUILT)
+        build_on_host(args.feature_dir.resolve(), PREBUILT)
     else:
         status()
 

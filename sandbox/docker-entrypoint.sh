@@ -1,17 +1,10 @@
 #!/usr/bin/env bash
 # Container side of `sandbox.py` with MARGINALIS_SANDBOX_DOCKER=1. MARGINALIS_SANDBOX_MODE picks what it does:
 #   run       (default) build the checkout and run the sandbox IDE through Gradle
-#   build     build the checkout once and put its plugins into /prebuilt, then exit
-#   prebuilt  run the sandbox IDE straight from /prebuilt's plugins: no Gradle, so many sandboxes start at once
+#   prebuilt  run the image's IDE (/opt/idea) with /prebuilt's plugins, which the host built: no Gradle, so many
+#             sandboxes start at once
 set -euo pipefail
 mode="${MARGINALIS_SANDBOX_MODE:-run}"
-
-# Run mode builds with Gradle and needs a Gradle home of its own; a prebuilt sandbox runs its IDE straight from the
-# seed, and copying the seed (every IDE in it, gigabytes) cost each new container minutes.
-if [ "$mode" = run ] && [ ! -d /root/.gradle/caches ] && [ -d /gradle-seed/caches ]; then
-  cp -a /gradle-seed/. /root/.gradle/
-  find /root/.gradle -name '*.lock' -delete
-fi
 
 export MARGINALIS_SANDBOX_RUNTIME=/work/runtime MARGINALIS_ROBOT_PORT=8082
 plugins=/work/runtime/ide/plugins_runIdeForUiTests
@@ -38,43 +31,13 @@ if [ -d /project-host ]; then
   rsync -a --delete /project-host/ /work/runtime/project/
 fi
 
-if [ "$mode" != prebuilt ]; then
+if [ "$mode" = run ]; then
   # Gradle builds off a copy: on a host bind mount it is slow, and the copy keeps its build output between starts.
   rsync -a --delete \
     --exclude /.git --exclude /build --exclude /core/build --exclude /.gradle --exclude /.kotlin \
     --exclude /.intellijPlatform --exclude /.idea --exclude /out --exclude __pycache__ \
     /src/ /work/src/
   find /work/src/gradlew /work/src/sandbox -maxdepth 1 \( -name gradlew -o -name '*.sh' \) -exec sed -i 's/\r$//' {} +
-fi
-
-if [ "$mode" = build ]; then
-  cd /work/src
-  ./gradlew --no-daemon -q --init-script sandbox/init.gradle prepareSandbox_runIdeForUiTests buildPlugin
-  rm -rf /prebuilt/plugins && mkdir -p /prebuilt/plugins
-  cp -a "$plugins"/. /prebuilt/plugins/
-  # The testing sandbox adds the test dependencies to the plugin's lib; the sandbox runs what users get instead:
-  # the distribution zip's content.
-  version=$(sed -n 's/^version = "\([^"]*\)".*/\1/p' build.gradle.kts)
-  distribution="/work/src/build/distributions/marginalis-$version.zip"
-  [ -f "$distribution" ] || { echo "no distribution zip $distribution" >&2; exit 1; }
-  rm -rf /prebuilt/plugins/marginalis
-  (cd /prebuilt/plugins && jar xf "$distribution")
-  # The sandbox IDE: JetBrains' open-source IntelliJ IDEA build, which has no licensing (the unified distribution asks
-  # for a subscription on CI runners). Downloaded once per version into the Gradle home, recorded relative to it.
-  sandbox_ide=$(sed -n "s/^def sandboxIde = '\([^']*\)'.*/\1/p" sandbox/init.gradle)
-  ide_home=/root/.gradle/sandbox-ide/idea-$sandbox_ide
-  if [ ! -x "$ide_home/bin/idea.sh" ]; then
-    rm -rf "$ide_home.part" && mkdir -p "$ide_home.part"
-    curl -fsSL "https://github.com/JetBrains/intellij-community/releases/download/idea/$sandbox_ide/idea-$sandbox_ide.tar.gz" \
-      | tar xz --strip-components=1 -C "$ide_home.part"
-    mv "$ide_home.part" "$ide_home"
-  fi
-  echo "sandbox-ide/idea-$sandbox_ide" > /prebuilt/ide
-  # Set by the harness on a Linux host, where files root writes into a bind mount stay root's.
-  if [ -n "${MARGINALIS_HOST_OWNER:-}" ]; then
-    chown -R "$MARGINALIS_HOST_OWNER" /prebuilt/plugins
-  fi
-  exit 0
 fi
 
 # The robot and REST servers listen on loopback only; published ports arrive on the container's own address.
@@ -88,10 +51,8 @@ if [ "$mode" = run ]; then
   exec bash sandbox/run-ide-xvfb.sh
 fi
 
-# Straight from the build container's Gradle home: a sandbox's own copy of it dates from the sandbox's first start and
-# may hold an older IDE only.
-ide="/gradle-seed/$(cat /prebuilt/ide 2>/dev/null)"
-[ -x "$ide/bin/idea.sh" ] || { echo "no sandbox IDE at $ide: run ./gradlew sandboxPrebuilt" >&2; exit 1; }
+ide=/opt/idea
+[ -d /prebuilt/plugins/marginalis ] || { echo "no plugins in /prebuilt: run ./gradlew sandboxPrebuilt" >&2; exit 1; }
 rm -rf "$plugins" && mkdir -p "$plugins" && cp -a /prebuilt/plugins/. "$plugins"/
 ide_dir=/work/runtime/ide
 cat > /tmp/idea.properties <<EOF
@@ -100,7 +61,7 @@ idea.system.path=$ide_dir/system_runIdeForUiTests
 idea.plugins.path=$plugins
 idea.log.path=$ide_dir/log_runIdeForUiTests
 EOF
-# The same properties sandbox/init.gradle gives the IDE in run mode.
+# The same properties sandbox/ui-ide.gradle gives the IDE in run mode.
 { cat "$ide/bin/idea64.vmoptions"; cat <<EOF
 -Drobot-server.port=8082
 -Didea.trust.all.projects=true
