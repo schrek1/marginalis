@@ -146,9 +146,13 @@ class MarginalisStore(private val project: Project) : Disposable {
         if (marker != null) {
             if (marker.isValid) {
                 thread.line = marker.document.getLineNumber(marker.startOffset)
-            } else if (thread.status is ThreadStatus.Open) {
-                thread.markOrphaned()
-                endLive(thread)
+            } else {
+                // Dropped with the orphaning: a thread reopened later gets a fresh marker on its line.
+                markers.remove(thread.id)
+                if (thread.status is ThreadStatus.Open) {
+                    thread.markOrphaned()
+                    endLive(thread)
+                }
             }
         }
         return thread.line

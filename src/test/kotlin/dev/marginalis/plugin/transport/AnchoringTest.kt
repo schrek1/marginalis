@@ -207,6 +207,23 @@ class AnchoringTest : HttpContractTestCase() {
         assertEquals("open", agent.threads().single { it.id == moved }.string("status"))
     }
 
+    fun testAReplyAfterARewriteLeavesTheThreadOrphanedNotOnItsOldLine() {
+        // GIVEN - a tool rewrote the file, the thread's code is gone, and nobody has listed the threads since
+        sample()
+        val id = agent.addOnLine(20)
+        val document = document()
+        WriteCommandAction.runWriteCommandAction(project) {
+            document.setText((1..60).joinToString("\n") { "// rewritten $it" })
+        }
+
+        // WHEN - the agent replies to the thread
+        agent.post("comment_reply", "thread_id" to id, "body" to "Still relevant after the rewrite?")
+
+        // THEN - the thread is orphaned, not pinned onto whatever line 20 holds now
+        val thread = agent.threads().single()
+        assertEquals("orphaned", thread.string("status"))
+    }
+
     fun testAnOrphanPastTheEndOfARewrittenFileKeepsItsLostText() {
         sample()
         agent.addOnLine(50)

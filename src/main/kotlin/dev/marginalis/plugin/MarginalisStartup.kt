@@ -124,7 +124,11 @@ class MarginalisStartup : ProjectActivity {
 
             thread.line == null -> {}
 
-            thread.status is ThreadStatus.Open && (marker == null || !marker.isValid) -> {
+            // An edit took the thread's line away: it is orphaned, as a listing finds it. A new marker would pin it
+            // onto whatever its old line number holds now.
+            thread.status is ThreadStatus.Open && marker != null && !marker.isValid -> store.syncLine(thread)
+
+            thread.status is ThreadStatus.Open && marker == null -> {
                 val base = project.guessProjectDir() ?: return
                 val vFile = thread.file?.let { base.findFileByRelativePath(it) } ?: return
                 val document = FileDocumentManager.getInstance().getDocument(vFile) ?: return
