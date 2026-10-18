@@ -84,6 +84,8 @@ jobs:
       - uses: ./.github/actions/ide-layout-index
       - name: Tests and checks
         run: xvfb-run -a ./gradlew build --console=plain
+      - name: Tests of the CI scripts
+        run: python3 -m unittest discover -s scripts -p 'test_*.py' -v
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
@@ -152,6 +154,23 @@ jobs:
           name: plugin-verifier-reports
           path: build/reports/pluginVerifier
           if-no-files-found: ignore
+
+  cache-prune:
+    # setup-gradle saves a changed Gradle home under new hashes and leaves the replaced entries behind: a few pushes a
+    # day took the repository's cache to its 10 GB limit. Once test, the Gradle cache's writer, has saved, this branch's
+    # replaced entries go (scripts/prune_gradle_caches.py).
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Delete replaced Gradle cache entries
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/prune_gradle_caches.py "${{ github.repository }}" "${{ github.ref }}"
 
   release:
     # A green push to schreko_stable is the release (stable-release.yml decides whether there is one to make). It runs
