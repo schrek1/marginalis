@@ -4,7 +4,7 @@
 # compiles against the real ideaIC-2025.2 floor (the tenant dev sandbox
 # can't reach the JetBrains CDN and uses a local IDE via the
 # `marginalis.localIde` property instead) and runs the Plugin Verifier
-# against JetBrains' recommended IDE set for our since-build range.
+# against the floor and the latest IntelliJ IDEA (`marginalis.latestIde`).
 name: CI
 
 on:

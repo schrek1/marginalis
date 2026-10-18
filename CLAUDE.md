@@ -20,8 +20,9 @@ is the shipped record and decision log.
   can't connect back); `./gradlew test` runs the plugin's platform tests
   against a real in-memory IDE.
 - CI (`.github/workflows/`) is the honest environment: compiles against
-  the real `ideaIC-2025.2` floor and runs the Plugin Verifier
-  (`recommended()` IDE set). Local builds may compile against a newer
+  the real `ideaIC-2025.2` floor and runs the Plugin Verifier on the floor
+  and on the latest IntelliJ IDEA (`marginalis.latestIde` in
+  `gradle.properties`). Local builds may compile against a newer
   local IDE via the `marginalis.localIde` property, so floor violations
   surface in CI, not locally.
 - Releases: stamp `[Unreleased]` in `CHANGELOG.md` as the new version,
