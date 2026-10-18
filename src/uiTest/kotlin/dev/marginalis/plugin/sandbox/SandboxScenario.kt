@@ -49,6 +49,8 @@ abstract class SandboxScenario(private val scenario: String) {
         val stopFailure = runCatching { Sandbox.close() }.exceptionOrNull()
         val elapsed = Duration.ofNanos(System.nanoTime() - started)
         Durations.record(javaClass.name, elapsed)
+        // scripts/shard_map.py reads this line from CI's logs to rebuild sandbox/shards.json.
+        println("scenario-duration ${javaClass.simpleName} ${"%.1f".format(Locale.ROOT, elapsed.toMillis() / 1000.0)} s")
         val minutes = elapsed.toMillis() / 60_000.0
         report("INFO  $scenario ends at ${LocalTime.now().withNano(0)}")
         try {

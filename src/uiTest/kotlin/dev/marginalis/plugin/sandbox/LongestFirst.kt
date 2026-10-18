@@ -39,13 +39,20 @@ object Durations {
     }
 }
 
-/** Starts the longest scenarios first, so the run does not end on one long straggler. */
+/**
+ * Starts the longest scenarios first, so the run does not end on one long straggler. Without a duration from this
+ * machine (always the case on CI) a scenario takes the one in the shard map.
+ */
 class LongestFirst : ClassOrderer {
     override fun orderClasses(context: ClassOrdererContext) {
         val durations = Durations.all()
+        val mapped = ShardMap.readIfPresent()?.scenarios.orEmpty()
         context.classDescriptors.sortWith(
-            compareByDescending<ClassDescriptor> { durations[it.testClass.name] ?: Durations.unknown }
-                .thenBy { it.testClass.name },
+            compareByDescending<ClassDescriptor> {
+                durations[it.testClass.name]
+                    ?: mapped[it.testClass.simpleName]?.let { placement -> Duration.ofMillis((placement.seconds * 1000).toLong()) }
+                    ?: Durations.unknown
+            }.thenBy { it.testClass.name },
         )
     }
 }

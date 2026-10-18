@@ -103,13 +103,28 @@ The Kotlin suite was measured at the default 6 sandboxes on 2026-10-16: about 4.
 
 ### In CI
 
-Every pull request runs the suite in the `e2e` job of `.github/workflows/ci.yml`. The `package` job builds the
-plugin zip once (and is the one writer of the IDE index cache); `test`, `verify` and `e2e` wait for it and work on
-that zip, so a broken compile stops the run after about two minutes. `e2e` runs on GitHub's free `ubuntu-24.04`
-runner (4 vCPU, 16 GB) with 4 sandboxes. It keeps the JUnit results, each scenario's IDE log, the timeout
-diagnostics and the shots as the `e2e-reports` artifact. The runner is a Linux host, where files a container writes
-into a bind mount stay root's: the harness copies the project back with `docker cp`, which writes as the runner's
-user.
+Every pull request runs the suite in `.github/workflows/ci.yml`. The `package` job builds the plugin zip once (and is
+the one writer of the IDE index cache); `test`, `verify` and the e2e shards wait for it and work on that zip, so a
+broken compile stops the run after about two minutes. The scenarios run as two shards, `e2e (1/2)` and `e2e (2/2)`,
+each on GitHub's free `ubuntu-24.04` runner (4 vCPU, 16 GB) with 4 sandboxes. Each keeps its JUnit results, each
+scenario's IDE log, the timeout diagnostics and the shots as the `e2e-reports-<shard>` artifact. The `e2e` job is the
+check the release and `stable.py` wait for: green only when both shards were. The runner is a Linux host, where files a
+container writes into a bind mount stay root's: the harness copies the project back with `docker cp`, which writes as
+the runner's user.
+
+**The shard map.** `sandbox/shards.json` assigns every scenario class to a shard, with its duration; the shards are
+balanced on those durations, the longest scenario first to the shard with the least time so far, and each shard also
+starts its scenarios longest first. `-Pmarginalis.sandbox.shard=<n>/2` runs one shard locally; the harness's own tests
+go with shard 1.
+- A scenario missing from the map still runs, on the shard with the least mapped time, and CI warns with
+  "Shard map" that the map needs rebuilding. Without any map (a branch that has none yet) the scenarios split by
+  name, sorted and alternating, so each shard gets half of them, and CI warns the same way.
+- The `e2e` job prints each shard's scenario time and warns ("e2e shards apart") when one took at least 3 minutes and
+  half as long again as the other.
+- Every scenario logs `scenario-duration <class> <seconds> s`. To rebuild the map from the last 10 green runs on
+  `schreko_stable` (median per scenario): `python3 scripts/shard_map.py schrek1/marginalis [--runs N]`; from one local
+  run: `python3 scripts/shard_map.py --local <runtime>/durations-kotlin.json` (a desktop's durations are not CI's).
+  Commit the map in its own pull request.
 
 Measured on 2026-10-17: 10 runs out of 10 green on one commit, 12.3–17.7 min each. The runner is much slower than a
 desktop, and getting there showed where a scenario must wait for a condition rather than for time:

@@ -94,12 +94,18 @@ jobs:
             build/test-results/test/
             core/build/test-results/test/
 
-  e2e:
+  e2e-shard:
     # The sandbox scenarios on the free runner: sandbox IDEs in Docker on a virtual screen, running package's zip.
-    # Fewer sandboxes than on a desktop (4 vCPU, 16 GB); docs/testing.md has the measured settings.
+    # Fewer sandboxes than on a desktop (4 vCPU, 16 GB); docs/testing.md has the measured settings. Two runners split
+    # the scenarios by the committed map sandbox/shards.json, so both finish at about the same time.
+    name: e2e (${{ matrix.shard }}/2)
     needs: package
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
@@ -117,17 +123,44 @@ jobs:
       - name: Sandbox scenarios
         env:
           MARGINALIS_SANDBOX_RUNTIME: ${{ github.workspace }}/build/sandbox-runtime
-        run: ./gradlew uiSandboxTest -Pmarginalis.sandbox.jobs=4 -Pmarginalis.pluginZip="$(ls build/package/*.zip)" --console=plain
+        run: >-
+          ./gradlew uiSandboxTest -Pmarginalis.sandbox.jobs=4 -Pmarginalis.sandbox.shard=${{ matrix.shard }}/2
+          -Pmarginalis.pluginZip="$(ls build/package/*.zip)" --console=plain
+      - name: Scenarios missing from the shard map
+        if: ${{ !cancelled() }}
+        run: |
+          notes=build/sandbox-runtime/shard-map-notes.txt
+          [ ! -f "$notes" ] || while IFS= read -r note; do echo "::warning title=Shard map::$note"; done < "$notes"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: e2e-reports
+          # Its JUnit results are what sandbox/shards.json is rebuilt from (docs/testing.md).
+          name: e2e-reports-${{ matrix.shard }}
           path: |
             build/test-results/uiSandboxTest/
             build/sandbox-runtime/*/run.log
             build/sandbox-runtime/*/diagnostics/
             build/sandbox-runtime/shots/
           if-no-files-found: ignore
+
+  e2e:
+    # The one e2e check that the release job and stable.py name: green only when every shard was. It also reports how
+    # long each shard took and warns when the shard map no longer splits the scenarios evenly.
+    needs: e2e-shard
+    # A failed shard must still fail this check; a run cancelled by a newer push reports nothing.
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Every shard passed
+        run: '[ "${{ needs.e2e-shard.result }}" = success ] || { echo "e2e shards: ${{ needs.e2e-shard.result }}"; exit 1; }'
+      - uses: actions/checkout@v7
+      - name: Shard times
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/e2e_shard_balance.py "${{ github.repository }}" "${{ github.run_id }}"
 
   verify:
     needs: package
