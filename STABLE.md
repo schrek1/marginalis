@@ -58,3 +58,4 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-136 | The plugin compiles for the floor's Kotlin stdlib (API and language 2.2) | `fix/MARG-133-tab-open-without-blocking` | — | — | `26fb956` |
 | MARG-133 | The Margin tab comes back once the project's configuration is done | `fix/MARG-133-tab-open-without-blocking` | — | — | `aa1dbb6` |
 | MARG-141 | CI runs on ubuntu-24.04 until the move to Ubuntu 26 is made on purpose | `chore/MARG-141-pin-ubuntu-24-04` | — | — | `c3bb791` |
+| MARG-149 | The plugin's Overview lists the fork features newest first, under their release | `feat/MARG-149-overview-by-release` | — | — | `ef351e8` |
