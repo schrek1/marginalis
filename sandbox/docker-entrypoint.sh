@@ -6,7 +6,9 @@
 set -euo pipefail
 mode="${MARGINALIS_SANDBOX_MODE:-run}"
 
-if [ ! -d /root/.gradle/caches ] && [ -d /gradle-seed/caches ]; then
+# Run mode builds with Gradle and needs a Gradle home of its own; a prebuilt sandbox runs its IDE straight from the
+# seed, and copying the seed (every IDE in it, gigabytes) cost each new container minutes.
+if [ "$mode" = run ] && [ ! -d /root/.gradle/caches ] && [ -d /gradle-seed/caches ]; then
   cp -a /gradle-seed/. /root/.gradle/
   find /root/.gradle -name '*.lock' -delete
 fi
@@ -57,6 +59,17 @@ if [ "$mode" = build ]; then
   [ -f "$distribution" ] || { echo "no distribution zip $distribution" >&2; exit 1; }
   rm -rf /prebuilt/plugins/marginalis
   (cd /prebuilt/plugins && jar xf "$distribution")
+  # The sandbox IDE: JetBrains' open-source IntelliJ IDEA build, which has no licensing (the unified distribution asks
+  # for a subscription on CI runners). Downloaded once per version into the Gradle home, recorded relative to it.
+  sandbox_ide=$(sed -n "s/^def sandboxIde = '\([^']*\)'.*/\1/p" sandbox/init.gradle)
+  ide_home=/root/.gradle/sandbox-ide/idea-$sandbox_ide
+  if [ ! -x "$ide_home/bin/idea.sh" ]; then
+    rm -rf "$ide_home.part" && mkdir -p "$ide_home.part"
+    curl -fsSL "https://github.com/JetBrains/intellij-community/releases/download/idea/$sandbox_ide/idea-$sandbox_ide.tar.gz" \
+      | tar xz --strip-components=1 -C "$ide_home.part"
+    mv "$ide_home.part" "$ide_home"
+  fi
+  echo "sandbox-ide/idea-$sandbox_ide" > /prebuilt/ide
   # Set by the harness on a Linux host, where files root writes into a bind mount stay root's.
   if [ -n "${MARGINALIS_HOST_OWNER:-}" ]; then
     chown -R "$MARGINALIS_HOST_OWNER" /prebuilt/plugins
@@ -75,8 +88,10 @@ if [ "$mode" = run ]; then
   exec bash sandbox/run-ide-xvfb.sh
 fi
 
-ide=$(ls -d /root/.gradle/caches/*/transforms/*/transformed/ideaIC-* 2>/dev/null | head -1)
-[ -n "$ide" ] || { echo "no IntelliJ distribution in the Gradle home: run one sandbox in run mode first" >&2; exit 1; }
+# Straight from the build container's Gradle home: a sandbox's own copy of it dates from the sandbox's first start and
+# may hold an older IDE only.
+ide="/gradle-seed/$(cat /prebuilt/ide 2>/dev/null)"
+[ -x "$ide/bin/idea.sh" ] || { echo "no sandbox IDE at $ide: run ./gradlew sandboxPrebuilt" >&2; exit 1; }
 rm -rf "$plugins" && mkdir -p "$plugins" && cp -a /prebuilt/plugins/. "$plugins"/
 ide_dir=/work/runtime/ide
 cat > /tmp/idea.properties <<EOF

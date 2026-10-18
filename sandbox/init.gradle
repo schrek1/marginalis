@@ -5,6 +5,9 @@
 def runtime = System.getenv('MARGINALIS_SANDBOX_RUNTIME') ?: 'D:/OSOBNI/programming/marginalis-sandbox-runtime'
 def robotPort = System.getenv('MARGINALIS_ROBOT_PORT') ?: '8082'
 def robotVersion = '0.11.23'
+// The prebuilt sandboxes run the open-source IntelliJ IDEA of this version (docker-entrypoint.sh downloads it); run
+// mode, through Gradle, still runs the plugin's floor.
+def sandboxIde = '2026.2'
 
 gradle.rootProject { project ->
     project.pluginManager.withPlugin('org.jetbrains.intellij.platform') {
