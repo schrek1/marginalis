@@ -122,12 +122,35 @@ jobs:
             build/test-results/test/
             core/build/test-results/test/
 
+  e2e-plan:
+    # Splits the scenarios between the e2e shards by their live durations: the median over the last green runs on
+    # schreko_stable, planned while package builds, so it costs no time and nobody maintains a map. Planning is an
+    # optimisation: when it fails the shards split by name and warn, and nothing else changes.
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Shard map from the last green runs
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/shard_map.py "${{ github.repository }}" --runs 10 --out build/e2e-plan/shards.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: e2e-shard-map
+          path: build/e2e-plan/shards.json
+          if-no-files-found: ignore
+
   e2e-shard:
     # The sandbox scenarios on the free runner: sandbox IDEs in Docker on a virtual screen, running package's zip.
     # Fewer sandboxes than on a desktop (4 vCPU, 16 GB); docs/testing.md has the measured settings. Two runners split
-    # the scenarios by the committed map sandbox/shards.json, so both finish at about the same time.
+    # the scenarios by e2e-plan's map, so both finish at about the same time.
     name: e2e (${{ matrix.shard }}/2)
-    needs: package
+    needs: [package, e2e-plan]
+    # A failed plan only costs the balance; the shards then split by name.
+    if: ${{ !cancelled() && needs.package.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
@@ -140,6 +163,12 @@ jobs:
         with:
           name: marginalis-plugin
           path: build/package
+      - uses: actions/download-artifact@v8
+        # Absent when planning failed: the harness then splits by name and says so.
+        continue-on-error: true
+        with:
+          name: e2e-shard-map
+          path: sandbox
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -154,7 +183,7 @@ jobs:
         run: >-
           ./gradlew uiSandboxTest -Pmarginalis.sandbox.jobs=4 -Pmarginalis.sandbox.shard=${{ matrix.shard }}/2
           -Pmarginalis.pluginZip="$(ls build/package/*.zip)" --console=plain
-      - name: Scenarios missing from the shard map
+      - name: Shard map notes
         if: ${{ !cancelled() }}
         run: |
           notes=build/sandbox-runtime/shard-map-notes.txt

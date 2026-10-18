@@ -2,9 +2,10 @@
 
 Usage: python3 scripts/e2e_shard_balance.py REPO RUN_ID
 
-The shards follow the committed map sandbox/shards.json. Scenarios that got slower or faster since it was built pull the
-shards apart, and the warning asks for the map to be rebuilt (docs/testing.md). A gap counts only when it is both large
-in minutes and large against the faster shard: one runner's slow day moves both numbers a little, a stale map one a lot.
+The shards follow the map e2e-plan planned from the last green runs' durations. A scenario whose time just changed a lot
+pulls them apart until the medians catch up, and the warning names the gap (docs/testing.md). A gap counts only when it
+is both large in minutes and large against the faster shard: one runner's slow day moves both numbers a little, a
+misplaced scenario one a lot.
 """
 from __future__ import annotations
 
@@ -38,7 +39,7 @@ def imbalance(minutes: dict[int, float]) -> str | None:
     if gap < MIN_GAP_MINUTES or minutes[slowest] < MIN_RATIO * minutes[fastest]:
         return None
     return (f"shard {slowest} took {minutes[slowest]:.1f} min, shard {fastest} {minutes[fastest]:.1f} min: "
-            f"rebuild sandbox/shards.json from this run's durations (docs/testing.md)")
+            f"the live plan split them unevenly; a scenario's time may have changed (docs/testing.md)")
 
 
 def main() -> None:

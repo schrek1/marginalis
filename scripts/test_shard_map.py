@@ -1,6 +1,40 @@
+import json
+import subprocess
+import sys
+import tempfile
 import unittest
+from pathlib import Path
 
 from shard_map import balance, durations_in_log, medians, simple_names
+
+SCRIPT = Path(__file__).resolve().parent / "shard_map.py"
+
+
+class CommandLineTest(unittest.TestCase):
+
+    def test_the_map_goes_where_out_points(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            durations = Path(tmp, "durations-kotlin.json")
+            durations.write_text(json.dumps({"dev.marginalis.plugin.sandbox.scenarios.A": 90.0, "x.B": 30.0}))
+            out = Path(tmp, "plan", "shards.json")
+
+            run = subprocess.run([sys.executable, str(SCRIPT), "--local", str(durations), "--out", str(out)],
+                                 capture_output=True, text=True)
+
+            self.assertEqual(0, run.returncode, run.stderr)
+            self.assertEqual({"A": 1, "B": 2}, {name: placed["shard"] for name, placed in json.loads(out.read_text())["scenarios"].items()})
+
+    def test_no_durations_write_no_map_and_fail(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            durations = Path(tmp, "durations-kotlin.json")
+            durations.write_text("{}")
+            out = Path(tmp, "shards.json")
+
+            run = subprocess.run([sys.executable, str(SCRIPT), "--local", str(durations), "--out", str(out)],
+                                 capture_output=True, text=True)
+
+            self.assertNotEqual(0, run.returncode)
+            self.assertFalse(out.exists())
 
 
 class DurationsInLogTest(unittest.TestCase):

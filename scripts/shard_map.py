@@ -1,15 +1,18 @@
-"""Rebuilds sandbox/shards.json, the committed map that splits the sandbox scenarios between CI's e2e shards.
+"""Plans the shard map, sandbox/shards.json, that splits the sandbox scenarios between CI's e2e shards.
 
 Usage:
-  python3 scripts/shard_map.py REPO [--runs N]   from the last N green CI runs on schreko_stable (default 10)
-  python3 scripts/shard_map.py --local FILE      from one local run's durations-kotlin.json
+  python3 scripts/shard_map.py REPO [--runs N] [--out FILE]   from the last N green CI runs on schreko_stable
+  python3 scripts/shard_map.py --local FILE [--out FILE]      from one local run's durations-kotlin.json
 
-Each scenario prints its duration into the e2e log (`scenario-duration <class> <seconds> s`). A scenario's duration is
-its median over the runs, so one slow runner does not move it, and the longest scenario goes first to the shard with
-the least time so far. Ties go by name, so the same durations always give the same map.
+CI's e2e-plan job runs it in every run, so the map follows the scenarios' live durations and nobody maintains it. Each
+scenario prints its duration into the e2e log (`scenario-duration <class> <seconds> s`). A scenario's duration is its
+median over the runs, so one slow runner does not move it, and the longest scenario goes first to the shard with the
+least time so far. Ties go by name, so the same durations always give the same map. Without any durations it writes
+no map and fails; the shards then split by name.
 """
 from __future__ import annotations
 
+import argparse
 import json
 import re
 import statistics
@@ -46,7 +49,8 @@ def balance(seconds: dict[str, float], shards: int) -> dict:
 
 
 def gh(*args: str) -> str:
-    return subprocess.run(["gh", *args], check=True, capture_output=True, text=True).stdout
+    return subprocess.run(["gh", *args], check=True, capture_output=True, text=True, encoding="utf-8",
+                          errors="replace").stdout
 
 
 def ci_history(repo: str, count: int) -> list[dict[str, float]]:
@@ -57,29 +61,33 @@ def ci_history(repo: str, count: int) -> list[dict[str, float]]:
         jobs = json.loads(gh("api", f"repos/{repo}/actions/runs/{run['databaseId']}/jobs?per_page=100"))["jobs"]
         durations = {}
         for job in jobs:
-            if job["name"].startswith("e2e"):
-                durations |= durations_in_log(gh("api", f"repos/{repo}/actions/jobs/{job['id']}/logs"))
+            if job["name"].startswith("e2e ("):
+                # Not `gh api …/logs`: newer gh refuses to print a log with terminal escape sequences in it.
+                durations |= durations_in_log(gh("run", "view", "--repo", repo, "--job", str(job["id"]), "--log"))
         if durations:
             history.append(durations)
     return history
 
 
 def main() -> None:
-    args = sys.argv[1:]
-    if args[:1] == ["--local"] and len(args) == 2:
-        history = [simple_names(json.loads(Path(args[1]).read_text()))]
-    elif len(args) in (1, 3) and not args[0].startswith("-") and (len(args) == 1 or args[1] == "--runs"):
-        history = ci_history(args[0], int(args[2]) if len(args) == 3 else 10)
-    else:
-        sys.exit(__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("repo", nargs="?", help="the GitHub repository whose green schreko_stable runs to read")
+    source.add_argument("--local", type=Path, help="one local run's durations-kotlin.json")
+    parser.add_argument("--runs", type=int, default=10)
+    parser.add_argument("--out", type=Path, default=MAP)
+    args = parser.parse_args()
+    history = [simple_names(json.loads(args.local.read_text()))] if args.local else ci_history(args.repo, args.runs)
+    history = [run for run in history if run]
     if not history:
-        sys.exit("no scenario durations found: the runs predate the scenario-duration log line")
+        sys.exit("no scenario durations found: no run logged a scenario-duration line")
     shard_map = balance(medians(history), SHARDS)
-    MAP.write_text(json.dumps(shard_map, indent=2) + "\n")
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    args.out.write_text(json.dumps(shard_map, indent=2) + "\n")
     for shard in range(1, SHARDS + 1):
         total = sum(placed["seconds"] for placed in shard_map["scenarios"].values() if placed["shard"] == shard)
         print(f"shard {shard}: {total / 60:.1f} scenario-minutes")
-    print(f"{MAP} from {len(history)} run(s), {len(shard_map['scenarios'])} scenarios")
+    print(f"{args.out} from {len(history)} run(s), {len(shard_map['scenarios'])} scenarios")
 
 
 if __name__ == "__main__":
