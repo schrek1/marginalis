@@ -64,3 +64,4 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-135 | Sandbox plugins come from the host's Gradle, the sandbox IDE from the image | `chore/MARG-135-ide-in-image` | — | — | `bc44b25` |
 | MARG-141 | CI builds the plugin once: package, then test, verify and e2e on its zip | `chore/MARG-141-job-graph` | — | — | `5ab8b5e` |
 | MARG-134 | The Plugin Verifier checks the floor and the latest IntelliJ IDEA, from one version | `chore/MARG-134-floor-and-latest` | — | — | `4fbff33` |
+| MARG-101 | CI deletes the Gradle cache entries a newer one has replaced | `chore/MARG-101-cache-prune` | — | — | `4267445` |
