@@ -130,18 +130,22 @@ jobs:
     permissions:
       contents: read
       actions: read
+    outputs:
+      planned: ${{ steps.plan.outcome == 'success' }}
     steps:
       - uses: actions/checkout@v7
       - name: Shard map from the last green runs
+        id: plan
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/shard_map.py "schrek1/no-such-repo" --runs 10 --out build/e2e-plan/shards.json
       - uses: actions/upload-artifact@v7
+        if: steps.plan.outcome == 'success'
         with:
           name: e2e-shard-map
           path: build/e2e-plan/shards.json
-          if-no-files-found: ignore
+          if-no-files-found: error
 
   e2e-shard:
     # The sandbox scenarios on the free runner: sandbox IDEs in Docker on a virtual screen, running package's zip.
@@ -164,8 +168,8 @@ jobs:
           name: marginalis-plugin
           path: build/package
       - uses: actions/download-artifact@v8
-        # Absent when planning failed: the harness then splits by name and says so.
-        continue-on-error: true
+        # Without a plan the harness splits by name and says so.
+        if: needs.e2e-plan.outputs.planned == 'true'
         with:
           name: e2e-shard-map
           path: sandbox

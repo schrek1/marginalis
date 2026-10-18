@@ -97,7 +97,7 @@ class ShardFilter : PostDiscoveryFilter {
     init {
         if (spec != null) {
             notes.deleteIfExists()
-            if (!measured) note("no shard map (e2e-plan found no scenario durations); the scenarios are split by name, half on each shard.")
+            if (!measured) note("no shard map (e2e-plan made none; its log says why); the scenarios are split by name, half on each shard.")
         }
     }
 
