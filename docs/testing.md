@@ -27,7 +27,7 @@ per check. Each feature has one scenario, a JUnit class on Remote-Robot in
 `src/uiTest/kotlin/dev/marginalis/plugin/sandbox/scenarios/`, and a runbook in `sandbox/runbooks/`. Gradle runs
 them as `uiSandboxTest`.
 
-The sandbox IDE is JetBrains' open-source IntelliJ IDEA of the latest release (2026.2, see
+The sandbox IDE is JetBrains' open-source IntelliJ IDEA of the latest release (2026.2.3, see
 [The latest IDE](#the-latest-ide)), the platform in daily use, without licensing; the platform floor (2025.2) keeps
 its compile and platform tests in CI's `package` and `test`, and the Plugin Verifier in `verify` checks both. The floor
 runs on JBR 21, where updating any plugin with Swing UI without a restart can fail on a platform thread that keeps its
