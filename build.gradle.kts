@@ -70,7 +70,8 @@ dependencies {
 
     "uiTestImplementation"("org.junit.jupiter:junit-jupiter:5.13.4")
     "uiTestImplementation"("io.kotest:kotest-assertions-core:5.9.1")
-    "uiTestRuntimeOnly"("org.junit.platform:junit-platform-launcher:1.13.4")
+    // Compiled against: the CI shard filter is a launcher extension.
+    "uiTestImplementation"("org.junit.platform:junit-platform-launcher:1.13.4")
     "uiTestImplementation"("org.kodein.di:kodein-di-jvm:7.26.1")
     "uiTestImplementation"("org.jetbrains.kotlin:kotlin-stdlib:2.4.0")
     "uiTestImplementation"("org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.10.2")
@@ -396,6 +397,9 @@ tasks.register<Test>("uiSandboxTest") {
         tags?.let { includeTags(it) }
     }
     filter { includeTestsMatching("dev.marginalis.plugin.sandbox.*") }
+    // `-Pmarginalis.sandbox.shard=1/2` runs the scenarios sandbox/shards.json gives shard 1, for CI's parallel e2e
+    // shards; the harness's own tests go with shard 1.
+    providers.gradleProperty("marginalis.sandbox.shard").orNull?.let { shard -> systemProperty("marginalis.sandbox.shard", shard) }
     // A scenario's outcome depends on the IDE it drives, not only on these inputs.
     outputs.upToDateWhen { false }
     testLogging {
