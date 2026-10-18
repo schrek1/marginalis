@@ -238,13 +238,13 @@ fun releaseSandboxRunLock() {
     if (ours) Files.deleteIfExists(sandboxRunLock)
 }
 
-val sandboxRunUnlock by tasks.registering {
+val sandboxRunUnlock = tasks.register("sandboxRunUnlock") {
     description = "Releases the machine-wide sandbox run lock this build holds."
     group = "verification"
     doLast { releaseSandboxRunLock() }
 }
 
-val sandboxRunLocked by tasks.registering {
+val sandboxRunLocked = tasks.register("sandboxRunLocked") {
     description = "Waits for the machine-wide sandbox run lock and takes it."
     group = "verification"
     // A single Docker sandbox shares the build container's volumes with every run (sandboxPrebuilt).
@@ -320,13 +320,13 @@ val sandboxImageTag: String = run {
     "marginalis-sandbox:" + digest.digest().joinToString("") { "%02x".format(it) }.take(12)
 }
 
-val sandboxImage by tasks.registering(Exec::class) {
+val sandboxImage = tasks.register<Exec>("sandboxImage") {
     description = "Builds the sandbox IDE's Docker image (a no-op once Docker has it cached)."
     group = "verification"
     commandLine("docker", "build", "-q", "-t", sandboxImageTag, layout.projectDirectory.dir("sandbox").asFile.absolutePath)
 }
 
-val sandboxPrebuilt by tasks.registering(Exec::class) {
+val sandboxPrebuilt = tasks.register<Exec>("sandboxPrebuilt") {
     description = "Builds this checkout's plugins once in the sandbox image, for sandboxes that start straight from them."
     group = "verification"
     dependsOn(sandboxImage, sandboxRunLocked)
@@ -462,4 +462,4 @@ tasks.named<info.solidsoft.gradle.pitest.PitestTask>("pitest") {
     childProcessJvmArgs = provider { test.allJvmArgs }
 }
 
-sandboxRunUnlock { mustRunAfter(sandboxPrebuilt, "uiSandboxTest") }
+sandboxRunUnlock.configure { mustRunAfter(sandboxPrebuilt, "uiSandboxTest") }
