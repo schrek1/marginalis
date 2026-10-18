@@ -108,7 +108,8 @@ plugin zip once (and is the one writer of the IDE index cache); `test`, `verify`
 that zip, so a broken compile stops the run after about two minutes. `e2e` runs on GitHub's free `ubuntu-24.04`
 runner (4 vCPU, 16 GB) with 4 sandboxes. It keeps the JUnit results, each scenario's IDE log, the timeout
 diagnostics and the shots as the `e2e-reports` artifact. The runner is a Linux host, where files a container writes
-into a bind mount stay root's: the harness hands them back to the runner's user (`rsync --chown`).
+into a bind mount stay root's: the harness copies the project back with `docker cp`, which writes as the runner's
+user.
 
 Measured on 2026-10-17: 10 runs out of 10 green on one commit, 12.3–17.7 min each. The runner is much slower than a
 desktop, and getting there showed where a scenario must wait for a condition rather than for time:
@@ -187,8 +188,13 @@ than the property, it opens a fork issue (or updates the open one) with both lin
 - **Screenshots** show the IDE frame painted inside the IDE (`shot(name)`, `SandboxUi.screenshotFrame`), never the
   desktop.
 - **A restart** can bring the tool window back hidden; the steps show it first.
+- **A stop is a user's Exit.** The harness asks the IDE to exit as the Exit action does, waits until it has (about
+  2 s, at most 60 s), then copies the project back, so whatever the project close writes reaches the next start.
+  Every scenario checks that its IDE exited; one that does not fails the stop, with a thread dump in
+  `<scenario>/diagnostics/`. Never run the exit as the robot's own EDT script: the robot server's HTTP thread waits
+  for that script while the exit waits for the server's shutdown hook, and the IDE hangs for good.
 - **The test project lives in the container** (Docker mode). The host folder `<runtime>/<scenario>/project` is the
-  copy the harness prepares before a start and reads back after a stop. While the IDE runs:
+  copy the harness prepares before a start and reads back once the IDE has exited. While the IDE runs:
   - read files the IDE writes (`.idea/workspace.xml`, `.idea/marginalis.json`) with `Sandbox.projectText(path)`;
   - after writing files into the host folder, call `SandboxUi.refreshProjectFiles()`, which copies them in
     (`Sandbox.pushProject()`) and refreshes the IDE.
@@ -210,8 +216,8 @@ script, with the same steps as the suite. It is no test runner. `sandbox/README.
   asleep Windows reports 640x480 and clamps the window until thread panels get no width.
 - **Docker:** `MARGINALIS_SANDBOX_DOCKER=1 py sandbox/sandbox.py start` runs it on the floor IDE in a container on
   a virtual screen, as the suite does.
-- `py sandbox/sandbox.py status` says whether it answers, `py sandbox/sandbox.py stop` saves its settings and
-  stops it.
+- `py sandbox/sandbox.py status` says whether it answers, `py sandbox/sandbox.py stop` exits it as a user would
+  (the project close saves everything) and kills it only if it does not exit within 60 s.
 - An experiment that runs sandboxes next to other work goes under the machine lock:
   `py sandbox/sandbox.py locked <command...>`. The lock ends with the command, so wrap the whole experiment (start,
   work, stop), not just the start.

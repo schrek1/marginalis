@@ -12,6 +12,7 @@ import java.nio.file.Path
 import java.time.Duration
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import kotlin.io.path.ExperimentalPathApi
@@ -57,17 +58,11 @@ object Sandbox {
         .toAbsolutePath()
     private val prebuilt: Path? = System.getProperty("marginalis.sandbox.prebuilt")?.let(Path::of)?.takeIf { it.resolve("plugins").exists() }
 
-    // The IDE in the container runs as root. Docker Desktop (Windows, macOS) maps what it writes into a bind mount to
-    // the host user; a Linux host keeps root as the owner, and the harness could no longer delete the project.
-    private val hostOwner: String? = if (System.getProperty("os.name").startsWith("Linux")) {
-        com.sun.security.auth.module.UnixSystem().let { user -> "${user.uid}:${user.gid}" }
-    } else {
-        null
-    }
-
     // `sandboxImage` tags the image by what it is built from (build.gradle.kts).
     private val image: String = System.getProperty("marginalis.sandbox.image") ?: "marginalis-sandbox"
     private val startTimeout = Duration.ofSeconds(900)
+    // A clean exit takes about 2 s; the margin is for a loaded CI runner, not for a hang.
+    private val exitTimeout = Duration.ofSeconds(60)
     private val http = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).connectTimeout(Duration.ofSeconds(1)).build()
 
     private val current = InheritableThreadLocal<Instance?>()
@@ -84,10 +79,13 @@ object Sandbox {
         current.set(Instance(runtime.resolve(name)))
     }
 
-    /** Stops the calling thread's sandbox and lets go of it. */
+    /** Stops the calling thread's sandbox and lets go of it, also when the stop fails. */
     fun close() {
-        current.get()?.stop(release = true)
-        current.remove()
+        try {
+            current.get()?.stop(release = true)
+        } finally {
+            current.remove()
+        }
     }
 
     private val sandbox: Instance get() = current.get() ?: error("no sandbox on this thread; a scenario opens one")
@@ -134,8 +132,11 @@ object Sandbox {
 
     /** Restarts the sandbox; a Docker sandbox keeps its container, so its port, IDE config and caches stay. */
     fun restart(fresh: Boolean, prepare: () -> Unit = {}) {
+        val begun = System.nanoTime()
         sandbox.stop(release = false)
+        val stopped = System.nanoTime()
         sandbox.start(fresh, prepare)
+        println("sandbox restarted in %.1f s (stop %.1f s)".format(Locale.ROOT, (System.nanoTime() - begun) / 1e9, (stopped - begun) / 1e9))
     }
 
     private class IdeExited(message: String) : IllegalStateException(message)
@@ -209,42 +210,25 @@ object Sandbox {
                 Launch.ATTACH -> false
             }
             if (!started) return
-            if (robotUp()) {
-                // Settings are saved explicitly first: the robot server goes down early in the shutdown, and a kill
-                // after that loses whatever the exit had not flushed yet (workspace.xml, app options).
-                // A failed or hung save must not keep the kill below from running: no sandbox may outlive its scenario.
-                runCatching {
-                    robot.runJs(
-                        """
-                        var store = com.intellij.configurationStore.StoreUtil;
-                        var projects = com.intellij.openapi.project.ProjectManager.getInstance().getOpenProjects();
-                        for (var i = 0; i < projects.length; i++) store.saveSettings(projects[i], true);
-                        store.saveSettings(com.intellij.openapi.application.ApplicationManager.getApplication(), true);
-                        """,
-                    )
-                }.onFailure { println("saving the sandbox's settings failed: $it") }
-            }
-            // Also with the robot down: the IDE may have written the project since the last copy, and the next start
-            // seeds the container from the host folder.
-            pullProject()
-            if (robotUp()) {
-                // The IDE closes the connection before answering.
-                runCatching { robot.runJs("com.intellij.openapi.application.ApplicationManager.getApplication().exit(true, true, false)", edt = true) }
-            }
+            // An IDE whose robot answers has to exit when asked, whatever the request itself returned.
+            val asked = robotUp()
+            if (asked) runCatching { requestExit() }.onFailure { println("asking the sandbox IDE to exit failed: $it") }
+            val exited = if (asked) ideExited(exitTimeout) else !ideRunning()
+            // An IDE that could not be asked has failed already, in what the scenario saw; it is only killed here.
+            val hang = if (exited) null else recordExitHang(asked).takeIf { asked }
             when (launch) {
                 Launch.DOCKER -> container?.let { name ->
-                    // The shutdown often hangs after the robot server is gone (a leak it reports); everything is saved
-                    // by now, so a short grace period and a kill are safe.
+                    if (!exited) docker("kill", name)
+                    // After the exit: closing the project writes it once more (the Margin tab parks itself, the last
+                    // save), and the next start seeds the container from the host folder.
+                    pullProject(name)
                     if (release) {
                         docker("rm", "-f", name)
                         liveContainers.remove(name)
                         container = null
-                    } else {
-                        docker("stop", "-t", "20", name)
                     }
                 }
                 Launch.XVFB -> ide?.let { process ->
-                    process.waitFor(20, TimeUnit.SECONDS)
                     process.descendants().forEach { it.destroyForcibly() }
                     process.destroyForcibly()
                 }
@@ -253,7 +237,60 @@ object Sandbox {
             ide?.destroy()
             ide = null
             cachedPort = null
-            println("sandbox stopped")
+            println("sandbox stopped${if (exited) "" else " (killed)"}")
+            check(hang == null) { hang!! }
+        }
+
+        // From a background call, not as the robot's own EDT script: the robot server's HTTP thread would wait for
+        // that script while the exit, on the EDT, waits for the server's shutdown hook, which waits for that thread.
+        // The application's invokeLater also gives the exit the write-intent lock a user's Exit has; without it,
+        // closing the project fails and no close listener runs.
+        private fun requestExit() = robot.runJs(
+            """
+            var app = com.intellij.openapi.application.ApplicationManager.getApplication();
+            app.invokeLater(new java.lang.Runnable({ run: function () { app.exit(true, true, false); } }),
+                com.intellij.openapi.application.ModalityState.any());
+            """,
+        )
+
+        /** Whether the IDE process ended within [timeout]; a Docker IDE is the container's main process. */
+        private fun ideExited(timeout: Duration): Boolean = when (launch) {
+            Launch.DOCKER -> {
+                val wait = ProcessBuilder("docker", "wait", container!!).redirectErrorStream(true).start()
+                wait.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS).also { if (!it) wait.destroyForcibly() }
+            }
+            Launch.XVFB -> ide!!.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)
+            Launch.ATTACH -> true
+        }
+
+        private fun ideRunning(): Boolean = when (launch) {
+            Launch.DOCKER -> containerRunning()
+            Launch.XVFB -> ide?.isAlive == true
+            Launch.ATTACH -> false
+        }
+
+        /** Records what the still running IDE is doing, before it is killed; returns what happened. */
+        private fun recordExitHang(asked: Boolean): String {
+            val what = if (asked) "did not exit within ${exitTimeout.seconds} s of being asked" else "could not be asked to exit (robot not answering)"
+            val dump = dir.resolve("diagnostics").resolve(LocalTime.now().format(DateTimeFormatter.ofPattern("HHmmss")) + "-ide-exit-threads.txt")
+            // jcmd answers once the dump is complete; a SIGQUIT dump would race the kill that follows. No quotes in the
+            // script: Java on Windows passes an argument's inner quotes to docker unescaped.
+            val threads = if (launch == Launch.DOCKER && containerRunning()) {
+                dockerOutput(
+                    "exec", container!!, "sh", "-c",
+                    "pid=\$(pgrep -f com.intellij.idea.Main | head -n 1) && \$(dirname \$(readlink /proc/\$pid/exe))/jcmd \$pid Thread.print -l",
+                )
+            } else {
+                null
+            }
+            val dumpNote = if (threads != null) {
+                Files.createDirectories(dump.parent)
+                Files.writeString(dump, threads)
+                "thread dump $dump"
+            } else {
+                "thread dump ${if (threadDump()) "in $logFile" else "not taken"}"
+            }
+            return "the sandbox IDE $what; $dumpNote".also { println("DIAG  $it") }
         }
 
         /** Starts the claimed container again, or claims one; the returned process follows its log. */
@@ -353,16 +390,22 @@ object Sandbox {
             }
         }
 
-        private fun pullProject() {
-            if (launch != Launch.DOCKER) return
-            val pulled = if (containerRunning()) {
-                val chown = hostOwner?.let { owner -> listOf("--chown=$owner") }.orEmpty()
-                docker("exec", container!!, "rsync", "-a", "--delete", *chown.toTypedArray(), "$CONTAINER_PROJECT/", "/project-host/")
-            } else {
-                -1
+        /**
+         * Replaces the host folder with the stopped container's project. `docker cp` writes as the calling user, so a
+         * Linux host can delete what the IDE (root in the container) wrote.
+         */
+        @OptIn(ExperimentalPathApi::class)
+        private fun pullProject(name: String) {
+            val pulled = dir.resolve("project.pulled")
+            if (pulled.exists()) pulled.deleteRecursively()
+            val exit = docker("cp", "$name:$CONTAINER_PROJECT/.", pulled.toString())
+            hostProjectStale = exit != 0
+            if (hostProjectStale) {
+                println("the IDE's project could not be copied back to the host (docker cp exit $exit)")
+                return
             }
-            hostProjectStale = pulled != 0
-            if (hostProjectStale) println("the IDE's project could not be copied back to the host (${if (pulled < 0) "container not running" else "rsync exit $pulled"})")
+            if (project.exists()) project.deleteRecursively()
+            Files.move(pulled, project)
         }
 
         /** A thread dump in the IDE log and a shot of the frame, for a wait that timed out. */

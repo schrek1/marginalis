@@ -45,7 +45,7 @@ Docker mode needs only Docker and Python.
 ```
 python sandbox.py start [--feature-dir PATH] [--fresh]   # build from PATH, start the IDE, wait until it answers
 python sandbox.py status
-python sandbox.py stop                                   # graceful exit (flushes workspace.xml), then kill
+python sandbox.py stop                                   # exits as a user would; killed only if not out in 60 s
 python sandbox.py locked <command...>                    # run a one-off experiment under the machine lock
 python robot.py js "<rhino script>" [--edt]              # run JS inside the sandbox JVM, print its String result
 python robot.py find "<xpath>"                           # components in the robot's hierarchy
