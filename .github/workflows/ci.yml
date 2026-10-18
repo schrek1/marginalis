@@ -20,7 +20,32 @@ concurrency:
 
 # The runner image is pinned: `ubuntu-latest` moved to Ubuntu 26, and that move is made on purpose (MARG-142).
 jobs:
-  build:
+  package:
+    # The plugin is built once, and every later job tests that zip; a broken compile stops the run here. The one
+    # writer of the IDE index, so an index is built at most once per key.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: true
+      - uses: ./.github/actions/ide-layout-index
+        with:
+          save: "true"
+      - name: Build the plugin zip
+        run: ./gradlew buildPlugin --console=plain
+      - uses: actions/upload-artifact@v7
+        with:
+          name: marginalis-plugin
+          path: build/distributions/*.zip
+          if-no-files-found: error
+
+  test:
+    needs: package
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -57,13 +82,8 @@ jobs:
         run: sudo apt-get install -y xvfb
       # Without the Java plugin in the IDE index, the platform tests run without Java.
       - uses: ./.github/actions/ide-layout-index
-        with:
-          # schreko_stable too: the fork's pull requests go into it and read its caches.
-          save: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/schreko_stable') }}
-      - name: Build plugin
-        # `build` alone runs checks but does not produce the distributable
-        # zip — `buildPlugin` does.
-        run: xvfb-run -a ./gradlew build buildPlugin --console=plain
+      - name: Tests and checks
+        run: xvfb-run -a ./gradlew build --console=plain
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
@@ -71,19 +91,19 @@ jobs:
           path: |
             build/test-results/test/
             core/build/test-results/test/
-      - uses: actions/upload-artifact@v7
-        with:
-          name: marginalis-plugin
-          path: build/distributions/*.zip
-          if-no-files-found: error
 
   e2e:
-    # The sandbox scenarios on the free runner: sandbox IDEs in Docker on a virtual screen, the plugin built once.
+    # The sandbox scenarios on the free runner: sandbox IDEs in Docker on a virtual screen, running package's zip.
     # Fewer sandboxes than on a desktop (4 vCPU, 16 GB); docs/testing.md has the measured settings.
+    needs: package
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: marginalis-plugin
+          path: build/package
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -95,7 +115,7 @@ jobs:
       - name: Sandbox scenarios
         env:
           MARGINALIS_SANDBOX_RUNTIME: ${{ github.workspace }}/build/sandbox-runtime
-        run: ./gradlew uiSandboxTest -Pmarginalis.sandbox.jobs=4 --console=plain
+        run: ./gradlew uiSandboxTest -Pmarginalis.sandbox.jobs=4 -Pmarginalis.pluginZip="$(ls build/package/*.zip)" --console=plain
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -108,9 +128,14 @@ jobs:
           if-no-files-found: ignore
 
   verify:
+    needs: package
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: marginalis-plugin
+          path: build/package
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -119,8 +144,8 @@ jobs:
         with:
           cache-read-only: true
       - uses: ./.github/actions/ide-layout-index
-      - name: Run IntelliJ Plugin Verifier
-        run: ./gradlew verifyPlugin --console=plain
+      - name: Run IntelliJ Plugin Verifier on package's zip
+        run: ./gradlew verifyPlugin -Pmarginalis.pluginZip="$(ls build/package/*.zip)" --console=plain
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -131,7 +156,7 @@ jobs:
   release:
     # A green push to schreko_stable is the release (stable-release.yml decides whether there is one to make). It runs
     # inside this run because a tag pushed with GITHUB_TOKEN would start no other workflow.
-    needs: [build, e2e, verify]
+    needs: [package, test, e2e, verify]
     if: github.event_name == 'push' && github.ref == 'refs/heads/schreko_stable'
     permissions:
       contents: write

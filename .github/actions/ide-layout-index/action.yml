@@ -6,16 +6,26 @@ name: IDE layout index
 description: Restores the checked index of the IDE's bundled plugins, or builds one that holds the Java plugin.
 inputs:
   save:
-    description: Cache an index this job had to build (the build job of a push only, the cache's one writer).
+    description: Cache an index this job had to build (the package job, the cache's one writer).
     default: "false"
 runs:
   using: composite
   steps:
+    # The index depends on the IDE and on the plugin that reads it, not on the rest of the build script: keyed by the
+    # whole script, any edit (sharding, Kotlin options) rebuilt it in every job. A line not found fails the job rather
+    # than freezing the key on a stale value.
+    - id: key
+      shell: bash
+      run: |
+        gradle_plugin=$(sed -n 's/.*id("org.jetbrains.intellij.platform") version "\([^"]*\)".*/\1/p' build.gradle.kts)
+        ide=$(sed -n 's/.*intellijIdeaCommunity("\([^"]*\)").*/\1/p' build.gradle.kts)
+        [ -n "$gradle_plugin" ] && [ -n "$ide" ] || { echo "no IntelliJ Platform Gradle plugin or IDE version in build.gradle.kts"; exit 1; }
+        echo "key=ide-layout-index-${{ runner.os }}-ipgp$gradle_plugin-ide$ide" >> "$GITHUB_OUTPUT"
     - id: restore
       uses: actions/cache/restore@v6
       with:
         path: .intellijPlatform/layoutIndex
-        key: ide-layout-index-${{ hashFiles('build.gradle.kts', 'settings.gradle.kts', 'gradle/wrapper/gradle-wrapper.properties') }}
+        key: ${{ steps.key.outputs.key }}
     - name: Index the IDE's bundled plugins
       if: steps.restore.outputs.cache-hit != 'true'
       shell: bash
@@ -39,4 +49,4 @@ runs:
       uses: actions/cache/save@v6
       with:
         path: .intellijPlatform/layoutIndex
-        key: ide-layout-index-${{ hashFiles('build.gradle.kts', 'settings.gradle.kts', 'gradle/wrapper/gradle-wrapper.properties') }}
+        key: ${{ steps.key.outputs.key }}
