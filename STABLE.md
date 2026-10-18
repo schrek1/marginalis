@@ -65,3 +65,4 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-141 | CI builds the plugin once: package, then test, verify and e2e on its zip | `chore/MARG-141-job-graph` | — | — | `5ab8b5e` |
 | MARG-134 | The Plugin Verifier checks the floor and the latest IntelliJ IDEA, from one version | `chore/MARG-134-floor-and-latest` | — | — | `4fbff33` |
 | MARG-101 | CI deletes the Gradle cache entries a newer one has replaced | `chore/MARG-101-cache-prune` | — | — | `4267445` |
+| MARG-158 | CI's latest IntelliJ IDEA is 2026.2.3 | `chore/MARG-158-latest-ide-2026-2-3` | — | — | `500c3b7` |
