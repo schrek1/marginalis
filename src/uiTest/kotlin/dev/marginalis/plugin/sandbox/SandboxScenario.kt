@@ -46,15 +46,18 @@ abstract class SandboxScenario(private val scenario: String) {
     @AfterAll
     fun stopSandbox() {
         val ideLog = Sandbox.ideLog
-        Sandbox.close()
+        val stopFailure = runCatching { Sandbox.close() }.exceptionOrNull()
         val elapsed = Duration.ofNanos(System.nanoTime() - started)
         Durations.record(javaClass.name, elapsed)
         val minutes = elapsed.toMillis() / 60_000.0
         report("INFO  $scenario ends at ${LocalTime.now().withNano(0)}")
         try {
-            // Read after the stop: errors the plugin raises while the IDE shuts down count too.
-            val errors = PluginErrors.inLog(if (Files.exists(ideLog)) Files.readAllLines(ideLog) else emptyList())
-            check("the IDE logged no error from the plugin", errors.isEmpty(), errors.firstOrNull()?.let { "${errors.size} entries in $ideLog, first: $it" })
+            case("ide_shutdown") {
+                check("the IDE exited when asked", stopFailure == null, stopFailure?.message)
+                // Read after the stop: errors the plugin raises while the IDE shuts down count too.
+                val errors = PluginErrors.inLog(if (Files.exists(ideLog)) Files.readAllLines(ideLog) else emptyList())
+                check("the IDE logged no error from the plugin", errors.isEmpty(), errors.firstOrNull()?.let { "${errors.size} entries in $ideLog, first: $it" })
+            }
         } finally {
             report("== $scenario: $passes pass, ${failures.size} fail, ${"%.1f".format(Locale.ROOT, minutes)} min")
         }

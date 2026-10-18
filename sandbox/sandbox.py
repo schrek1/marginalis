@@ -36,9 +36,6 @@ ROBOT_PORT = int(os.environ.get("MARGINALIS_ROBOT_PORT", "8082"))
 # window size whatever the monitor does (asleep it reports 640x480, which clamps every window), nothing on the
 # desktop, and the platform floor IDE (IntelliJ Community from the build) as CI runs it.
 DOCKER = os.environ.get("MARGINALIS_SANDBOX_DOCKER") == "1"
-# The container runs as root. Docker Desktop (Windows, macOS) maps what it writes into a bind mount to the host user;
-# a Linux host keeps root as the owner, so the copies brought out are handed to the host user.
-HOST_OWNER = f"{os.getuid()}:{os.getgid()}" if sys.platform.startswith("linux") else None
 CONTAINER = f"marginalis-sandbox-{ROBOT_PORT}"
 _GRADLE_PROPERTIES = dict(
     line.split("=", 1) for line in (REPO / "gradle.properties").read_text(encoding="utf-8").splitlines()
@@ -341,49 +338,67 @@ def push_project() -> None:
 
 
 def pull_project() -> None:
-    """Brings the IDE's copy back into the host folder, so the next start (and reads after the stop) see it."""
-    if container_running():
-        chown = [f"--chown={HOST_OWNER}"] if HOST_OWNER else []
-        subprocess.run(["docker", "exec", CONTAINER, "rsync", "-a", "--delete", *chown, "/work/runtime/project/",
-                        "/project-host/"], capture_output=True)
+    """Replaces the host folder with the stopped container's project, so the next start (and reads after the stop)
+    see what the IDE wrote, its project close included. `docker cp` writes as the calling user, so a Linux host can
+    delete what the IDE (root in the container) wrote."""
+    pulled = RUNTIME / "project.pulled"
+    shutil.rmtree(pulled, ignore_errors=True)
+    copied = subprocess.run(["docker", "cp", f"{CONTAINER}:/work/runtime/project/.", str(pulled)], capture_output=True)
+    if copied.returncode != 0:
+        print(f"the IDE's project could not be copied back to the host: {copied.stderr.decode(errors='replace').strip()}")
+        return
+    shutil.rmtree(PROJECT, ignore_errors=True)
+    pulled.rename(PROJECT)
+
+
+# Run from a background call, not as the robot's own EDT script: the robot server's HTTP thread would wait for that
+# script while the exit, on the EDT, waits for the server's shutdown hook, which waits for that thread. The
+# application's invokeLater also gives the exit the write-intent lock a user's Exit has; without it, closing the
+# project fails and no close listener runs.
+EXIT_SCRIPT = """
+    var app = com.intellij.openapi.application.ApplicationManager.getApplication();
+    app.invokeLater(new java.lang.Runnable({ run: function () { app.exit(true, true, false); } }),
+        com.intellij.openapi.application.ModalityState.any());
+"""
+# A clean exit takes about 2 s; the margin is for a loaded machine, not for a hang.
+EXIT_TIMEOUT_S = 60
+
+
+def ide_exited(pid: str | None) -> bool:
+    if DOCKER:
+        try:
+            subprocess.run(["docker", "wait", CONTAINER], capture_output=True, timeout=EXIT_TIMEOUT_S)
+            return True
+        except subprocess.TimeoutExpired:
+            return False
+    deadline = time.monotonic() + EXIT_TIMEOUT_S
+    while pid and process_alive(pid):
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(1)
+    return True
 
 
 def stop() -> None:
     pid = PID_FILE.read_text().strip() if PID_FILE.exists() else None
+    asked = False
     if robot_up():
         import robot
-        # Settings are saved explicitly first: the robot server goes down early in the shutdown, and a kill after
-        # that loses whatever the exit had not flushed yet (workspace.xml, app options).
+        asked = True
         try:
-            robot.run_js("""
-                var store = com.intellij.configurationStore.StoreUtil;
-                var projects = com.intellij.openapi.project.ProjectManager.getInstance().getOpenProjects();
-                for (var i = 0; i < projects.length; i++) store.saveSettings(projects[i], true);
-                store.saveSettings(com.intellij.openapi.application.ApplicationManager.getApplication(), true);
-            """)
+            robot.run_js(EXIT_SCRIPT)
         except (OSError, robot.RobotError) as error:
-            # A hung IDE never answers; the kill below still has to run.
-            print(f"saving the sandbox's settings failed ({type(error).__name__}); killing it")
-    # Also with the robot down: the IDE may have written the project since the last copy, and the next start seeds
-    # the container from the host folder.
-    pull_project()
-    if robot_up():
-        import robot
-        try:
-            robot.run_js("com.intellij.openapi.application.ApplicationManager.getApplication().exit(true, true, false)",
-                         edt=True)
-        except (OSError, robot.RobotError):
-            pass  # the IDE closes the connection before answering
+            print(f"asking the sandbox IDE to exit failed ({type(error).__name__})")
+    if asked and not ide_exited(pid):
+        print(f"the sandbox IDE did not exit within {EXIT_TIMEOUT_S}s of being asked; killing it")
     if pid:
-        # The shutdown often hangs after the robot server is gone (a leak it reports); everything is saved by now,
-        # so a short grace period and a kill are safe.
-        for _ in range(20):
-            if not process_alive(pid):
-                break
-            time.sleep(1)
         subprocess.run(["taskkill", "/T", "/F", "/PID", pid], capture_output=True)
         PID_FILE.unlink()
     if DOCKER:
+        subprocess.run(["docker", "kill", CONTAINER], capture_output=True)
+        # Also after a kill: the IDE may have written the project since the start, and the next start seeds the
+        # container from the host folder.
+        pull_project()
         subprocess.run(["docker", "rm", "-f", CONTAINER], capture_output=True)
     print("sandbox stopped")
 
