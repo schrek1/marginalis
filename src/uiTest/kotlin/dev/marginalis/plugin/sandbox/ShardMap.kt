@@ -14,8 +14,8 @@ import kotlin.io.path.exists
 import kotlin.io.path.readText
 
 /**
- * `sandbox/shards.json`: which of CI's e2e shards runs each scenario class (by simple name), and how long it took
- * there. `scripts/shard_map.py` rebuilds it from CI's logs; a scenario missing from it still runs.
+ * `sandbox/shards.json`: which of CI's e2e shards runs each scenario class (by simple name), and how long it takes.
+ * CI's e2e-plan writes it in every run (`scripts/shard_map.py`); a scenario missing from it still runs.
  */
 data class ShardMap(val shards: Int, val scenarios: Map<String, Placement>) {
 
@@ -97,7 +97,7 @@ class ShardFilter : PostDiscoveryFilter {
     init {
         if (spec != null) {
             notes.deleteIfExists()
-            if (!measured) note("sandbox/shards.json is missing; the scenarios are split by name, half on each shard. Build the map (docs/testing.md).")
+            if (!measured) note("no shard map (e2e-plan made none; its log says why); the scenarios are split by name, half on each shard.")
         }
     }
 
@@ -110,7 +110,7 @@ class ShardFilter : PostDiscoveryFilter {
         val scenario = ShardMap.scenarioOf(className)
         if (!map.runsOn(shard, scenario)) return FilterResult.excluded("runs on another shard")
         if (scenario != null && scenario !in map.scenarios && noted.add(scenario)) {
-            note("$scenario is not in sandbox/shards.json; it ran on shard $shard. Rebuild the map (docs/testing.md).")
+            note("$scenario is not in the shard map yet (no green run on schreko_stable measured it); it ran on shard $shard.")
         }
         return FilterResult.included("runs on shard $shard")
     }

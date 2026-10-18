@@ -12,3 +12,5 @@ out/
 /CLAUDE.local.md
 
 .features
+# Planned by CI's e2e-plan job in every run (scripts/shard_map.py), never committed
+/sandbox/shards.json

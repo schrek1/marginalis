@@ -112,19 +112,19 @@ check the release and `stable.py` wait for: green only when both shards were. Th
 container writes into a bind mount stay root's: the harness copies the project back with `docker cp`, which writes as
 the runner's user.
 
-**The shard map.** `sandbox/shards.json` assigns every scenario class to a shard, with its duration; the shards are
-balanced on those durations, the longest scenario first to the shard with the least time so far, and each shard also
-starts its scenarios longest first. `-Pmarginalis.sandbox.shard=<n>/2` runs one shard locally; the harness's own tests
-go with shard 1.
-- A scenario missing from the map still runs, on the shard with the least mapped time, and CI warns with
-  "Shard map" that the map needs rebuilding. Without any map (a branch that has none yet) the scenarios split by
-  name, sorted and alternating, so each shard gets half of them, and CI warns the same way.
+**The shard map.** CI balances the shards by itself; nobody maintains a map. Every scenario logs
+`scenario-duration <class> <seconds> s`, and in every run the `e2e-plan` job, alongside `package`, takes each
+scenario's median over the last 10 green runs on `schreko_stable` and writes `sandbox/shards.json` for both shards:
+the longest scenario first to the shard with the least time so far, and each shard starts its scenarios longest first.
+The map is never committed.
+- A scenario no green run has measured yet still runs, on the shard with the least mapped time, and CI warns with
+  "Shard map". Without any map (planning failed, or a branch with no history) the scenarios split by name, sorted and
+  alternating, so each shard gets half of them, and CI warns the same way; planning never fails a run.
 - The `e2e` job prints each shard's scenario time and warns ("e2e shards apart") when one took at least 3 minutes and
   half as long again as the other.
-- Every scenario logs `scenario-duration <class> <seconds> s`. To rebuild the map from the last 10 green runs on
-  `schreko_stable` (median per scenario): `python3 scripts/shard_map.py schrek1/marginalis [--runs N]`; from one local
-  run: `python3 scripts/shard_map.py --local <runtime>/durations-kotlin.json` (a desktop's durations are not CI's).
-  Commit the map in its own pull request.
+- Locally, `-Pmarginalis.sandbox.shard=<n>/2` runs one shard; the harness's own tests go with shard 1. The map for it:
+  `python3 scripts/shard_map.py schrek1/marginalis` (CI's durations), or `--local <runtime>/durations-kotlin.json`
+  (this machine's).
 
 Measured on 2026-10-17: 10 runs out of 10 green on one commit, 12.3–17.7 min each. The runner is much slower than a
 desktop, and getting there showed where a scenario must wait for a condition rather than for time:
