@@ -62,8 +62,20 @@ def change_notes(previous: str | None, added: list[str], others: list[str]) -> s
 
 
 def overview(tag: str) -> str:
-    return ("<p>Ondra's everyday Marginalis: upstream plus the fork's features.</p>"
-            + html_list([f"{key} {title}" for key, title in stable_features(tag)]))
+    """Every fork feature of `tag`, newest release first, each under the release since which its row is unchanged."""
+    remaining = stable_features(tag)
+    sections = []
+    release = tag
+    while remaining:
+        previous = previous_tag(release)
+        before = set(stable_features(previous)) if previous else set()
+        brought = [row for row in remaining if not previous or row not in before]
+        remaining = [row for row in remaining if row not in brought]
+        if brought:
+            sections.append(f"<h3>{html.escape(release)}</h3>"
+                            + html_list([f"{key} {title}" for key, title in reversed(brought)]))
+        release = previous
+    return "<p>Ondra's everyday Marginalis: upstream plus the fork's features, newest first.</p>" + "".join(sections)
 
 
 def release_notes(previous: str | None, added: list[str], others: list[str]) -> str:
