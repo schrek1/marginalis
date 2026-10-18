@@ -35,7 +35,7 @@ jobs:
           [ -n "$endpoints" ] || { echo "found no endpoints to check — parser broken?"; exit 1; }
           missing=0
           for e in $endpoints; do
-            grep -qE "^\| \`(GET|POST) $e[ ?\`]" "$guide" || { echo "MISSING from the guide's API table: $e"; missing=1; }
+            grep -qE "^\| \`(GET|POST) ${e}[ ?\`]" "$guide" || { echo "MISSING from the guide's API table: $e"; missing=1; }
           done
           exit $missing
       - uses: actions/setup-java@v6
