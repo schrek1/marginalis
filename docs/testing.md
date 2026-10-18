@@ -27,8 +27,9 @@ per check. Each feature has one scenario, a JUnit class on Remote-Robot in
 `src/uiTest/kotlin/dev/marginalis/plugin/sandbox/scenarios/`, and a runbook in `sandbox/runbooks/`. Gradle runs
 them as `uiSandboxTest`.
 
-The sandbox IDE is JetBrains' open-source IntelliJ IDEA 2026.2, the platform in daily use, without licensing; the
-platform floor (2025.2) keeps its compile, platform tests and Plugin Verifier in CI's `build` and `verify`. The floor
+The sandbox IDE is JetBrains' open-source IntelliJ IDEA of the latest release (2026.2, see
+[The latest IDE](#the-latest-ide)), the platform in daily use, without licensing; the platform floor (2025.2) keeps
+its compile and platform tests in CI's `build`, and the Plugin Verifier in `verify` checks both. The floor
 runs on JBR 21, where updating any plugin with Swing UI without a restart can fail on a platform thread that keeps its
 class loader, so scenarios run on JBR 25. Measured 2026-10-17: on a desktop the suite takes as long as on 2025.2
 (265–271 s vs 263–266 s, 2 rounds each); on CI's free runner `e2e` takes about 3 minutes longer (16.6 vs 13.4 min,
@@ -38,8 +39,8 @@ one run each: 0.8 min for the extra download, the rest more CPU per scenario).
 
 Docker gives every sandbox a virtual 2560x1440 screen, so scenarios behave the same on Windows, macOS, Linux and in
 CI, whatever the monitor does, and nothing appears on your desktop. The IDE is a layer of the image
-(`SANDBOX_IDE` in `sandbox/Dockerfile`, checked against the release's SHA-256); the plugins come from the host's Gradle
-(`sandboxPrebuilt`).
+(`marginalis.latestIde` in `gradle.properties`, checked against the release's SHA-256); the plugins come from the
+host's Gradle (`sandboxPrebuilt`).
 
 - **Needs:** Docker (Desktop on Windows and macOS, Engine on Linux). On Windows give WSL2 room for several IDEs in
   `%USERPROFILE%\.wslconfig`, then `wsl --shutdown` and start Docker again; memory is taken only while used:
@@ -115,6 +116,34 @@ desktop, and getting there showed where a scenario must wait for a condition rat
 - the tool window counts as shown once it stays on screen.
 
 A failure there is a bug to diagnose from the artifact, never a reason to rerun the job until it passes.
+
+## The latest IDE
+
+CI checks two IDE versions: the floor (2025.2, `since-build` 252) and the latest released IntelliJ IDEA.
+
+- **The floor:** compile and the platform tests in `build`, the Plugin Verifier in `verify` (the IDE JetBrains
+  recommends for the since-build range, the floor's latest bugfix build).
+- **The latest:** the Plugin Verifier in `verify` (the unified IntelliJ IDEA, which needs no licence for a headless
+  check) and the sandbox scenarios in `e2e` (the open-source build of the same version).
+
+Both verifications fail on the same problems: compatibility, missing dependencies, an invalid plugin, internal and
+scheduled-for-removal API usages. The latest version is one property pair in `gradle.properties`, which
+`pluginVerification`, the `sandboxImage` task and `sandbox/sandbox.py` read, so the two cannot drift apart:
+
+```
+marginalis.latestIde=2026.2
+marginalis.latestIde.sha256=<SHA-256 of idea-2026.2.tar.gz>
+```
+
+**Moving to a new release:**
+1. Take the checksum GitHub lists for the open-source build:
+   `gh api repos/JetBrains/intellij-community/releases/tags/idea/<version> --jq '.assets[]|select(.name=="idea-<version>.tar.gz")|.digest'`.
+2. Set both lines; the image tag includes them, so the next sandbox run builds the new IDE layer (about 0.9 GB, once
+   per machine).
+3. Open the PR: `verify` reports one verification per IDE, `e2e` runs every scenario on the new version. Green ships.
+
+The weekly `.github/workflows/latest-ide.yml` notices a release: when GitHub lists a newer open-source IntelliJ IDEA
+than the property, it opens a fork issue (or updates the open one) with both lines filled in.
 
 ## Adding a scenario
 

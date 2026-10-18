@@ -1,0 +1,67 @@
+# Notices a new IntelliJ IDEA release: CI checks the floor and the latest released IntelliJ IDEA
+# (`marginalis.latestIde` in gradle.properties), so once JetBrains releases a newer one, a fork issue says so, with the
+# two lines that move both the Plugin Verifier and the sandbox image to it (docs/testing.md → The latest IDE).
+# The open-source build on GitHub is the reference: the sandbox runs it, and it is published after the unified one.
+name: Latest IDE
+
+on:
+  schedule:
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+# The runner image is pinned: `ubuntu-latest` moved to Ubuntu 26, and that move is made on purpose (MARG-142).
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Compare with JetBrains' latest IntelliJ IDEA release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          current=$(sed -n 's/^marginalis\.latestIde=//p' gradle.properties | tr -d '\r')
+          [ -n "$current" ] || { echo "marginalis.latestIde not found in gradle.properties"; exit 1; }
+          # The newest by version, not by date: a bugfix of an older line is often published after a newer release.
+          latest=$(gh api 'repos/JetBrains/intellij-community/releases?per_page=100' \
+            --jq '.[] | select((.draft or .prerelease) | not) | .tag_name | select(test("^idea/[0-9]+([.][0-9]+)+$")) | ltrimstr("idea/")' \
+            | sort -V | tail -1)
+          [ -n "$latest" ] || { echo "found no IntelliJ IDEA release on GitHub; has the release list changed?"; exit 1; }
+          echo "the build checks IntelliJ IDEA $current; the latest release is $latest"
+          if [ "$(printf '%s\n%s\n' "$current" "$latest" | sort -V | tail -1)" = "$current" ]; then
+            echo "up to date"
+            exit 0
+          fi
+          digest=$(gh api "repos/JetBrains/intellij-community/releases/tags/idea/$latest" \
+            --jq ".assets[] | select(.name == \"idea-$latest.tar.gz\") | .digest")
+          case "$digest" in
+            sha256:*) sha256=${digest#sha256:} ;;
+            *) echo "idea-$latest.tar.gz has no published checksum yet; the next run looks again"; exit 0 ;;
+          esac
+          title="IntelliJ IDEA $latest is out: the latest IDE in CI moves to it"
+          cat > body.md <<EOF
+          **Why:** CI checks the plugin on the floor and on the latest released IntelliJ IDEA. The build checks $current; JetBrains has released $latest.
+
+          **Expected:** in \`gradle.properties\`:
+
+          \`\`\`
+          marginalis.latestIde=$latest
+          marginalis.latestIde.sha256=$sha256
+          \`\`\`
+
+          Then CI proves it: the Plugin Verifier on $latest and the sandbox scenarios on its open-source build (docs/testing.md → The latest IDE).
+
+          _Opened by the weekly \`latest-ide.yml\`, which keeps this issue current until the move lands._
+          EOF
+          open=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'label:maintain in:title "the latest IDE in CI moves to it"' \
+            --json number --jq '.[0].number // empty')
+          if [ -n "$open" ]; then
+            gh issue edit "$open" --repo "$GITHUB_REPOSITORY" --title "MARG-$open: $title" --body-file body.md
+          else
+            url=$(gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body-file body.md \
+              --label fork-only --label platform --label maintain --label P2)
+            gh issue edit "${url##*/}" --repo "$GITHUB_REPOSITORY" --title "MARG-${url##*/}: $title"
+          fi
