@@ -59,3 +59,4 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-133 | The Margin tab comes back once the project's configuration is done | `fix/MARG-133-tab-open-without-blocking` | — | — | `aa1dbb6` |
 | MARG-141 | CI runs on ubuntu-24.04 until the move to Ubuntu 26 is made on purpose | `chore/MARG-141-pin-ubuntu-24-04` | — | — | `c3bb791` |
 | MARG-140 | ci.yml is actionlint-clean | `chore/MARG-140-actionlint-clean` | — | — | `6b40848` |
+| MARG-149 | The plugin's Overview lists the fork features newest first, under their release | `feat/MARG-149-overview-by-release` | — | — | `ef351e8` |
