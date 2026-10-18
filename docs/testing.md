@@ -117,7 +117,8 @@ balanced on those durations, the longest scenario first to the shard with the le
 starts its scenarios longest first. `-Pmarginalis.sandbox.shard=<n>/2` runs one shard locally; the harness's own tests
 go with shard 1.
 - A scenario missing from the map still runs, on the shard with the least mapped time, and CI warns with
-  "Shard map" that the map needs rebuilding.
+  "Shard map" that the map needs rebuilding. Without any map (a branch that has none yet) the scenarios split by
+  name, sorted and alternating, so each shard gets half of them, and CI warns the same way.
 - The `e2e` job prints each shard's scenario time and warns ("e2e shards apart") when one took at least 3 minutes and
   half as long again as the other.
 - Every scenario logs `scenario-duration <class> <seconds> s`. To rebuild the map from the last 10 green runs on

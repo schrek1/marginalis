@@ -8,7 +8,7 @@ import org.junit.platform.engine.support.descriptor.MethodSource
 import org.junit.platform.launcher.PostDiscoveryFilter
 import java.nio.file.Files
 import java.nio.file.Path
-import kotlin.io.path.appendText
+import java.nio.file.StandardOpenOption
 import kotlin.io.path.deleteIfExists
 import kotlin.io.path.exists
 import kotlin.io.path.readText
@@ -51,6 +51,26 @@ data class ShardMap(val shards: Int, val scenarios: Map<String, Placement>) {
         }
 
         fun readIfPresent(): ShardMap? = file.takeIf { it.exists() }?.let(::read)
+
+        /** The split without measured durations (a branch with no map yet): sorted by name, alternating. */
+        fun byName(scenarios: List<String>, shards: Int): ShardMap = ShardMap(
+            shards,
+            scenarios.sorted().withIndex().associate { (position, name) -> name to Placement(position % shards + 1, 0.0) },
+        )
+
+        /** The simple names of the scenario classes, from the compiled scenarios package. */
+        fun scenarioClasses(): List<String> {
+            val loader = SandboxScenario::class.java.classLoader
+            val packageDir = Path.of(SandboxScenario::class.java.protectionDomain.codeSource.location.toURI())
+                .resolve("dev/marginalis/plugin/sandbox/scenarios")
+            return Files.list(packageDir).use { files ->
+                files.map { it.fileName.toString() }.toList()
+                    .filter { it.endsWith(".class") && '$' !in it }
+                    .map { it.removeSuffix(".class") }
+                    .filter { SandboxScenario::class.java.isAssignableFrom(Class.forName("dev.marginalis.plugin.sandbox.scenarios.$it", false, loader)) }
+                    .sorted()
+            }
+        }
     }
 }
 
@@ -60,13 +80,19 @@ data class ShardMap(val shards: Int, val scenarios: Map<String, Placement>) {
  */
 class ShardFilter : PostDiscoveryFilter {
     private val spec: String? = System.getProperty("marginalis.sandbox.shard")
-    private val map: ShardMap? = spec?.let { ShardMap.read(ShardMap.file) }
+    private val measured: Boolean = spec != null && ShardMap.file.exists()
+    private val map: ShardMap? = spec?.let {
+        if (measured) ShardMap.read(ShardMap.file) else ShardMap.byName(ShardMap.scenarioClasses(), it.substringAfter('/').toInt())
+    }
     private val shard: Int? = spec?.let { map!!.shardIndex(it) }
     // Lazy: the same classpath runs the IDE Starter tests, which never touch the sandbox.
     private val notes: Path by lazy { Sandbox.runtime.resolve("shard-map-notes.txt") }
 
     init {
-        if (spec != null) notes.deleteIfExists()
+        if (spec != null) {
+            notes.deleteIfExists()
+            if (!measured) note("sandbox/shards.json is missing; the scenarios are split by name, half on each shard. Build the map (docs/testing.md).")
+        }
     }
 
     private val noted = mutableSetOf<String>()
@@ -92,6 +118,6 @@ class ShardFilter : PostDiscoveryFilter {
     private fun note(text: String) {
         println("WARN  $text")
         Files.createDirectories(notes.parent)
-        notes.appendText("$text\n")
+        Files.writeString(notes, "$text\n", StandardOpenOption.CREATE, StandardOpenOption.APPEND)
     }
 }

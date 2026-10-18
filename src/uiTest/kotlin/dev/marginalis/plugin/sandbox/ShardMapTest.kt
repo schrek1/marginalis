@@ -1,6 +1,7 @@
 package dev.marginalis.plugin.sandbox
 
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
@@ -28,6 +29,24 @@ class ShardMapTest {
     @Test
     fun `the harness's own tests run on the first shard only`() {
         listOf(map.runsOn(1, scenario = null), map.runsOn(2, scenario = null)) shouldBe listOf(true, false)
+    }
+
+    @Test
+    fun `without a measured map the scenarios split by name, half of them on each shard`() {
+        // GIVEN - a branch that has no shard map yet
+        val scenarios = listOf("Delta", "Alpha", "Charlie", "Bravo", "Echo")
+
+        // WHEN - the scenarios are split by name alone
+        val byName = ShardMap.byName(scenarios, shards = 2)
+
+        // THEN - sorted by name, they alternate between the shards
+        scenarios.associateWith(byName::shardOf) shouldBe
+            mapOf("Alpha" to 1, "Bravo" to 2, "Charlie" to 1, "Delta" to 2, "Echo" to 1)
+    }
+
+    @Test
+    fun `the scenario classes are found on the classpath`() {
+        ShardMap.scenarioClasses() shouldContain "ApiReplyRerendersTest"
     }
 
     @Test
