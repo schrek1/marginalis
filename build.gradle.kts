@@ -48,6 +48,8 @@ sourceSets {
 }
 
 val ideStarterVersion = "262.9437.185"
+// The latest released IntelliJ IDEA (gradle.properties): the Plugin Verifier's second IDE and the sandbox image's.
+val latestIde: String = providers.gradleProperty("marginalis.latestIde").get()
 // The same version as the robot-server plugin sandbox/init.gradle installs into the sandbox IDE.
 val remoteRobotVersion = "0.11.23"
 
@@ -160,11 +162,10 @@ intellijPlatform {
     }
 
     pluginVerification {
-        // CI runs this against JetBrains' recommended IDE set for our
-        // since-build range — the proof behind the declared 2025.2+ support.
-        // Fail on real problems; deprecated/experimental/internal *usages*
-        // are reported but advisory (and NOT_DYNAMIC is a known, accepted
-        // limitation for now).
+        // CI checks both ends of the declared 2025.2+ support: the floor, as JetBrains' recommended IDE set for our
+        // since-build range resolves it, and the latest released IntelliJ IDEA, the one the sandbox scenarios run.
+        // Fail on real problems; deprecated/experimental *usages* are reported but advisory (and NOT_DYNAMIC is a
+        // known, accepted limitation for now).
         failureLevel = listOf(
             org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel.COMPATIBILITY_PROBLEMS,
             org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel.MISSING_DEPENDENCIES,
@@ -178,6 +179,8 @@ intellijPlatform {
         )
         ides {
             recommended()
+            // The unified distribution: a headless verification needs no licence.
+            create(org.jetbrains.intellij.platform.gradle.IntelliJPlatformType.IntellijIdea, latestIde)
         }
     }
 }
@@ -309,20 +312,31 @@ allprojects {
     }
 }
 
+// In the order sandbox/sandbox.py hashes them too, so both harnesses build one image under one tag.
+val sandboxImageBuildArgs: List<String> = listOf(
+    "SANDBOX_IDE=$latestIde",
+    "SANDBOX_IDE_SHA256=${providers.gradleProperty("marginalis.latestIde.sha256").get()}",
+)
+
 // The image is tagged by what it is built from: sandboxes of another checkout (or the Python harness on another
-// branch) building a different entrypoint under one shared tag would swap the image under running scenarios.
+// branch) building a different entrypoint or IDE under one shared tag would swap the image under running scenarios.
 val sandboxImageTag: String = run {
     val digest = MessageDigest.getInstance("SHA-256")
     listOf("Dockerfile", "docker-entrypoint.sh").forEach { name ->
         digest.update(layout.projectDirectory.file("sandbox/$name").asFile.readText().replace("\r\n", "\n").toByteArray())
     }
+    sandboxImageBuildArgs.forEach { buildArg -> digest.update("$buildArg\n".toByteArray()) }
     "marginalis-sandbox:" + digest.digest().joinToString("") { "%02x".format(it) }.take(12)
 }
 
 val sandboxImage = tasks.register<Exec>("sandboxImage") {
     description = "Builds the sandbox IDE's Docker image (a no-op once Docker has it cached)."
     group = "verification"
-    commandLine("docker", "build", "-q", "-t", sandboxImageTag, layout.projectDirectory.dir("sandbox").asFile.absolutePath)
+    commandLine(
+        listOf("docker", "build", "-q") +
+            sandboxImageBuildArgs.flatMap { buildArg -> listOf("--build-arg", buildArg) } +
+            listOf("-t", sandboxImageTag, layout.projectDirectory.dir("sandbox").asFile.absolutePath),
+    )
 }
 
 apply(from = "sandbox/ui-ide.gradle")

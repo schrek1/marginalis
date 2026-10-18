@@ -65,7 +65,7 @@ object Sandbox {
         null
     }
 
-    // `sandboxImage` tags the image by its Dockerfile and entrypoint (build.gradle.kts).
+    // `sandboxImage` tags the image by what it is built from (build.gradle.kts).
     private val image: String = System.getProperty("marginalis.sandbox.image") ?: "marginalis-sandbox"
     private val startTimeout = Duration.ofSeconds(900)
     private val http = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).connectTimeout(Duration.ofSeconds(1)).build()

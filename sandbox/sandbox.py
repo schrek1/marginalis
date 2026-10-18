@@ -40,10 +40,17 @@ DOCKER = os.environ.get("MARGINALIS_SANDBOX_DOCKER") == "1"
 # a Linux host keeps root as the owner, so the copies brought out are handed to the host user.
 HOST_OWNER = f"{os.getuid()}:{os.getgid()}" if sys.platform.startswith("linux") else None
 CONTAINER = f"marginalis-sandbox-{ROBOT_PORT}"
+_GRADLE_PROPERTIES = dict(
+    line.split("=", 1) for line in (REPO / "gradle.properties").read_text(encoding="utf-8").splitlines()
+    if "=" in line and not line.lstrip().startswith("#"))
+# The sandbox IDE, the one build.gradle.kts's `sandboxImage` passes too, in the same order.
+IMAGE_BUILD_ARGS = [f"SANDBOX_IDE={_GRADLE_PROPERTIES['marginalis.latestIde']}",
+                    f"SANDBOX_IDE_SHA256={_GRADLE_PROPERTIES['marginalis.latestIde.sha256']}"]
 # Tagged by what goes into the image: runs of different checkouts build their own image instead of swapping each
-# other's entrypoint under running containers.
+# other's entrypoint or IDE under running containers.
 IMAGE = "marginalis-sandbox:" + hashlib.sha256(b"".join(
-    (HERE / name).read_bytes().replace(b"\r\n", b"\n") for name in ("Dockerfile", "docker-entrypoint.sh"))).hexdigest()[:12]
+    [(HERE / name).read_bytes().replace(b"\r\n", b"\n") for name in ("Dockerfile", "docker-entrypoint.sh")]
+    + [f"{build_arg}\n".encode() for build_arg in IMAGE_BUILD_ARGS])).hexdigest()[:12]
 # Plugins built once by `sandbox.py build`; a sandbox started with this set runs the IDE without Gradle.
 PREBUILT = Path(os.environ["MARGINALIS_SANDBOX_PREBUILT"]) if os.environ.get("MARGINALIS_SANDBOX_PREBUILT") else None
 # Clear of the host's JetBrains IDEs (63342 and up) and of Windows' dynamic port range (49152 and up), where
@@ -160,7 +167,8 @@ def build_on_host(feature_dir: Path, prebuilt: Path) -> None:
 def start_in_docker(feature_dir: Path) -> subprocess.Popen:
     """Builds the image (a no-op once cached) and runs the container; the returned process follows its log and
     ends with it. The build output, the sandbox IDE's config and the Gradle cache live in volumes between starts."""
-    subprocess.run(["docker", "build", "-q", "-t", IMAGE, str(HERE)], check=True, stdout=subprocess.DEVNULL)
+    build_args = [arg for build_arg in IMAGE_BUILD_ARGS for arg in ("--build-arg", build_arg)]
+    subprocess.run(["docker", "build", "-q", *build_args, "-t", IMAGE, str(HERE)], check=True, stdout=subprocess.DEVNULL)
     subprocess.run(["docker", "rm", "-f", CONTAINER], capture_output=True)
     source = (["-e", "MARGINALIS_SANDBOX_MODE=prebuilt",
                "--mount", f"type=bind,source={PREBUILT.resolve()},target=/prebuilt,readonly"] if PREBUILT else

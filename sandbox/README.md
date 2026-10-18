@@ -72,8 +72,9 @@ python robot.py screenshot out.png --frame               # the sandbox frame, pa
 
 UI work depends on the window size: a sleeping monitor makes Windows report 640x480 and clamps the frame until
 thread panels get no width. In Docker the sandbox IDE runs on a virtual 2560x1440 screen (Xvfb). The prebuilt
-sandboxes run JetBrains' open-source IntelliJ IDEA 2026.2 (`SANDBOX_IDE` in `Dockerfile`, a layer of the image, from
-the JetBrains/intellij-community releases), the platform in daily use, not the plugin's 2025.2 floor that the build
+sandboxes run JetBrains' open-source IntelliJ IDEA of the latest release (`marginalis.latestIde` in
+`gradle.properties`, passed to `Dockerfile` as `SANDBOX_IDE`, a layer of the image, from the
+JetBrains/intellij-community releases), the platform in daily use, not the plugin's 2025.2 floor that the build
 compiles and verifies against: up to 2025.3 the IDE runs on JBR 21, where a platform thread can keep any plugin's
 class loader, so an update without a restart cannot be tested there. The open-source build has no licensing: the
 unified distribution asked for a subscription on CI runners and blocked the scenarios. Run mode (the IDE through
