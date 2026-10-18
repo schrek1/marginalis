@@ -55,3 +55,5 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-122 | Every CI job that runs Gradle takes a checked IDE index | `chore/MARG-123-ci-actions-node24` | — | — | `22ff681` |
 | MARG-131 | A thread whose code an edit removed stays orphaned | `fix/MARG-131-no-pin-after-edit` | — | — | `07fdd66` |
 | MARG-126 | Sandbox scenarios run on the open-source IntelliJ IDEA 2026.2 | `chore/MARG-126-sandbox-on-2026-2` | — | — | `0e653ec` |
+| MARG-136 | The plugin compiles for the floor's Kotlin stdlib (API and language 2.2) | `fix/MARG-133-tab-open-without-blocking` | — | — | `26fb956` |
+| MARG-133 | The Margin tab comes back once the project's configuration is done | `fix/MARG-133-tab-open-without-blocking` | — | — | `aa1dbb6` |

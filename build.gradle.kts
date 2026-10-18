@@ -438,6 +438,10 @@ tasks.withType<JavaCompile>().configureEach {
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
     compilerOptions.jvmTarget = JvmTarget.JVM_21
+    // The plugin runs on the IDE's own Kotlin stdlib, on the floor (2025.2) a 2.2 one: code built for 2.3 crashed every
+    // resume of a plugin coroutine there (debug metadata 2 vs 1), and newer stdlib calls would fail at runtime.
+    compilerOptions.apiVersion = org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_2
+    compilerOptions.languageVersion = org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_2
 }
 
 pitest {
