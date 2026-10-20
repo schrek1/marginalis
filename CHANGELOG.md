@@ -83,6 +83,8 @@ History before 0.1.19 lives in git tags.
   Project node. The Guided Layout menu in the tool window header
   switches to the folder tree as before, or to one node per file, and
   each project remembers its choice.
+### Fixed
+
 - A thread you left open shows the agent's reply when you come back to
   it. A reply that arrived while its file, or the Margin tab, was in a
   background tab used to stay hidden until something else changed on
@@ -95,6 +97,29 @@ History before 0.1.19 lives in git tags.
   agent posts into another thread above it, and keeps your cursor. The
   same goes for a new project thread you are writing. Reading without
   a draft, the card at the top of your view stays put too.
+
+## [0.2.4] - 2026-10-19
+
+Thanks to [@schrek1](https://github.com/schrek1) for the features in this release.
+
+### Added
+
+- "Select in Marginalis" on a thread jumps straight to it in the
+  Marginalis tool window.
+- Select Opened Thread finds the thread on your line, in the editor or a
+  pull request's diff, or else the file.
+- Navigate › Select In takes you from a file to its threads in the
+  Marginalis tool window.
+- Expand and Collapse in the Marginalis tool window tame a long review
+  one level at a time. Each press reaches one level further out from
+  your selection: its folder, each folder that contains it, its section,
+  then every section. The button names the level its next press acts on.
+
+### Fixed
+
+- Folds you make in the Marginalis tool window last. A reply or a
+  filter change no longer opens the folders you folded, or folds the
+  Resolved section you opened.
 
 ## [0.2.3] - 2026-10-16
 

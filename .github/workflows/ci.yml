@@ -118,6 +118,7 @@ jobs:
         if: failure()
         with:
           name: test-reports
+          include-hidden-files: true
           path: |
             build/test-results/test/
             core/build/test-results/test/

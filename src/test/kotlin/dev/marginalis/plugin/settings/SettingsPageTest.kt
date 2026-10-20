@@ -182,6 +182,19 @@ class SettingsPageTest : HttpContractTestCase() {
         assertEquals(listOf("Bard"), bylines(user.panel()))
     }
 
+    fun testSwitchingGitHubAvatarsRedrawsTheAvatarsOfPanelsAlreadyOpen() {
+        val id = agent.addOnLine(5)
+        val panel = user.open(id)
+        val before = user.avatars(panel).single()
+        val page = page()
+
+        page.tick("Show GitHub avatars when no picture is set", false)
+        page.apply()
+        PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+
+        assertNotSame(before, user.avatars(panel).single())
+    }
+
     fun testListingSomeoneTwiceIsRefusedAndNothingIsSaved() {
         val page = page()
         page.addPerson("mona", nickname = "Mo")

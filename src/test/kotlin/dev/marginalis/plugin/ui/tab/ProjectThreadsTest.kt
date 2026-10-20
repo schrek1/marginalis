@@ -1,7 +1,11 @@
 package dev.marginalis.plugin.ui.tab
 
 import dev.marginalis.plugin.settings.MarginalisSettings
+import dev.marginalis.plugin.testing.DisplayOnly
+import dev.marginalis.plugin.testing.NeedsADisplay
+import org.junit.runner.RunWith
 
+@RunWith(NeedsADisplay::class)
 class ProjectThreadsTest : MarginTabTestCase() {
 
     fun testAnAgentsQuestionsArriveExpandedWithTheOldestOnTop() {
@@ -178,6 +182,16 @@ class ProjectThreadsTest : MarginTabTestCase() {
 
         assertEquals("Agreed.", agent.threads().single { it.id == alpha }.messages().last().string("body"))
         assertEquals(listOf("✈ Shall we call it Oak? ● [expanded]"), shown())
+    }
+
+    @DisplayOnly
+    fun testANewProjectThreadsDraftSurvivesSwitchingToAFileAndBack() {
+        tab.newProjectThread()
+
+        tab.openFileInFront(sample())
+        tab.bringToFront()
+
+        assertEquals(listOf("[draft] new comment — unsent"), shown())
     }
 
     fun testFileThreadsNeverShowInTheTab() {

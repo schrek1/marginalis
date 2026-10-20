@@ -5,9 +5,13 @@ import com.intellij.notification.Notifications
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.actionSystem.impl.SimpleDataContext
 import com.intellij.testFramework.PlatformTestUtil
+import dev.marginalis.plugin.testing.DisplayOnly
+import dev.marginalis.plugin.testing.NeedsADisplay
 import dev.marginalis.plugin.ui.MarginalisPalette
 import dev.marginalis.plugin.ui.WalkthroughNavigator
+import org.junit.runner.RunWith
 
+@RunWith(NeedsADisplay::class)
 class RevealTest : MarginTabTestCase() {
 
     private fun walkthrough(): List<String> {
@@ -143,5 +147,21 @@ class RevealTest : MarginTabTestCase() {
 
         assertTrue(tab.isInFront)
         assertEquals(listOf("✉ The release plan ● [expanded]"), shown())
+    }
+
+    @DisplayOnly
+    fun testAReferenceToAReplyThatArrivedWhileItsFileWasBehindTheTabScrollsToIt() {
+        sample()
+        val id = agent.addOnLine(5, "body" to (1..120).joinToString("\n\n") { "Paragraph $it." })
+        tab.openFileInFront(SAMPLE)
+        val panel = user.open(id)
+        tab.bringToFront()
+        val reply = agent.reply(id, "The very last word.").json["message_id"]!!.asString
+        agent.ask("See mg:${reply.take(8)}")
+
+        user.followLink(tab.panel("See mg:"), "mg:${reply.take(8)}")
+        tab.settle()
+
+        assertFalse(user.messageBody(panel, "The very last word.").visibleRect.isEmpty)
     }
 }

@@ -154,6 +154,7 @@ class ThreadPanel(
     }
     private var agreeableId: String? = null
     private var renderedMessages: List<Message> = emptyList()
+    private var rendered: Rendering? = null
     var showsNewTags = false
         private set
     private var whileAttached: Disposable? = null
@@ -390,7 +391,7 @@ class ThreadPanel(
         return toolbar.component
     }
 
-    private fun isDraft(): Boolean = MarginalisStore.getInstance(project).threads.byId(thread.id) == null
+    private fun isDraft(): Boolean = MarginalisStore.getInstance(project).isDraft(thread)
 
     private fun resolveAction(): AnAction = object : AnAction() {
         override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
@@ -528,6 +529,7 @@ class ThreadPanel(
 
     fun reveal(message: Message) {
         if (message.id !in messageComponents) showFullHistory()
+        validate()
         messageComponents[message.id]?.let { it.scrollRectToVisible(Rectangle(it.size)) }
         markReadIfSeen()
     }
@@ -850,12 +852,29 @@ class ThreadPanel(
     private var watchingThread: AutoCloseable? = null
     private val threadUpdate = CoalescedEdtRunner(project) {
         if (watchingThread == null) return@CoalescedEdtRunner
-        if (MarginalisStore.getInstance(project).threads.byId(thread.id) == null) {
+        if (isDeleted()) {
             onClose()
         } else {
-            refresh()
+            if (currentRendering() != rendered) refresh()
             markReadIfSeen()
         }
+    }
+
+    private fun isDeleted(): Boolean = MarginalisStore.getInstance(project).threads.byId(thread.id) == null && !isDraft()
+
+    private fun catchUpOnChangesMissedInABackgroundTab() = threadUpdate.request()
+
+    private fun currentRendering() = Rendering(
+        MarginalisStore.getInstance(project).threads.revisionOf(thread.id),
+        thread.messages.map { it.seenBy.toSet() },
+        statusText(),
+    )
+
+    private fun statusText(): String = when {
+        isDraft() -> "new comment — unsent"
+        thread.status is ThreadStatus.Open -> "open${walkPosition()}"
+        thread.status is ThreadStatus.Resolved -> "resolved by ${thread.resolvedBy?.displayName ?: "?"}"
+        else -> "orphaned (anchor deleted)"
     }
 
     override fun addNotify() {
@@ -875,10 +894,7 @@ class ThreadPanel(
         ApplicationManager.getApplication().messageBus.connect(attached)
             .subscribe(AvatarsListener.TOPIC, AvatarsListener { repaint() })
         editor?.scrollingModel?.addVisibleAreaListener({ markReadIfSeen() }, attached)
-        // Nothing watches the thread while detached (a background editor tab is removed from the
-        // hierarchy), so catch up on what changed meanwhile; this also marks it read once seen.
-        // A draft is not in the store yet, and the update would close it as deleted.
-        if (!isDraft()) threadUpdate.request()
+        catchUpOnChangesMissedInABackgroundTab()
     }
 
     override fun removeNotify() {
@@ -892,12 +908,7 @@ class ThreadPanel(
     }
 
     fun refresh() {
-        statusLabel.text = when {
-            isDraft() -> "new comment — unsent"
-            thread.status is ThreadStatus.Open -> "open${walkPosition()}"
-            thread.status is ThreadStatus.Resolved -> "resolved by ${thread.resolvedBy?.displayName ?: "?"}"
-            else -> "orphaned (anchor deleted)"
-        }
+        rendered = currentRendering().also { statusLabel.text = it.status }
         // "Submit", not "Send": nothing is transmitted — the message waits in
         // the local store for the agent's next read.
         submitAction.putValue(
@@ -1151,6 +1162,8 @@ class ThreadPanel(
     private fun seenByNames(message: Message): String {
         return "Seen by ${message.seenBy.sorted().joinToString(", ") { agentNames[it] ?: it }}"
     }
+
+    private data class Rendering(val threadRevision: Long, val receipts: List<Set<String>>, val status: String)
 
     private class Chip(text: String, private val pill: JBColor, textColor: JBColor) : JBLabel(text) {
 

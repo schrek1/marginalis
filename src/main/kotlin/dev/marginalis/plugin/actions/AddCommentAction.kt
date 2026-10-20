@@ -6,13 +6,12 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.fileEditor.FileDocumentManager
-import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.util.TextRange
-import com.intellij.openapi.vfs.VfsUtilCore
 import dev.marginalis.core.AnchorPolicy
 import dev.marginalis.core.CommentThread
 import dev.marginalis.core.Segment
 import dev.marginalis.core.ThreadStatus
+import dev.marginalis.plugin.ProjectPaths
 import dev.marginalis.plugin.store.MarginalisStore
 import dev.marginalis.plugin.ui.ThreadChooserPopup
 import dev.marginalis.plugin.ui.ThreadInlayManager
@@ -32,8 +31,7 @@ class AddCommentAction : AnAction() {
         val editor = e.getData(CommonDataKeys.EDITOR) ?: return
         val project = e.project ?: return
         val vFile = FileDocumentManager.getInstance().getFile(editor.document) ?: return
-        val base = project.guessProjectDir() ?: return
-        val relPath = VfsUtilCore.getRelativePath(vFile, base) ?: return
+        val relPath = ProjectPaths.of(project, vFile) ?: return
 
         val document = editor.document
         val segment = captureSegment(editor)

@@ -6,9 +6,9 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
-import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
 import dev.marginalis.core.Turn
+import dev.marginalis.plugin.ProjectPaths
 import dev.marginalis.plugin.store.MarginalisStore
 
 object FileTurn {
@@ -16,8 +16,7 @@ object FileTurn {
     fun of(project: Project, file: VirtualFile): Turn? {
         val turns = MarginalisStore.getInstance(project).fileTurns
         if (turns.isEmpty()) return null
-        val base = project.guessProjectDir() ?: return null
-        val path = VfsUtilCore.getRelativePath(file, base) ?: return null
+        val path = ProjectPaths.of(project, file) ?: return null
         return turns.of(path)
     }
 

@@ -18,6 +18,7 @@ import com.intellij.openapi.ui.TestDialog
 import com.intellij.openapi.ui.TestDialogManager
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.wm.ToolWindow
+import com.intellij.openapi.wm.ToolWindowBalloonShowOptions
 import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.testFramework.PlatformTestUtil
 import com.intellij.testFramework.TestActionEvent
@@ -48,6 +49,7 @@ import java.awt.event.KeyEvent
 import java.awt.event.MouseEvent
 import javax.swing.Icon
 import javax.swing.JComponent
+import javax.swing.JFrame
 import javax.swing.JLabel
 import javax.swing.JList
 import javax.swing.JMenuItem
@@ -64,6 +66,9 @@ class MarginToolWindow(private val project: Project, private val disposable: Dis
         var actions: List<AnAction> = emptyList()
         var shownIcon: Icon? = null
         val titles = mutableListOf<String>()
+        val balloons = mutableListOf<String>()
+        var visible = true
+        var activations = 0
 
         override fun getId(): String = ID
         override fun setTitleActions(actions: List<AnAction>) {
@@ -79,6 +84,20 @@ class MarginToolWindow(private val project: Project, private val disposable: Dis
         override fun setStripeTitle(title: String) {
             titles += title
         }
+        override fun isVisible(): Boolean = visible
+        override fun show(runnable: Runnable?) {
+            visible = true
+            runnable?.run()
+        }
+        override fun hide(runnable: Runnable?) {
+            visible = false
+            runnable?.run()
+        }
+        override fun activate(runnable: Runnable?, autoFocusContents: Boolean, forced: Boolean) {
+            visible = true
+            activations++
+            runnable?.run()
+        }
     }
 
     val window = Window(project)
@@ -90,6 +109,9 @@ class MarginToolWindow(private val project: Project, private val disposable: Dis
     init {
         val manager = object : ToolWindowHeadlessManagerImpl(project) {
             override fun getToolWindow(id: String?): ToolWindow? = if (id == ID) window else super.getToolWindow(id)
+            override fun notifyByBalloon(options: ToolWindowBalloonShowOptions) {
+                if (options.toolWindowId == ID) window.balloons += options.htmlBody
+            }
         }
         project.replaceService(ToolWindowManager::class.java, manager, disposable)
         MarginalisToolWindowFactory().createToolWindowContent(project, window)
@@ -223,6 +245,16 @@ class MarginToolWindow(private val project: Project, private val disposable: Dis
 
     fun isExpanded(text: String, under: String? = null): Boolean = tree.isExpanded(rowOf(text, under))
 
+    fun select(text: String, under: String? = null) {
+        tree.selectionPath = tree.getPathForRow(rowOf(text, under))
+        settle()
+    }
+
+    fun selectNothing() {
+        tree.clearSelection()
+        settle()
+    }
+
     fun canJumpToSource(): Boolean {
         val action = ActionManager.getInstance().getAction("EditSource")
         val event = TestActionEvent.createTestEvent(action, dataContext())
@@ -315,6 +347,7 @@ class MarginToolWindow(private val project: Project, private val disposable: Dis
             val action = action(text)
             val event = event(action)
             action.update(event)
+            check(event.presentation.isEnabled) { "$text is greyed out" }
             action.actionPerformed(event)
         } finally {
             TestDialogManager.setTestDialog(TestDialog.DEFAULT)
@@ -431,6 +464,35 @@ class MarginToolWindow(private val project: Project, private val disposable: Dis
     private fun mouse(id: Int, at: Point, clickCount: Int) {
         val modifiers = if (id == MouseEvent.MOUSE_CLICKED) 0 else InputEvent.BUTTON1_DOWN_MASK
         tree.dispatchEvent(MouseEvent(tree, id, System.currentTimeMillis(), modifiers, at.x, at.y, at.x, at.y, clickCount, false, MouseEvent.BUTTON1))
+    }
+
+    fun selectOpenedThread(context: DataContext = SimpleDataContext.getProjectContext(project)) {
+        val action = action("Select Opened Thread")
+        val event = TestActionEvent.createTestEvent(action, context)
+        action.update(event)
+        check(event.presentation.isEnabled) { "Select Opened Thread is greyed out" }
+        action.actionPerformed(event)
+        settle()
+    }
+
+    fun showOnScreen(width: Int, height: Int) {
+        val screen = object : JFrame() {
+            override fun isShowing(): Boolean = true
+        }
+        Disposer.register(disposable) { screen.dispose() }
+        screen.contentPane.add(panel)
+        screen.setSize(width, height)
+        screen.addNotify()
+        screen.rootPane.setBounds(0, 0, width, height)
+        screen.validate()
+        settle()
+    }
+
+    fun isSelectionInView(): Boolean {
+        settle()
+        panel.rootPane?.validate()
+        val bounds = tree.getPathBounds(tree.selectionPath ?: return false) ?: return false
+        return tree.visibleRect.contains(bounds)
     }
 
     fun selectedPath(): List<String> {

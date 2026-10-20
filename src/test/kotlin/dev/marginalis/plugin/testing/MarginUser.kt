@@ -1,10 +1,13 @@
 package dev.marginalis.plugin.testing
 
+import com.intellij.ide.DataManager
+import com.intellij.ide.impl.HeadlessDataManager
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionToolbar
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.CommonDataKeys
+import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.actionSystem.KeyboardShortcut
 import com.intellij.openapi.actionSystem.Presentation
 import com.intellij.openapi.actionSystem.Separator
@@ -47,8 +50,10 @@ import dev.marginalis.plugin.ui.ThreadGutterIconRenderer
 import dev.marginalis.plugin.ui.ThreadInlayManager
 import dev.marginalis.plugin.ui.ThreadPanel
 import dev.marginalis.plugin.ui.WalkthroughNavigator
+import java.awt.Component
 import java.awt.KeyboardFocusManager
 import java.awt.event.ActionEvent
+import java.awt.event.FocusEvent
 import java.awt.event.HierarchyEvent
 import java.awt.event.KeyEvent
 import javax.swing.AbstractButton
@@ -58,6 +63,7 @@ import javax.swing.JEditorPane
 import javax.swing.JLabel
 import javax.swing.JList
 import javax.swing.KeyStroke
+import javax.swing.SwingUtilities
 import javax.swing.event.HyperlinkEvent
 import javax.swing.event.HyperlinkListener
 
@@ -103,7 +109,7 @@ class MarginUser(private val project: Project, private val disposable: Disposabl
         return UIUtil.findComponentsOfType(panel, ActionLink::class.java).single { it.isVisible && it.text.startsWith("@") }.text
     }
 
-    private fun mention(panel: ThreadPanel, agentId: String) {
+    fun mention(panel: ThreadPanel, agentId: String) {
         val composer = composer(panel)
         UiInterceptors.register(object : UiInterceptors.UiInterceptor<JBPopup>(JBPopup::class.java) {
             override fun doIntercept(popup: JBPopup) {
@@ -205,6 +211,14 @@ class MarginUser(private val project: Project, private val disposable: Disposabl
 
     fun panel(editor: Editor = editor()): ThreadPanel = panels(editor).single()
 
+    fun whileInABackgroundTab(panel: ThreadPanel, editor: Editor = editor(), meanwhile: () -> Unit) {
+        panel.removeNotify()
+        meanwhile()
+        PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+        if (SwingUtilities.isDescendingFrom(panel, editor.contentComponent)) panel.addNotify()
+        PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+    }
+
     fun gutterIcon(file: String, line: Int): ThreadGutterIconRenderer? = gutterIconsOnLine(file, line).firstOrNull()
 
     fun gutterIconsOnLine(file: String, line: Int): List<ThreadGutterIconRenderer> {
@@ -277,7 +291,7 @@ class MarginUser(private val project: Project, private val disposable: Disposabl
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
     }
 
-    private fun editorContext(editor: Editor) = SimpleDataContext.builder()
+    fun editorContext(editor: Editor): DataContext = SimpleDataContext.builder()
         .add(CommonDataKeys.PROJECT, project)
         .add(CommonDataKeys.EDITOR, editor)
         .build()
@@ -286,6 +300,24 @@ class MarginUser(private val project: Project, private val disposable: Disposabl
         composer(panel).text = text
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
     }
+
+    fun focusComposer(panel: ThreadPanel) {
+        val composer = composer(panel)
+        composer.focusGained(FocusEvent(composer, FocusEvent.FOCUS_GAINED))
+        PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+    }
+
+    private var productionData = false
+
+    fun dataContextOf(component: Component): DataContext {
+        if (!productionData) {
+            HeadlessDataManager.fallbackToProductionDataManager(disposable)
+            productionData = true
+        }
+        return DataManager.getInstance().getDataContext(component)
+    }
+
+    fun replyBoxContext(panel: ThreadPanel): DataContext = dataContextOf(composer(panel).editor!!.contentComponent)
 
     fun composer(panel: ThreadPanel): EditorTextField {
         panel.focusReply()
@@ -330,6 +362,9 @@ class MarginUser(private val project: Project, private val disposable: Disposabl
         pane.fireHyperlinkUpdate(HyperlinkEvent(pane, HyperlinkEvent.EventType.ACTIVATED, url, href))
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
     }
+
+    fun messageBody(panel: ThreadPanel, text: String): JEditorPane =
+        UIUtil.findComponentsOfType(panel, JEditorPane::class.java).single { it.document.getText(0, it.document.length).contains(text) }
 
     fun hasLink(panel: ThreadPanel, href: String): Boolean =
         UIUtil.findComponentsOfType(panel, JEditorPane::class.java).any { it.text.contains("href=\"$href\"") }

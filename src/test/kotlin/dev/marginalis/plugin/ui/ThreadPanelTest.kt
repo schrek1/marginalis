@@ -9,7 +9,9 @@ import com.intellij.testFramework.PlatformTestUtil
 import com.intellij.util.ui.UIUtil
 import dev.marginalis.plugin.settings.MarginalisSettings
 import dev.marginalis.plugin.store.Authors
+import dev.marginalis.plugin.store.MarginalisStore
 import dev.marginalis.plugin.testing.Relays
+import dev.marginalis.plugin.testing.RenderedBody
 import dev.marginalis.plugin.transport.HttpContractTestCase
 
 class ThreadPanelTest : HttpContractTestCase() {
@@ -205,6 +207,18 @@ class ThreadPanelTest : HttpContractTestCase() {
         val last = agent.threads().single().messages().last()
         assertEquals("Agreed.", last.string("body"))
         assertEquals("claude-main", last.string("to"))
+    }
+
+    fun testAnFyiStopsOfferingAgreeOnceItIsRead() {
+        sample()
+        val id = agent.addOnLine(5, "intent" to "fyi")
+        val panel = user.open(id)
+        assertTrue(user.visibleLinks(panel).contains("Agree"))
+
+        panel.markRead()
+        settle()
+
+        assertFalse(user.visibleLinks(panel).contains("Agree"))
     }
 
     fun testAgreeIsOfferedOnlyWhenAnAgentSpokeLast() {
@@ -431,6 +445,162 @@ class ThreadPanelTest : HttpContractTestCase() {
         settle()
 
         assertEquals(emptyList<ThreadPanel>(), user.panels())
+    }
+
+    fun testAReplyThatArrivedWhileThePanelWasInABackgroundTabShowsWhenItComesBack() {
+        sample()
+        val id = agent.addOnLine(5)
+        val panel = user.open(id)
+
+        user.whileInABackgroundTab(panel) { agent.reply(id, "Posted while you were away.") }
+
+        assertTrue(user.shownText(panel).contains("Posted while you were away."))
+    }
+
+    fun testAReopenWhileThePanelWasInABackgroundTabShowsWhenItComesBack() {
+        sample()
+        val id = agent.addOnLine(5)
+        agent.post("comment_resolve", "thread_id" to id)
+        val panel = user.open(id)
+
+        user.whileInABackgroundTab(panel) { agent.post("comment_reopen", "thread_id" to id) }
+
+        assertTrue(user.shownText(panel).lines().contains("open"))
+    }
+
+    fun testAReadReceiptWhileThePanelWasInABackgroundTabShowsWhenItComesBack() {
+        sample()
+        val id = agent.addOnLine(5)
+        user.reply(id, "Why?")
+        val panel = user.open(id)
+
+        user.whileInABackgroundTab(panel) { agent.threads() }
+
+        assertTrue(user.shownText(panel).lines().contains("✓ seen"))
+    }
+
+    fun testANewCommentsDraftAndItsAddresseeSurviveABackgroundTab() {
+        sample()
+        reviewer.addOnLine(9)
+        user.comment(SAMPLE, 12)
+        val draft = user.panel()
+        user.mention(draft, "claude-review")
+        user.type(draft, "for you")
+        val other = agent.addOnLine(5)
+
+        user.whileInABackgroundTab(draft) { agent.reply(other, "Posted on another thread.") }
+
+        assertEquals(listOf(draft), user.panels())
+        assertTrue(user.shownText(draft).lines().contains("new comment — unsent"))
+        assertEquals("for you", user.composer(draft).text)
+        assertTrue(user.visibleLinks(draft).contains("@Claude · review ✕"))
+    }
+
+    fun testAnUnsentReplySurvivesCatchingUpOnAnAgentsReply() {
+        sample()
+        val id = agent.addOnLine(5)
+        val panel = user.open(id)
+        user.type(panel, "half a thought")
+
+        user.whileInABackgroundTab(panel) { agent.reply(id, "Posted while you were away.") }
+
+        assertTrue(user.shownText(panel).contains("Posted while you were away."))
+        assertEquals("half a thought", user.composer(panel).text)
+    }
+
+    fun testAThreadDeletedWhileItsPanelWasInABackgroundTabLeavesNoPanel() {
+        sample()
+        val id = agent.addOnLine(5)
+        val panel = user.open(id)
+
+        user.whileInABackgroundTab(panel) { agent.post("comment_clear_all", "file" to SAMPLE) }
+
+        assertEquals(emptyList<ThreadPanel>(), user.panels())
+    }
+
+    fun testAThreadAddedAboveWhileThePanelWasInABackgroundTabMovesItsStepWhenItComesBack() {
+        sample()
+        agent.addOnLine(5)
+        val panel = user.open(agent.addOnLine(9))
+        assertTrue(user.shownText(panel).lines().contains("open · step 2/2"))
+
+        user.whileInABackgroundTab(panel) { agent.addOnLine(3) }
+
+        assertTrue(user.shownText(panel).lines().contains("open · step 3/3"))
+    }
+
+    fun testAThreadResolvedWhileThePanelWasInABackgroundTabDropsItsStepWhenItComesBack() {
+        sample()
+        val earlier = agent.addOnLine(5)
+        val panel = user.open(agent.addOnLine(9))
+
+        user.whileInABackgroundTab(panel) { agent.post("comment_resolve", "thread_id" to earlier) }
+
+        assertTrue(user.shownText(panel).lines().contains("open"))
+    }
+
+    fun testAPanelSentBackBeforeItCaughtUpStaysAsItWas() {
+        sample()
+        val id = agent.addOnLine(5)
+        val panel = user.open(id)
+        panel.removeNotify()
+        agent.reply(id, "Posted while you were away.")
+
+        panel.addNotify()
+        panel.removeNotify()
+        settle()
+
+        assertFalse(user.shownText(panel).contains("Posted while you were away."))
+        assertTrue(panel in UIUtil.findComponentsOfType(user.editor().contentComponent, ThreadPanel::class.java))
+        assertFalse(user.thread(id).messages.last().readByUser)
+    }
+
+    fun testComingBackFromABackgroundTabAgainAndAgainAddsNoListeners() {
+        sample()
+        val id = agent.addOnLine(5)
+        val panel = user.open(id)
+        val listening = MarginalisStore.getInstance(project).threads.listenerCount
+
+        repeat(3) { user.whileInABackgroundTab(panel) {} }
+
+        assertEquals(listening, MarginalisStore.getInstance(project).threads.listenerCount)
+    }
+
+    fun testASelectionInAMessageSurvivesABackgroundTabWhenNothingChanged() {
+        sample()
+        val id = agent.addOnLine(5, "body" to "Extract this loop.")
+        val panel = user.open(id)
+        RenderedBody.of(panel).select("Extract")
+
+        user.whileInABackgroundTab(panel) {}
+
+        assertEquals("Extract", RenderedBody.of(panel).selection("Extract"))
+    }
+
+    fun testASelectionInAMessageSurvivesABackgroundTabWhileAnotherThreadChanged() {
+        sample()
+        val id = agent.addOnLine(5, "body" to "Extract this loop.")
+        val other = agent.addOnLine(9)
+        val panel = user.open(id)
+        RenderedBody.of(panel).select("Extract")
+
+        user.whileInABackgroundTab(panel) { agent.reply(other, "Posted on another thread.") }
+
+        assertEquals("Extract", RenderedBody.of(panel).selection("Extract"))
+    }
+
+    fun testAPanelWhoseHostKeepsItClosesOnceItSeesItsThreadWasDeletedMeanwhile() {
+        sample()
+        val id = agent.addOnLine(5)
+        var closed = false
+        val panel = ThreadPanel(project, null, user.thread(id), ensureStored = {}, onClose = { closed = true }, hostWidth = { 400 })
+        agent.post("comment_clear_all", "file" to SAMPLE)
+
+        panel.addNotify()
+        settle()
+        panel.removeNotify()
+
+        assertTrue(closed)
     }
 
     fun testCommandEnterInTheComposerSubmits() {
