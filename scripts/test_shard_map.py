@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from shard_map import balance, durations_in_log, medians, simple_names
+from shard_map import balance, ci_history, durations_in_log, medians, simple_names
 
 SCRIPT = Path(__file__).resolve().parent / "shard_map.py"
 
@@ -35,6 +35,60 @@ class CommandLineTest(unittest.TestCase):
 
             self.assertNotEqual(0, run.returncode)
             self.assertFalse(out.exists())
+
+
+class FakeGitHub:
+    """Answers the gh calls ci_history makes: green runs, their jobs, the e2e jobs' logs. A run id in `failing`
+    fails its jobs call `failing[id]` times in a row."""
+
+    def __init__(self, logs: dict[int, str], failing: dict[int, int] | None = None):
+        self.logs = logs
+        self.failing = dict(failing or {})
+
+    def __call__(self, *args: str) -> str:
+        if args[:2] == ("run", "list"):
+            return json.dumps([{"databaseId": run} for run in self.logs])
+        if args[0] == "api":
+            run = int(args[1].split("/runs/")[1].split("/")[0])
+            if self.failing.get(run, 0) > 0:
+                self.failing[run] -= 1
+                raise subprocess.CalledProcessError(1, ["gh", *args], stderr="HTTP 502: Bad Gateway")
+            return json.dumps({"jobs": [{"name": "e2e (1/2)", "id": run * 10}, {"name": "e2e", "id": run * 10 + 1}]})
+        return self.logs[int(args[args.index("--job") + 1]) // 10]
+
+
+class CiHistoryTest(unittest.TestCase):
+
+    def test_a_run_whose_jobs_cannot_be_read_is_left_out_and_the_others_count(self):
+        # GIVEN - three green runs, the middle one's jobs unreadable however often they are asked for
+        github = FakeGitHub({1: "scenario-duration A 10.0 s", 2: "scenario-duration A 99.0 s", 3: "scenario-duration A 30.0 s"},
+                            failing={2: 99})
+        notes = []
+
+        # WHEN - the history is read
+        history = ci_history("acme/shop", 3, gh=github, report=notes.append)
+
+        # THEN - the plan uses the two readable runs and says which run it left out and why
+        self.assertEqual([{"A": 10.0}, {"A": 30.0}], history)
+        self.assertTrue(any("run 2" in note and "Bad Gateway" in note for note in notes), notes)
+
+    def test_a_call_that_fails_once_is_asked_again(self):
+        github = FakeGitHub({1: "scenario-duration A 10.0 s"}, failing={1: 1})
+
+        self.assertEqual([{"A": 10.0}], ci_history("acme/shop", 1, gh=github, report=lambda note: None))
+
+    def test_each_run_reports_how_many_durations_it_gave(self):
+        # GIVEN - one run with two scenarios and one whose log holds none
+        github = FakeGitHub({1: "scenario-duration A 10.0 s\nscenario-duration B 5.0 s", 2: "no durations here"})
+        notes = []
+
+        # WHEN - the history is read
+        history = ci_history("acme/shop", 2, gh=github, report=notes.append)
+
+        # THEN - the empty run is no history, and the notes say what each run gave
+        self.assertEqual([{"A": 10.0, "B": 5.0}], history)
+        self.assertIn("run 1: 2 scenario durations", notes)
+        self.assertIn("run 2: 0 scenario durations", notes)
 
 
 class DurationsInLogTest(unittest.TestCase):
