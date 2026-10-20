@@ -331,6 +331,17 @@ val sandboxRunLocked = tasks.register("sandboxRunLocked") {
 
 tasks.test {
     systemProperty("marginalis.rootProjectName", rootProject.name)
+    // settings.gradle.kts drops an IDE index without Java; one built again without it would fail the code-fence tests
+    // far from the cause.
+    val ideIndexes = layout.projectDirectory.dir(".intellijPlatform/layoutIndex")
+    doFirst {
+        val withoutJava = ideIndexes.asFile.listFiles { file -> file.extension == "json" }.orEmpty()
+            .filter { index -> "\"id\":\"com.intellij.java\"" !in index.readText() }
+        check(withoutJava.isEmpty()) {
+            "the IDE index ${withoutJava.joinToString { it.name }} lacks the Java plugin " +
+                "(intellij-platform-gradle-plugin#2192): run the build again, it indexes the IDE anew"
+        }
+    }
 }
 
 allprojects {
