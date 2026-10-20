@@ -364,24 +364,41 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
 
     // --- an open thread panel -----------------------------------------------------------------------------------
 
-    /** Runs a button of the thread header (e.g. "Next Step") with that button's own data context. */
+    /**
+     * Runs a button of the thread header (e.g. "Next Step") with that button's own data context. A missing button fails
+     * with what the panel shows, whether it is on screen, and how many panels show the thread.
+     */
     fun pressPanelAction(threadId: String, text: String) {
         val escaped = lit(text)
-        val token = js(
-            FIND + """
-            var button = find(component, function (c) {
-                return c instanceof com.intellij.openapi.actionSystem.impl.ActionButton
-                    && c.getPresentation().getText() == $escaped;
-            });
-            if (button == null) throw 'no panel button ' + $escaped;
-            var action = button.getAction();
-            var event = com.intellij.openapi.actionSystem.AnActionEvent.createEvent(
-                action, com.intellij.ide.DataManager.getInstance().getDataContext(button), button.getPresentation().clone(),
-                'MarginalisSandbox', com.intellij.openapi.actionSystem.ActionUiKind.NONE, null);
-            String(performLater(action, event))
-            """,
-            threadPanel(threadId),
-        )
+        val token = try {
+            js(
+                FIND + """
+                var button = find(component, function (c) {
+                    return c instanceof com.intellij.openapi.actionSystem.impl.ActionButton
+                        && c.getPresentation().getText() == $escaped;
+                });
+                if (button == null) {
+                    var shown = [];
+                    find(component, function (c) {
+                        if (c instanceof com.intellij.openapi.actionSystem.impl.ActionButton) shown.push(String(c.getPresentation().getText()));
+                        return false;
+                    });
+                    throw 'no panel button ' + $escaped + '; the panel is ' + (component.isShowing() ? '' : 'not ')
+                        + 'on screen and shows [' + shown.join(', ') + ']';
+                }
+                var action = button.getAction();
+                var event = com.intellij.openapi.actionSystem.AnActionEvent.createEvent(
+                    action, com.intellij.ide.DataManager.getInstance().getDataContext(button), button.getPresentation().clone(),
+                    'MarginalisSandbox', com.intellij.openapi.actionSystem.ActionUiKind.NONE, null);
+                String(performLater(action, event))
+                """,
+                threadPanel(threadId),
+            )
+        } catch (error: Exception) {
+            val panels = Sandbox.robot.findAll("//div[@javaclass='dev.marginalis.plugin.ui.ThreadPanel']")
+                .count { panel -> js("String(threadOf(component).getId())", panel) == threadId }
+            throw IllegalStateException("${error.message}; panels showing thread $threadId: $panels", error)
+        }
         awaitActionRan(text, token)
     }
 
