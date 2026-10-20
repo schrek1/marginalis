@@ -141,6 +141,8 @@ class MarginalisStore(private val project: Project) : Disposable {
 
     fun removeMarker(thread: CommentThread): RangeHighlighter? = markers.remove(thread.id)
 
+    fun isDraft(thread: CommentThread): Boolean = threads.byId(thread.id) == null && thread.messages.isEmpty()
+
     fun syncLine(thread: CommentThread): Int? {
         val marker = markers[thread.id]
         if (marker != null) {

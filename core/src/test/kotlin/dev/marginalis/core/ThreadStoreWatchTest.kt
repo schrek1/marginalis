@@ -7,6 +7,7 @@ import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeSameInstanceAs
 import kotlin.test.Test
+import kotlin.test.assertEquals
 
 class ThreadStoreWatchTest {
 
@@ -125,5 +126,41 @@ class ThreadStoreWatchTest {
         store.add(thread())
 
         heard.shouldBeEmpty()
+    }
+
+    @Test
+    fun `every change moves its thread to a new revision`() {
+        val store = ThreadStore()
+        val thread = thread()
+        val first = store.revisionOf(thread.id)
+        store.add(thread)
+        val added = store.revisionOf(thread.id)
+
+        store.notifyChanged(thread)
+
+        assertEquals(3, setOf(first, added, store.revisionOf(thread.id)).size)
+    }
+
+    @Test
+    fun `a change to another thread moves no revision`() {
+        val store = ThreadStore()
+        val watched = thread().also(store::add)
+        val other = thread().also(store::add)
+        val before = store.revisionOf(watched.id)
+
+        store.notifyChanged(other)
+
+        assertEquals(before, store.revisionOf(watched.id))
+    }
+
+    @Test
+    fun `rehydrating moves no revision`() {
+        val store = ThreadStore()
+        val thread = thread()
+        val before = store.revisionOf(thread.id)
+
+        store.addSilently(thread)
+
+        assertEquals(before, store.revisionOf(thread.id))
     }
 }

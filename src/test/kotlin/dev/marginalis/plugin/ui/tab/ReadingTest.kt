@@ -147,4 +147,62 @@ class ReadingTest : TabInFrontTestCase() {
 
         assertEquals("From GitHub · PR #7  ▾ 2 comments", shown().first())
     }
+
+    fun testAReplyWhileTheTabIsBehindAFileWaitsUnreadAndShowsAsNewWhenYouComeBack() {
+        val id = agent.ask("Which release name?")
+        tab.click("Which release name?")
+        tab.click("Which release name?")
+        tab.openFileInFront(sample())
+
+        agent.reply(id, "Any thoughts?")
+        assertEquals("1 open · 1 your move · 0 agent's move · 1 new", tab.counts())
+        tab.bringToFront()
+
+        val shown = user.shownText(tab.panel("Which release name?")).lines()
+        assertTrue(shown.toString(), shown.contains("Any thoughts?"))
+        assertTrue(shown.toString(), shown.contains("new"))
+        assertEquals("1 open · 1 your move · 0 agent's move", tab.counts())
+    }
+
+    fun testWhenOnlyClickingCountsAReplyShownOnComingBackStaysUnread() {
+        val id = agent.ask("Which release name?")
+        tab.click("Which release name?")
+        tab.click("Which release name?")
+        user.changeProjectTabSettings { whatCountsAsRead("Only when you click into the thread") }
+        tab.openFileInFront(sample())
+
+        agent.reply(id, "Any thoughts?")
+        tab.bringToFront()
+
+        assertTrue(user.shownText(tab.panel("Which release name?")).lines().contains("Any thoughts?"))
+        assertEquals("1 open · 1 your move · 0 agent's move · 1 new", tab.counts())
+    }
+
+    fun testAReplyShownWhenTheTabComesBackInAnInactiveWindowStaysUnread() {
+        val id = agent.ask("Which release name?")
+        tab.click("Which release name?")
+        tab.click("Which release name?")
+        tab.openFileInFront(sample())
+        agent.reply(id, "Any thoughts?")
+        tab.switchToAnotherApp()
+
+        tab.bringToFront()
+
+        assertTrue(user.shownText(tab.panel("Which release name?")).lines().contains("Any thoughts?"))
+        assertEquals("1 open · 1 your move · 0 agent's move · 1 new", tab.counts())
+    }
+
+    fun testAThreadOpenInAFileShowsAReplyThatArrivedWhileTheFileWasBehindTheTab() {
+        sample()
+        val id = agent.addOnLine(5)
+        tab.openFileInFront(SAMPLE)
+        val panel = user.open(id)
+        tab.bringToFront()
+        assertFalse(panel.isDisplayable)
+
+        agent.reply(id, "Posted while you were away.")
+        tab.openFileInFront(SAMPLE)
+
+        assertTrue(user.shownText(panel).contains("Posted while you were away."))
+    }
 }
