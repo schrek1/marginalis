@@ -1,0 +1,25 @@
+# The stable feature list is read from schreko_stable's history: each feature lands as one squash commit titled
+# `MARG-N: <feature> (#PR)` (scripts/stable_channel.py). So a pull request into schreko_stable must be titled by its
+# fork issue, or its feature would be missing from the release notes. An upstream sync (branch `stable/upstream-*`)
+# lands with a merge commit and brings no fork feature. Its own workflow, so that editing a title re-checks it
+# without running CI again.
+name: PR title
+
+on:
+  pull_request:
+    branches: [schreko_stable]
+    types: [opened, edited, synchronize, reopened]
+
+# The runner image is pinned: `ubuntu-latest` moved to Ubuntu 26, and that move is made on purpose (MARG-142).
+jobs:
+  title:
+    if: ${{ !startsWith(github.head_ref, 'stable/upstream') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: The title starts with its fork issue
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          [[ "$TITLE" =~ ^MARG-[0-9]+:\ [^[:space:]] ]] && exit 0
+          echo "::error title=PR title::\"$TITLE\" must start with \"MARG-N: \", its fork issue: the release notes list the features by these titles."
+          exit 1
