@@ -53,20 +53,40 @@ def gh(*args: str) -> str:
                           errors="replace").stdout
 
 
-def ci_history(repo: str, count: int) -> list[dict[str, float]]:
+def ci_history(repo: str, count: int, gh=gh, report=print) -> list[dict[str, float]]:
+    """The durations of the last `count` green runs. A run that cannot be read is left out, so one failed call to
+    GitHub costs one run of history, not the plan; `report` says what each run gave."""
     runs = json.loads(gh("run", "list", "--repo", repo, "--workflow", "ci.yml", "--branch", "schreko_stable",
                          "--status", "success", "--limit", str(count), "--json", "databaseId"))
     history = []
     for run in runs:
-        jobs = json.loads(gh("api", f"repos/{repo}/actions/runs/{run['databaseId']}/jobs?per_page=100"))["jobs"]
-        durations = {}
-        for job in jobs:
-            if job["name"].startswith("e2e ("):
-                # Not `gh api …/logs`: newer gh refuses to print a log with terminal escape sequences in it.
-                durations |= durations_in_log(gh("run", "view", "--repo", repo, "--job", str(job["id"]), "--log"))
+        run_id = run["databaseId"]
+        try:
+            durations = run_durations(repo, run_id, gh)
+        except subprocess.CalledProcessError as error:
+            report(f"run {run_id}: left out, GitHub did not answer: {(error.stderr or '').strip() or error}")
+            continue
+        report(f"run {run_id}: {len(durations)} scenario durations")
         if durations:
             history.append(durations)
     return history
+
+
+def run_durations(repo: str, run_id: int, gh) -> dict[str, float]:
+    jobs = json.loads(asked_twice(gh, "api", f"repos/{repo}/actions/runs/{run_id}/jobs?per_page=100"))["jobs"]
+    durations = {}
+    for job in jobs:
+        if job["name"].startswith("e2e ("):
+            # Not `gh api …/logs`: newer gh refuses to print a log with terminal escape sequences in it.
+            durations |= durations_in_log(asked_twice(gh, "run", "view", "--repo", repo, "--job", str(job["id"]), "--log"))
+    return durations
+
+
+def asked_twice(gh, *args: str) -> str:
+    try:
+        return gh(*args)
+    except subprocess.CalledProcessError:
+        return gh(*args)
 
 
 def main() -> None:
