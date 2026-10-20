@@ -19,14 +19,14 @@ class StableHistory:
         self.git("config", "user.name", "Test")
 
     def git(self, *args: str) -> str:
-        return subprocess.run(["git", *args], cwd=self.root, check=True, capture_output=True, text=True).stdout.strip()
+        return subprocess.run(["git", *args], cwd=self.root, check=True, capture_output=True, text=True, encoding="utf-8").stdout.strip()
 
     def commit(self, subject: str, stable_md: str | None = None, retire: bool = False, touch: str = "src.txt") -> None:
         path = self.root / touch
         path.write_text(path.read_text() + subject + "\n" if path.exists() else subject + "\n")
         self.git("add", touch)
         if stable_md is not None:
-            (self.root / "STABLE.md").write_text(stable_md)
+            (self.root / "STABLE.md").write_text(stable_md, encoding="utf-8")
             self.git("add", "STABLE.md")
         if retire:
             self.git("rm", "-q", "STABLE.md")

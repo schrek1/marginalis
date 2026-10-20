@@ -2,8 +2,9 @@
 the GitHub Release's notes.
 
 The IDE reads updatePlugins.xml as a custom plugin repository. Its update dialog shows the entry's change notes as
-What's New (the fork tickets new since the previous stable tag, from STABLE.md rows) and its description as the
-Overview (every fork feature in STABLE.md).
+What's New (the fork tickets new since the previous stable tag) and its description as the Overview (every fork
+feature). The features are the branch's first-parent `MARG-N: <feature> (#PR)` commits; those that landed before that
+form, listed by STABLE.md until it was retired, come from the file's last version.
 
 Usage:  python3 scripts/stable_channel.py TAG REPO OUT_DIR
         writes OUT_DIR/updatePlugins.xml, OUT_DIR/index.html and OUT_DIR/release-notes.md
@@ -20,6 +21,7 @@ PLUGIN_ID = "dev.marginalis.plugin"
 SINCE_BUILD = "252"
 TAG = re.compile(r"^(?P<upstream>\d+\.\d+\.\d+)-schreko\.(?P<n>\d+)$")
 STABLE_ROW = re.compile(r"^\| (MARG-\d+) \| ([^|]+?) \|", re.M)
+FEATURE_COMMIT = re.compile(r"^(MARG-\d+): (.+) \(#\d+\)$")
 
 
 def git(*args: str) -> str:
@@ -27,9 +29,22 @@ def git(*args: str) -> str:
 
 
 def stable_features(ref: str) -> list[tuple[str, str]]:
-    """(MARG key, feature title) per STABLE.md row as of `ref`; a ticket shipped in parts has a row per part."""
+    """(MARG key, feature title) per fork feature as of `ref`, oldest first; a ticket shipped in parts appears per part."""
+    listed = listed_features(ref)
+    if listed is not None:
+        return listed
+    retired = git("log", "-1", "--format=%H", "--diff-filter=D", ref, "--", "STABLE.md")
+    if not retired:
+        return []
+    since = git("log", "--first-parent", "--reverse", "--format=%s", f"{retired}^..{ref}").splitlines()
+    return (listed_features(f"{retired}^") or []) + [
+        (found.group(1), found.group(2)) for found in map(FEATURE_COMMIT.match, since) if found]
+
+
+def listed_features(ref: str) -> list[tuple[str, str]] | None:
+    """STABLE.md's rows as of `ref`, or None once the file was retired."""
     shown = subprocess.run(["git", "show", f"{ref}:STABLE.md"], capture_output=True, text=True, encoding="utf-8")
-    return STABLE_ROW.findall(shown.stdout) if shown.returncode == 0 else []
+    return STABLE_ROW.findall(shown.stdout) if shown.returncode == 0 else None
 
 
 def previous_tag(tag: str) -> str | None:
@@ -43,11 +58,11 @@ def news(tag: str, previous: str | None) -> tuple[list[str], list[str]]:
     before = set(stable_features(previous)) if previous else set()
     added = [f"{key} {title}" for key, title in stable_features(tag) if (key, title) not in before]
     since = f"{previous}..{tag}" if previous else tag
-    # A feature lands with its STABLE.md row, so it is listed by that row, not again by its commit subject.
-    feature_commits = set(git("log", "--first-parent", "--format=%H", since, "--", "STABLE.md").split())
+    # A feature is listed once, as a feature: by its STABLE.md row while there was one, else by its commit subject.
+    listed_by_row = set(git("log", "--first-parent", "--format=%H", since, "--", "STABLE.md").split())
     others = [subject for sha, subject in
               (line.split(" ", 1) for line in git("log", "--first-parent", "--format=%H %s", since).splitlines())
-              if sha not in feature_commits]
+              if sha not in listed_by_row and not FEATURE_COMMIT.match(subject)]
     return added, others
 
 
