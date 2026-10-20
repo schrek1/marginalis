@@ -793,8 +793,22 @@ function sortButton() {
 }
 """
 
-    /** Picks an entry of the Margin tab's Sort menu, through the toolbar button's own action group. */
+    /**
+     * Picks an entry of the Margin tab's Sort menu, through the toolbar button's own action group. The tab must be in
+     * front ([openMarginTab]): a user cannot reach the toolbar of a tab behind a file, and its buttons exist only once
+     * the tab has shown.
+     */
     fun chooseMarginSort(label: String) {
+        // The tab reports itself selected a moment before it is on screen.
+        val front = readUntil("the Margin tab on screen", Duration.ofSeconds(5), read = {
+            marginJs(
+                """
+                var files = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).getSelectedFiles();
+                fieldOf(marginPanel(), 'root').isShowing() ? '' : String(files.length ? files[0].getName() : 'nothing')
+                """,
+            )
+        }) { it.isEmpty() }
+        check(front.isEmpty()) { "the Margin tab is behind $front: bring it to the front before using its Sort menu" }
         // The toolbar fills its buttons in after the tab shows, on a slow machine seconds later.
         awaitUntil("the Margin tab shows its Sort button", Duration.ofSeconds(30)) {
             marginJs(FIND + SORT_BUTTON + "String(sortButton() != null)") == "true"

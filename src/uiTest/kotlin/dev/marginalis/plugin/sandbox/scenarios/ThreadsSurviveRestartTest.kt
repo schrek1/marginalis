@@ -48,6 +48,7 @@ class ThreadsSurviveRestartTest : SandboxScenario("threads_survive_restart") {
         Agent.resolveThread(resolved)
         unread = Agent.agentAddsLineThread(GREETING, 5, "farewell() could reuse greet()'s trimming.")
 
+        SandboxUi.openMarginTab(projectLevel)
         SandboxUi.chooseMarginSort("Newest first")
         ToolWindowUi.pressToolWindowAction("Live by default")
         ToolWindowUi.chooseGuidedLayout("By file")
