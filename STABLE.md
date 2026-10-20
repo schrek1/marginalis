@@ -74,4 +74,5 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-169 | Local sandbox runs reuse a bounded set of Docker volumes instead of piling them up | `chore/MARG-169-docker-hygiene` | — | — | `11116eb` |
 | MARG-176 | CI verifies with a pinned Plugin Verifier, not whatever is latest | `chore/MARG-176-pin-plugin-verifier` | — | — | `fef9a28` |
 | MARG-180 | A build drops an IDE index that lacks the Java plugin, locally as in CI | `fix/MARG-180-java-in-ide-index` | — | — | `a60e439` |
+| MARG-179 | pressPanelAction says why when a thread header button is missing | `fix/MARG-179-panel-button-wait` | — | — | `c74efd0` |
 | MARG-183 | e2e-plan skips a run it cannot read instead of dropping the whole plan | `fix/MARG-183-plan-skips-bad-run` | — | — | `8414901` |
