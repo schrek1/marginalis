@@ -14,6 +14,9 @@ is the shipped record and decision log.
   Docker, is in `docs/testing.md`: read it before writing or running
   tests. New tests assert with Kotest matchers (`shouldBe`,
   `shouldContainExactly`, …), not `kotlin.test`'s `assertEquals`.
+- Every tool and library version is pinned; `docs/upgrades.md` lists
+  each pin, where it lives and how to bump it. Never a dynamic
+  ("latest", `+`) version.
 - `./gradlew buildPlugin` → zip in `build/distributions/`;
   `./gradlew :core:test` runs the domain tests (`scripts/test-core.sh`
   runs them in a single JVM for environments where forked test workers
