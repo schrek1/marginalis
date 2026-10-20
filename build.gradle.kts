@@ -241,6 +241,36 @@ fun releaseSandboxRunLock() {
     if (ours) Files.deleteIfExists(sandboxRunLock)
 }
 
+fun dockerLines(vararg args: String): List<String> {
+    val process = ProcessBuilder(listOf("docker") + args).redirectError(ProcessBuilder.Redirect.DISCARD).start()
+    val lines = process.inputStream.bufferedReader().readLines().filter(String::isNotBlank)
+    return if (process.waitFor() == 0) lines else emptyList()
+}
+
+fun dockerSucceeds(vararg args: String): Boolean =
+    ProcessBuilder(listOf("docker") + args).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start().waitFor() == 0
+
+// The pool's `-work` volumes and the manual sandbox's pair (sandbox.py, port 8082) are reused run after run; any other
+// volume of ours (an older harness's names, run mode's Gradle caches) no run claims again.
+val reusedSandboxVolume = Regex("marginalis-sandbox-(81\\d\\d-work|8082-work|8082-gradle)")
+
+// Another checkout tags the image by its own Dockerfile and IDE: the two newest other tags spare it a rebuild.
+val otherSandboxImageTagsKept = 2
+
+fun sweepSandboxLeftovers() {
+    val volumes = dockerLines("volume", "ls", "--format", "{{.Name}}").filter { it.startsWith("marginalis-") && !reusedSandboxVolume.matches(it) }
+    val images = dockerLines("images", "marginalis-sandbox", "--format", "{{.Tag}}")
+        .filter { it != "<none>" && it != sandboxImageTag.substringAfter(':') }
+        .drop(otherSandboxImageTagsKept)
+        .map { "marginalis-sandbox:$it" }
+    // Docker refuses what a container still uses; that stays for a later run.
+    val removedVolumes = volumes.filter { dockerSucceeds("volume", "rm", it) }
+    val removedImages = images.filter { dockerSucceeds("rmi", it) }
+    if (removedVolumes.isNotEmpty() || removedImages.isNotEmpty()) {
+        logger.lifecycle("removed what no sandbox reuses: volumes ${removedVolumes.ifEmpty { "none" }}, images ${removedImages.ifEmpty { "none" }}")
+    }
+}
+
 val sandboxRunUnlock = tasks.register("sandboxRunUnlock") {
     description = "Releases the machine-wide sandbox run lock this build holds."
     group = "verification"
@@ -290,6 +320,7 @@ val sandboxRunLocked = tasks.register("sandboxRunLocked") {
                 logger.lifecycle("removing sandbox containers an earlier run left behind: ${orphans.joinToString()}")
                 ProcessBuilder(listOf("docker", "rm", "-f") + orphans).redirectErrorStream(true).start().waitFor()
             }
+            sweepSandboxLeftovers()
         }
     }
 }
