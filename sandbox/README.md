@@ -46,6 +46,7 @@ Docker mode needs only Docker and Python.
 python sandbox.py start [--feature-dir PATH] [--fresh]   # build from PATH, start the IDE, wait until it answers
 python sandbox.py status
 python sandbox.py stop                                   # exits as a user would; killed only if not out in 60 s
+python sandbox.py clean                                  # Docker: drop this port's container and its volumes
 python sandbox.py locked <command...>                    # run a one-off experiment under the machine lock
 python robot.py js "<rhino script>" [--edt]              # run JS inside the sandbox JVM, print its String result
 python robot.py find "<xpath>"                           # components in the robot's hierarchy
@@ -103,7 +104,7 @@ Gradle) still runs the floor.
 |---|---|
 | `ui-ide.gradle` | registers `runIdeForUiTests`: shared sandbox dir, robot-server plugin 0.11.23, first-run dialogs off, opens the test project; `build.gradle.kts` applies it |
 | `init.gradle` | applies `ui-ide.gradle` to a checkout whose build lacks it (an upstream-ready feature branch) |
-| `sandbox.py` | start / stop / status / build, port discovery, `locked` (the machine lock) |
+| `sandbox.py` | start / stop / status / clean / build, port discovery, `locked` (the machine lock) |
 | `robot.py` | minimal HTTP client for robot-server: `call_js`, `run_js`, `find_all`, `screenshot` |
 | `sandbox_ui.py` | Marginalis steps: agent REST calls (`agent_starts_project_thread`, `agent_waits`), user UI steps (`user_replies`, `press_tool_window_action`, `toggle_thread_live`), store reads (`is_live`, `live_by_default`, `message_bodies`) |
 | `Dockerfile`, `docker-entrypoint.sh` | the sandbox image, for this tool and the Kotlin suite alike |

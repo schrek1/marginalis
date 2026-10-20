@@ -71,3 +71,4 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-143 | A stable release ships the zip CI tested | `fix/MARG-143-release-ships-tested-zip` | — | — | `93dfc95` |
 | MARG-165 | CI plans the e2e shards from live run data in every run | `chore/MARG-165-plan-shards-live` | — | — | `49c0902` |
 | MARG-168 | ThreadsSurviveRestart picks its Sort entry on the Margin tab in front | `fix/MARG-168-sort-on-front-tab` | — | — | `afa33fe` |
+| MARG-169 | Local sandbox runs reuse a bounded set of Docker volumes instead of piling them up | `chore/MARG-169-docker-hygiene` | — | — | `11116eb` |
