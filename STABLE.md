@@ -73,3 +73,4 @@ upstream-ready branches off `main`; this file never leaves this branch.
 | MARG-168 | ThreadsSurviveRestart picks its Sort entry on the Margin tab in front | `fix/MARG-168-sort-on-front-tab` | — | — | `afa33fe` |
 | MARG-169 | Local sandbox runs reuse a bounded set of Docker volumes instead of piling them up | `chore/MARG-169-docker-hygiene` | — | — | `11116eb` |
 | MARG-176 | CI verifies with a pinned Plugin Verifier, not whatever is latest | `chore/MARG-176-pin-plugin-verifier` | — | — | `fef9a28` |
+| MARG-179 | pressPanelAction says why when a thread header button is missing | `fix/MARG-179-panel-button-wait` | — | — | `c74efd0` |
