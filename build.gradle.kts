@@ -107,9 +107,10 @@ dependencies {
         }
         testFramework(TestFrameworkType.Platform)
         testFramework(TestFrameworkType.Starter, version = ideStarterVersion, configurationName = "uiTestImplementation")
-        // Pinned: undeclared, it is "latest", looked up in JetBrains' repository on every run, so a hiccup there failed
-        // `verify` and the verdict depended on the day. A newer verifier is a deliberate bump.
+        // Pinned: undeclared, each is "latest", looked up in JetBrains' repository on every run, so a hiccup there failed
+        // `verify` and the verdict depended on the day. A newer one is a deliberate bump (docs/upgrades.md).
         pluginVerifier("1.411")
+        zipSigner("0.1.43")
     }
 }
 
