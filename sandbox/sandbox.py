@@ -403,6 +403,17 @@ def stop() -> None:
     print("sandbox stopped")
 
 
+def clean() -> None:
+    """Drops this port's container and its volumes, the IDE's state and the Gradle cache the next start then rebuilds."""
+    if robot_up():
+        sys.exit(f"the sandbox on {ROBOT_PORT} is running: stop it first")
+    subprocess.run(["docker", "rm", "-f", CONTAINER], capture_output=True)
+    volumes = [f"{CONTAINER}-work", f"{CONTAINER}-gradle"]
+    removed = [volume for volume in volumes
+               if subprocess.run(["docker", "volume", "rm", volume], capture_output=True).returncode == 0]
+    print(f"removed {', '.join(removed) or 'nothing'}")
+
+
 def status() -> None:
     port = marginalis_port()
     print(f"robot {'up' if robot_up() else 'down'} on {ROBOT_PORT}; marginalis {f'on {port}' if port else 'not found'}")
@@ -486,6 +497,7 @@ def main() -> None:
     start_command.add_argument("--fresh", action="store_true", help="recopy the test project from project-template")
     commands.add_parser("stop", help="graceful exit (flushes workspace.xml), then kill")
     commands.add_parser("status")
+    commands.add_parser("clean", help="drop this port's container and its volumes (Docker), for a start from nothing")
     build_command = commands.add_parser("build", help="build the checkout's plugins into MARGINALIS_SANDBOX_PREBUILT")
     build_command.add_argument("--feature-dir", type=Path, default=DEFAULT_FEATURE_DIR)
     locked_command = commands.add_parser("locked", help="run COMMAND under the machine-wide sandbox run lock, for a "
@@ -500,6 +512,8 @@ def main() -> None:
         start(args.feature_dir.resolve(), args.fresh)
     elif args.command == "stop":
         stop()
+    elif args.command == "clean":
+        clean()
     elif args.command == "build":
         if not (DOCKER and PREBUILT):
             sys.exit("build needs MARGINALIS_SANDBOX_DOCKER=1 and MARGINALIS_SANDBOX_PREBUILT=<folder for the plugins>")

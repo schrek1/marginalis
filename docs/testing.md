@@ -101,6 +101,21 @@ out. Six is the default: under a 5-minute target with half the machine left. A s
 
 The Kotlin suite was measured at the default 6 sandboxes on 2026-10-16: about 4.2 min, 5 runs in a row green.
 
+### What Docker keeps between runs
+
+Docker's disk stays bounded: what the harness keeps it reuses, and what no run will claim again it frees.
+- **A `-work` volume per sandbox port** (`marginalis-sandbox-<port>-work`, ports 8100–8199, claimed lowest first): the
+  IDE's config, caches and logs, about 0.4 GB each. Their number is the most sandboxes that ever ran side by side.
+  Reuse carries no state into a scenario: a new container starts from the default app settings, and its project is
+  copied fresh from the host.
+- **The sandbox image**, tagged by its Dockerfile, entrypoint and IDE (about 3.4 GB).
+- **The sweep:** once a run holds the machine lock, the build removes what no run will claim again, and prints what
+  it removed. It never touches anything that is not ours, nor what a container still uses.
+  - the containers a killed run left on the suite's ports (they would push the next run onto new ports and new
+    volumes);
+  - every `marginalis-*` volume no harness reuses: older harnesses' names, run-mode Gradle caches;
+  - the image tags other than the current one and the two newest others.
+
 ### In CI
 
 Every pull request runs the suite in `.github/workflows/ci.yml`. The `package` job builds the plugin zip once (and is
@@ -233,6 +248,9 @@ script, with the same steps as the suite. It is no test runner. `sandbox/README.
   a virtual screen, as the suite does.
 - `py sandbox/sandbox.py status` says whether it answers, `py sandbox/sandbox.py stop` exits it as a user would
   (the project close saves everything) and kills it only if it does not exit within 60 s.
+- In Docker it keeps a pair of volumes for its port (the IDE's state and a Gradle cache, so a start skips the
+  download). The suite's sweep leaves the default port 8082's pair alone; `py sandbox/sandbox.py clean` drops the
+  container and both volumes, for a start from nothing.
 - An experiment that runs sandboxes next to other work goes under the machine lock:
   `py sandbox/sandbox.py locked <command...>`. The lock ends with the command, so wrap the whole experiment (start,
   work, stop), not just the start.
