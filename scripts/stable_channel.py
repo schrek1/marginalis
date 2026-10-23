@@ -17,7 +17,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-PLUGIN_ID = "dev.marginalis.plugin"
+from fork_identity import PLUGIN_ID, PLUGIN_NAME
+
 SINCE_BUILD = "252"
 TAG = re.compile(r"^(?P<upstream>\d+\.\d+\.\d+)-schreko\.(?P<n>\d+)$")
 STABLE_ROW = re.compile(r"^\| (MARG-\d+) \| ([^|]+?) \|", re.M)
@@ -105,7 +106,7 @@ def repository(tag: str, zip_url: str, notes: str, description: str) -> str:
     return ("<plugins>\n"
             f'  <plugin id="{PLUGIN_ID}" url="{html.escape(zip_url)}" version="{tag}">\n'
             f'    <idea-version since-build="{SINCE_BUILD}"/>\n'
-            "    <name>Marginalis</name>\n"
+            f"    <name>{PLUGIN_NAME}</name>\n"
             f"    <description><![CDATA[{description}]]></description>\n"
             f"    <change-notes><![CDATA[{notes}]]></change-notes>\n"
             "  </plugin>\n"
