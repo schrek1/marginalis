@@ -20,7 +20,8 @@ import sys
 REPO = "schrek1/marginalis"
 STABLE_TAG = re.compile(r"(?P<upstream>\d+\.\d+\.\d+)-schreko\.(?P<n>\d+)")
 # What the plugin zip is built from; anything else (docs, sandbox, CI, tests) ships with the next plugin release.
-PLUGIN_INPUTS = ["src/main", "core/src/main", "*.gradle.kts", "gradle.properties", "gradle/", "CHANGELOG.md"]
+PLUGIN_INPUTS = ["src/main", "core/src/main", "*.gradle.kts", "gradle.properties", "gradle/", "CHANGELOG.md",
+                 "scripts/fork_identity.py"]
 STAGE_LABELS = {"in-progress", "waiting-for-dev-testing", "in-dev-testing", "request-demo", "waiting-for-gate-testing",
                 "in-gate-testing", "request-merge", "refine", "needs-decision", "blocked"}
 IN_STABLE = "in-stable"

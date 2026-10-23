@@ -49,11 +49,15 @@ jobs:
         run: |
           force=""; [ "${{ inputs.force }}" = true ] && force=--force
           python3 scripts/stable_release.py plan "$GITHUB_SHA" $force | tee -a "$GITHUB_OUTPUT"
-      - name: Release version
+      - name: Release version and plugin id
+        # The release ships under the fork's own plugin id, so the IDE never offers upstream's Marketplace release as an
+        # update over it (scripts/fork_identity.py). Every other build keeps upstream's id.
         if: steps.plan.outputs.release == 'true'
         env:
           VERSION: ${{ steps.plan.outputs.version }}
-        run: sed -i -E "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" build.gradle.kts && grep -q "^version = \"$VERSION\"$" build.gradle.kts
+        run: |
+          sed -i -E "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" build.gradle.kts && grep -q "^version = \"$VERSION\"$" build.gradle.kts
+          python3 scripts/fork_identity.py
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -164,6 +168,10 @@ jobs:
         shard: [1, 2]
     steps:
       - uses: actions/checkout@v7
+      - name: Fork plugin id
+        # A release zip carries the fork's plugin id, and the harness looks the plugin up by it.
+        if: needs.package.outputs.release == 'true'
+        run: python3 scripts/fork_identity.py
       - uses: actions/download-artifact@v8
         with:
           name: marginalis-plugin
