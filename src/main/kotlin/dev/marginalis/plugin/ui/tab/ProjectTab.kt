@@ -11,6 +11,7 @@ import dev.marginalis.core.CommentThread
 import dev.marginalis.core.Message
 import dev.marginalis.core.ProjectTabStartup
 import dev.marginalis.core.ProjectTabStartup.Outcome
+import dev.marginalis.plugin.settings.MarginalisSettings
 import dev.marginalis.plugin.store.MarginalisStore
 
 object ProjectTab {
@@ -66,6 +67,7 @@ object ProjectTab {
             wasOpen = properties.getBoolean(REOPEN_AFTER_RELOAD),
             wasPinned = properties.getBoolean(PINNED_BEFORE_RELOAD),
             firstOpen = !properties.getBoolean(INTRODUCED),
+            showOnOpen = MarginalisSettings.getInstance().state.showTabOnProjectOpen,
         )
         properties.unsetValue(REOPEN_AFTER_RELOAD)
         properties.unsetValue(PINNED_BEFORE_RELOAD)

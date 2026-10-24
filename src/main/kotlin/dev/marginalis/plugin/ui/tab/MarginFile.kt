@@ -10,6 +10,7 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileSystem
 import com.intellij.openapi.vfs.VirtualFileWithoutContent
 import com.intellij.testFramework.LightVirtualFile
+import dev.marginalis.plugin.settings.MarginalisSettings
 import org.jetbrains.annotations.TestOnly
 import java.util.concurrent.ConcurrentHashMap
 
@@ -67,6 +68,9 @@ class MarginFile private constructor(@Volatile private var projectKey: String?) 
 
         internal fun atPath(path: String): MarginFile? {
             if (withdrawn) return null
+            // The platform's editor restore skips a tab whose address finds nothing, so a tab not wanted on project
+            // open never shows, rather than showing and closing again.
+            if (!MarginalisSettings.getInstance().state.showTabOnProjectOpen) return null
             if (path == PATH) return MarginFile(null)
             val key = path.removePrefix("$PATH/").takeIf { it != path && it.isNotEmpty() && '/' !in it } ?: return null
             val registered = tabsByProject.computeIfAbsent(key) { MarginFile(it) }

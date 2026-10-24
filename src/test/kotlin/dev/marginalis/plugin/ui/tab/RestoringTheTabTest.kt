@@ -8,6 +8,11 @@ class RestoringTheTabTest : MarginTabTestCase() {
 
     private val ownAddress: String get() = "marginalis://margin/${project.locationHash}"
 
+    override fun setUp() {
+        super.setUp()
+        showTheTabWhenAProjectOpens()
+    }
+
     fun testARestartedProjectFindsItsTabByItsAddress() {
         tab.close()
         tab.unloadPluginForUpdate()

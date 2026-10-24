@@ -48,6 +48,7 @@ class EveryProjectHasItsOwnTabTest : MarginTabTestCase() {
     }
 
     fun testAClosedProjectsTabIsForgotten() {
+        showTheTabWhenAProjectOpens()
         withTwin { second, there ->
             val theirs = there.file
             second.closeProject()

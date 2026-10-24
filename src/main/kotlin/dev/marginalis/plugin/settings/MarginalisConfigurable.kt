@@ -335,6 +335,11 @@ class MarginalisConfigurable : Configurable {
                 }
             }
             group("Project Tab") {
+                row {
+                    checkBox("Show the Margin tab when a project opens")
+                        .comment("When off, the tab opens once an agent starts a project thread, or when you open it.")
+                        .bindSelected(state::showTabOnProjectOpen)
+                }
                 row("List while the tab is in front:") {
                     comboBox(ListWhileInFront.entries, textListCellRenderer { it?.let(::labelOf) })
                         .comment(

@@ -18,6 +18,7 @@ class UnloadingThePluginTest : MarginTabTestCase() {
     }
 
     fun testUpdatingThePluginWithTheTabOpenTakesItsMarksPanelsBadgesAndTabOutOfTheIde() {
+        showTheTabWhenAProjectOpens()
         sample()
         val thread = agent.addOnLine(5, "body" to "Still open in the editor")
         agent.add("file" to SAMPLE, "body" to "About the whole file")
@@ -46,6 +47,7 @@ class UnloadingThePluginTest : MarginTabTestCase() {
     }
 
     fun testUpdatingThePluginTakesEveryProjectsTabOutOfTheIde() {
+        showTheTabWhenAProjectOpens()
         withTwin { _, there ->
             val files = listOf(tab.file, there.file)
             var foundWhileUnloading: List<Any?> = emptyList()

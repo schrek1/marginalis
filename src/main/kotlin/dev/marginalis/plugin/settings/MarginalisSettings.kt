@@ -52,6 +52,8 @@ class MarginalisSettings : PersistentStateComponent<MarginalisSettings.State> {
 
         var groupRelayedConversation: Boolean = true
 
+        var showTabOnProjectOpen: Boolean = false
+
         var longThreadFolding: String = LongThreadFolding.FOLD_EVERY_READ_MESSAGE.stored
 
         var keepFirstMessageOpen: Boolean = false

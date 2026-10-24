@@ -6,6 +6,11 @@ import com.intellij.openapi.vfs.VirtualFileManager
 
 class OpeningTheTabTest : MarginTabTestCase() {
 
+    override fun setUp() {
+        super.setUp()
+        showTheTabWhenAProjectOpens()
+    }
+
     fun testAProjectsFirstOpenWithoutProjectThreadsLeavesTheTabClosed() {
         sample()
         tab.close()

@@ -8,6 +8,13 @@ History before 0.1.19 lives in git tags.
 ## [Unreleased]
 
 ### Added
+
+- The Margin tab no longer opens with the project, after a restart
+  included. It comes by itself once an agent starts a project thread,
+  and you can open it any time. To have it open with the project as
+  before, tick *Show the Margin tab when a project opens* in Settings →
+  Tools → Marginalis → Project Tab.
+
 ### Fixed
 
 - The Margin tab shows only when there is something in it. A project
