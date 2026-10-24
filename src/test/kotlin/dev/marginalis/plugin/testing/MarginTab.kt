@@ -280,7 +280,11 @@ class MarginTab(private val project: Project, private val disposable: Disposable
         settle()
     }
 
-    fun scrollToBottom() = scrollTo(stack.height)
+    fun scrollToBottom() {
+        // The height is read once the stack has laid out what just arrived, or the bottom is the old one.
+        settle()
+        scrollTo(stack.height)
+    }
 
     fun whileDraggingTheScrollBar(meanwhile: () -> Unit) {
         val bar = scroll.verticalScrollBar
@@ -328,11 +332,13 @@ class MarginTab(private val project: Project, private val disposable: Disposable
 
     fun alsoYourMove(): String? = shownLink("Also your move")?.text
 
-    fun pill(): String? = shownLink("↑")?.text
+    fun pill(): String? = shownPill()?.text
 
     fun clickAlsoYourMove() = click(shownLink("Also your move")!!)
 
-    fun clickPill() = click(shownLink("↑")!!)
+    fun clickPill() = click(shownPill()!!)
+
+    private fun shownPill(): ActionLink? = shownLink("↑") ?: shownLink("↓")
 
     private fun shownLink(startingWith: String): ActionLink? {
         settle()
@@ -356,6 +362,13 @@ class MarginTab(private val project: Project, private val disposable: Disposable
         val stop = group.getChildren(event(group)).single { it.templatePresentation.text == "Stop $agentName" }
         check(presentationOf(stop).isEnabled) { "Stop $agentName is greyed out" }
         stop.actionPerformed(event(stop))
+        settle()
+    }
+
+    fun sortBy(order: String) {
+        val menu = action("Sort") as ActionGroup
+        val choice = menu.getChildren(event(menu)).single { it.templatePresentation.text == order }
+        choice.actionPerformed(event(choice))
         settle()
     }
 

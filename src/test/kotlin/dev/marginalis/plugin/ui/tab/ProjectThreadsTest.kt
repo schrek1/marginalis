@@ -8,22 +8,21 @@ import org.junit.runner.RunWith
 @RunWith(NeedsADisplay::class)
 class ProjectThreadsTest : MarginTabTestCase() {
 
-    // FixMe: Known issue - #48 the Margin tab lists threads newest first, the opposite of how a thread reads
-    fun testAnAgentsQuestionsArriveExpandedWithTheNewestOnTop() {
+    fun testAnAgentsQuestionsArriveExpandedWithTheOldestOnTop() {
         agent.ask("Alpha question")
         agent.ask("Bravo question")
         agent.ask("Charlie question")
 
         assertEquals(
-            listOf("✉ Charlie question ● [expanded]", "✉ Bravo question ● [expanded]", "✉ Alpha question ● [expanded]"),
+            listOf("✉ Alpha question ● [expanded]", "✉ Bravo question ● [expanded]", "✉ Charlie question ● [expanded]"),
             shown(),
         )
         assertEquals("✉ 3", tab.title())
         assertEquals("3 open · 3 your move · 0 agent's move · 3 new", tab.counts())
     }
 
-    // FixMe: Known issue - #48 the Margin tab lists threads by latest activity, so a reply moves its thread to the top
     fun testAReplyMovesItsThreadToTheTop() {
+        tab.sortBy("Recent activity")
         val alpha = agent.ask("Alpha question")
         agent.ask("Bravo question")
 
@@ -88,6 +87,7 @@ class ProjectThreadsTest : MarginTabTestCase() {
     }
 
     fun testAThreadHoldingAnUnsentReplyKeepsItsPlace() {
+        tab.sortBy("Recent activity")
         val alpha = agent.ask("Alpha question")
         agent.ask("Bravo question")
         agent.ask("Charlie question")

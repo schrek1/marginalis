@@ -21,6 +21,7 @@ internal class ViewKeeper(
     private val stack: JComponent,
     private val stackedCards: () -> List<StackedCard>,
     private val holdsDraft: (String) -> Boolean,
+    private val newAtTheBottom: () -> Boolean,
 ) : Disposable {
 
     private sealed interface Target {
@@ -39,9 +40,11 @@ internal class ViewKeeper(
         // Held around the scroll pane's layout, not the stack's: the viewport's layout moves the view to fit the new content before the stack lays out.
         override fun validateTree() {
             val held = heldAsShown()
+            val shownWhileRestingOnTheLast = shownWhileRestingOnTheLast()
             super.validateTree()
             val topInTab = SwingUtilities.convertPoint(this, 0, 0, tab).y
-            held?.let { keepInPlace(it, viewMovedDownBy = topInTab - scrollTopInTab) }
+            val showedANewLast = shownWhileRestingOnTheLast?.let(::showANewLast) == true
+            if (!showedANewLast) held?.let { keepInPlace(it, viewMovedDownBy = topInTab - scrollTopInTab) }
             scrollTopInTab = topInTab
         }
 
@@ -67,8 +70,28 @@ internal class ViewKeeper(
         val view = scroll.viewport.viewRect
         if (view.height <= 0 || scroll.verticalScrollBar.valueIsAdjusting) return null
         val shown = shownCards()
-        return ViewHold.pick(shown.map { span(WholeCard(it.key), it.component) }, view.y, view.height, clicked, focus.writingIn(shown))
+        return ViewHold.pick(wholeCardSpans(shown), view.y, view.height, clicked, focus.writingIn(shown))
     }
+
+    private fun shownWhileRestingOnTheLast(): Set<Target>? {
+        if (!newAtTheBottom() || clicked != null) return null
+        val view = scroll.viewport.viewRect
+        if (view.height <= 0 || scroll.verticalScrollBar.valueIsAdjusting) return null
+        val shown = shownCards()
+        if (focus.writingIn(shown) != null) return null
+        val spans = wholeCardSpans(shown)
+        return if (ViewHold.restsOnTheLast(spans, view.y, view.height)) spans.mapTo(HashSet()) { it.key } else null
+    }
+
+    private fun showANewLast(shownBefore: Set<Target>): Boolean {
+        val viewport = scroll.viewport
+        val viewTop = ViewHold.viewTopShowingANewLast(shownBefore, wholeCardSpans(shownCards()), stack.height, viewport.extentSize.height)
+            ?: return false
+        if (viewTop != viewport.viewPosition.y) viewport.viewPosition = Point(viewport.viewPosition.x, viewTop)
+        return true
+    }
+
+    private fun wholeCardSpans(shown: List<StackedCard>): List<Span<Target>> = shown.map { span(WholeCard(it.key), it.component) }
 
     private fun keepInPlace(held: Held<Target>, viewMovedDownBy: Int) {
         val component = locate(held.key) ?: return

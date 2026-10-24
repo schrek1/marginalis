@@ -22,6 +22,16 @@ object ViewHold {
     fun <K> viewTopKeeping(held: Held<K>, heldTop: Int, contentHeight: Int, viewHeight: Int): Int =
         (heldTop - held.offsetFromViewTop).coerceIn(0, (contentHeight - viewHeight).coerceAtLeast(0))
 
+    // Where new threads arrive at the bottom, the bottom is what the very top is to the other orders: a new
+    // thread arriving there comes into view. A card that only grew is not new, so reading keeps its place.
+    fun <K> restsOnTheLast(cards: List<Span<K>>, viewTop: Int, viewHeight: Int): Boolean =
+        cards.maxByOrNull { it.bottom }?.let { it.overlaps(viewTop, viewHeight) && it.bottom <= viewTop + viewHeight } == true
+
+    fun <K> viewTopShowingANewLast(shownBefore: Set<K>, cards: List<Span<K>>, contentHeight: Int, viewHeight: Int): Int? {
+        val last = cards.maxByOrNull { it.bottom }?.takeIf { it.key !in shownBefore } ?: return null
+        return minOf(last.top, contentHeight - viewHeight).coerceAtLeast(0)
+    }
+
     private fun <K> heldWhileWriting(writing: WritingIn<K>, inView: List<Span<K>>, viewTop: Int, viewHeight: Int): Span<K>? =
         writing.replyBox?.takeIf { it.overlaps(viewTop, viewHeight) } ?: inView.firstOrNull { it.key == writing.card }
 

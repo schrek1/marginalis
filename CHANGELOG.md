@@ -21,6 +21,18 @@ History before 0.1.19 lives in git tags.
   without project threads opens without it, and an agent's new project
   thread opens a closed tab behind the file you are reading. It no
   longer pins itself on a project's first open.
+### Changed
+
+- The Margin tab now reads top to bottom, oldest thread first, the same
+  way messages read inside a thread. A reply no longer makes a thread
+  jump, and a walkthrough's steps read 1, 2, 3.
+  - A Sort menu in the tab switches to newest first or to the previous
+    most-recent-activity order. Each project remembers its choice.
+  - A new thread you start, and threads that arrive while the list holds
+    still, appear on the side the chosen order puts new threads.
+  - Resting at the bottom of an oldest-first list, a new thread arriving
+    there comes into view, as one arriving at the top does in the other
+    orders.
 
 ## [0.2.7] - 2026-10-22
 

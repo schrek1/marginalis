@@ -54,13 +54,12 @@ class RevealTest : MarginTabTestCase() {
         assertTrue(user.shownText(user.panel()).contains("Step three"))
     }
 
-    // FixMe: Known issue - #48 a walkthrough's project-level steps are listed newest first, so steps posted 1, 2, 3 read 3, 2, 1
-    fun testAWalkthroughsProjectStepsReadInReverse() {
+    fun testAWalkthroughsProjectStepsReadInStepOrder() {
         val items = (1..3).map { mapOf("order" to it, "walkthrough" to "plan", "body" to "Plan step $it") }
 
         agent.post("comment_add_batch", "items" to items)
 
-        assertEquals(listOf("Plan step 3", "Plan step 2", "Plan step 1"), shown().map { it.removePrefix("✉ ").removeSuffix(" ● [expanded]") })
+        assertEquals(listOf("Plan step 1", "Plan step 2", "Plan step 3"), shown().map { it.removePrefix("✉ ").removeSuffix(" ● [expanded]") })
     }
 
     fun testAReferenceToAProjectThreadOpensItInTheTabEvenWhenFolded() {

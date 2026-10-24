@@ -6,6 +6,12 @@ import dev.marginalis.plugin.testing.Agent
 
 class KeepingYourPlaceTest : TabInFrontTestCase() {
 
+    // These scenarios are written for the order that puts new threads and fresh activity on top.
+    override fun setUp() {
+        super.setUp()
+        tab.sortBy("Recent activity")
+    }
+
     private fun paragraphs(count: Int): String = (1..count).joinToString("\n\n") { "Paragraph $it." }
 
     private fun Agent.longAsk(title: String, count: Int = 40): String = ask("$title\n\n${paragraphs(count)}")

@@ -5,7 +5,9 @@ import dev.marginalis.core.ViewHold.Span
 import dev.marginalis.core.ViewHold.WritingIn
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class ViewHoldTest {
 
@@ -124,5 +126,41 @@ class ViewHoldTest {
         val held = Held("b", offsetFromViewTop = 100)
 
         assertEquals(0, ViewHold.viewTopKeeping(held, heldTop = 250, contentHeight = 380, viewHeight = 400))
+    }
+
+    @Test
+    fun `a view showing the end of the last card rests on it`() {
+        assertTrue(ViewHold.restsOnTheLast(cards, viewTop = 800, viewHeight = 400))
+        assertFalse(ViewHold.restsOnTheLast(cards, viewTop = 700, viewHeight = 400))
+    }
+
+    @Test
+    fun `a view scrolled past the last card does not rest on it`() {
+        assertFalse(ViewHold.restsOnTheLast(cards, viewTop = 1300, viewHeight = 400))
+    }
+
+    @Test
+    fun `a new last card is brought into view`() {
+        val withNew = cards + Span("e", top = 1200, bottom = 1350)
+
+        val viewTop = ViewHold.viewTopShowingANewLast(setOf("a", "b", "c", "d"), withNew, contentHeight = 1350, viewHeight = 400)
+
+        assertEquals(950, viewTop)
+    }
+
+    @Test
+    fun `a new last card taller than the view shows its top`() {
+        val withNew = cards + Span("e", top = 1200, bottom = 2000)
+
+        val viewTop = ViewHold.viewTopShowingANewLast(setOf("a", "b", "c", "d"), withNew, contentHeight = 2000, viewHeight = 400)
+
+        assertEquals(1200, viewTop)
+    }
+
+    @Test
+    fun `a last card that only grew is not new`() {
+        val grown = cards.dropLast(1) + Span("d", top = 900, bottom = 1600)
+
+        assertNull(ViewHold.viewTopShowingANewLast(setOf("a", "b", "c", "d"), grown, contentHeight = 1600, viewHeight = 400))
     }
 }

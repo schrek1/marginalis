@@ -8,7 +8,7 @@ class RelayedConversationsTest : MarginTabTestCase() {
         agent.ask("Our own question")
 
         assertEquals(
-            listOf("✉ Our own question ● [expanded]", "From GitHub · PR #7  ▸ 2 comments · 2 new"),
+            listOf("From GitHub · PR #7  ▸ 2 comments · 2 new", "✉ Our own question ● [expanded]"),
             shown(),
         )
     }
