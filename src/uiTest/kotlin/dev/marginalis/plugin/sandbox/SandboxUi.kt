@@ -610,6 +610,11 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
 
     /** Types the body into an open draft's composer and presses its send button. */
     fun userSubmitsDraft(threadId: String, body: String) {
+        val panel = threadPanel(threadId)
+        // A new draft's panel shows before it opens its composer, once its inlay is attached.
+        awaitUntil("the draft's composer is open") {
+            js(FIND + "String(find(component, function (c) { return c instanceof com.intellij.ui.EditorTextField; }) != null)", panel) == "true"
+        }
         js(
             FIND + """
             var area = find(component, function (c) { return c instanceof com.intellij.ui.EditorTextField; });
@@ -619,7 +624,7 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
             send.doClick();
             String(true)
             """,
-            threadPanel(threadId),
+            panel,
         )
     }
 
