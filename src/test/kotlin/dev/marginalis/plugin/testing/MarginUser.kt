@@ -44,6 +44,7 @@ import dev.marginalis.core.CommentThread
 import dev.marginalis.core.Identity
 import dev.marginalis.plugin.store.MarginalisStore
 import dev.marginalis.plugin.ui.AvatarIcon
+import dev.marginalis.plugin.ui.FoldedMessageRow
 import dev.marginalis.plugin.ui.StopAgentsGroup
 import dev.marginalis.plugin.ui.SubmitRoundAction
 import dev.marginalis.plugin.ui.ThreadGutterIconRenderer
@@ -56,6 +57,7 @@ import java.awt.event.ActionEvent
 import java.awt.event.FocusEvent
 import java.awt.event.HierarchyEvent
 import java.awt.event.KeyEvent
+import java.awt.event.MouseEvent
 import javax.swing.AbstractButton
 import javax.swing.Action
 import javax.swing.JComponent
@@ -66,6 +68,7 @@ import javax.swing.KeyStroke
 import javax.swing.SwingUtilities
 import javax.swing.event.HyperlinkEvent
 import javax.swing.event.HyperlinkListener
+import javax.swing.plaf.basic.BasicHTML
 
 class MarginUser(private val project: Project, private val disposable: Disposable) {
 
@@ -73,7 +76,11 @@ class MarginUser(private val project: Project, private val disposable: Disposabl
 
     fun openToolWindow(): MarginToolWindow = MarginToolWindow(project, disposable)
 
+    fun toolWindowStripe(): MarginToolWindow.Window = MarginToolWindow.stripe(project, disposable)
+
     fun openMarginTab(): MarginTab = MarginTab(project, disposable).open()
+
+    fun changeLongThreadSettings(edit: LongThreadSettings.() -> Unit) = LongThreadSettings.change(edit)
 
     fun changeProjectTabSettings(edit: ProjectTabSettings.() -> Unit) {
         ProjectTabSettings.change(edit)
@@ -171,6 +178,14 @@ class MarginUser(private val project: Project, private val disposable: Disposabl
     }
 
     fun resolve(threadId: String) = press(open(threadId), "Resolve")
+
+    fun reopen(threadId: String) = press(open(threadId), "Reopen")
+
+    fun goProjectLive() = openToolWindow().turnProjectLive(true)
+
+    fun stopProjectLive() = openToolWindow().turnProjectLive(false)
+
+    fun isProjectLive(): Boolean = openToolWindow().isProjectLive()
 
     fun submitRound() {
         val action = SubmitRoundAction()
@@ -301,7 +316,36 @@ class MarginUser(private val project: Project, private val disposable: Disposabl
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
     }
 
-    fun focusComposer(panel: ThreadPanel) {
+    fun writeIn(panel: ThreadPanel, text: String, caretAt: Int = text.length): EditorTextField {
+        type(panel, text)
+        val composer = composer(panel)
+        composer.editor!!.caretModel.moveToOffset(caretAt)
+        focusOn(composer.editor!!.contentComponent)
+        return composer
+    }
+
+    fun lastFocusedInWindowOf(component: Component): Component? = SwingUtilities.getWindowAncestor(component)?.mostRecentFocusOwner
+
+    private var focusMoved = false
+
+    fun focusOn(component: Component) {
+        check(component.isFocusable) { "$component can't take focus" }
+        if (!focusMoved) {
+            focusMoved = true
+            Disposer.register(disposable) { movePermanentFocusTo(null) }
+        }
+        movePermanentFocusTo(component)
+    }
+
+    @AllowReflection("A test frame is never shown, so AWT never moves focus into it, and no public API moves it there")
+    private fun movePermanentFocusTo(component: Component?) {
+        KeyboardFocusManager::class.java.getDeclaredMethod("setGlobalPermanentFocusOwner", Component::class.java)
+            .apply { isAccessible = true }
+            .invoke(KeyboardFocusManager.getCurrentKeyboardFocusManager(), component)
+        PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+    }
+
+    fun fireComposerFocusGained(panel: ThreadPanel) {
         val composer = composer(panel)
         composer.focusGained(FocusEvent(composer, FocusEvent.FOCUS_GAINED))
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
@@ -361,6 +405,52 @@ class MarginUser(private val project: Project, private val disposable: Disposabl
         val url = runCatching { java.net.URI(href).toURL() }.getOrNull()
         pane.fireHyperlinkUpdate(HyperlinkEvent(pane, HyperlinkEvent.EventType.ACTIVATED, url, href))
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+    }
+
+    fun fold(panel: ThreadPanel, text: String) = clickFoldToggle(panel, "Fold Message", text)
+
+    fun expand(panel: ThreadPanel, text: String) = clickFoldToggle(panel, "Expand Message", text)
+
+    fun foldToggles(panel: ThreadPanel): List<String> =
+        foldTogglesIn(panel).map { it.accessibleContext.accessibleName }
+
+    fun foldedRows(panel: ThreadPanel): List<String> = foldedRowsIn(panel).map { it.openingLine }
+
+    fun foldedRow(panel: ThreadPanel, text: String): JComponent = foldedRowsIn(panel).single { text in it.openingLine }
+
+    fun foldedRowsShownAsMarkup(panel: ThreadPanel): List<String> = foldedRowsIn(panel)
+        .flatMap { UIUtil.findComponentsOfType(it, JLabel::class.java) }
+        .filter { it.getClientProperty(BasicHTML.propertyKey) != null }
+        .map { it.text }
+
+    fun messagesWithAFoldToggle(panel: ThreadPanel): List<String> = foldTogglesIn(panel).map(::messageAround)
+
+    fun clickFoldedRow(panel: ThreadPanel, text: String, on: String = text) {
+        val row = foldedRowsIn(panel).single { text in it.openingLine }
+        val label = UIUtil.findComponentsOfType(row, JLabel::class.java).first { it.text != null && on in it.text }
+        label.dispatchEvent(MouseEvent(label, MouseEvent.MOUSE_CLICKED, System.currentTimeMillis(), 0, 1, 1, 1, false, MouseEvent.BUTTON1))
+        PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+    }
+
+    private fun foldedRowsIn(panel: ThreadPanel): List<FoldedMessageRow> =
+        UIUtil.findComponentsOfType(panel, FoldedMessageRow::class.java).filter { it.isVisible }
+
+    private fun foldTogglesIn(panel: ThreadPanel): List<ActionLink> = UIUtil.findComponentsOfType(panel, ActionLink::class.java)
+        .filter { it.isVisible && it.toolTipText in setOf("Fold Message", "Expand Message") }
+
+    fun foldToggle(panel: ThreadPanel, text: String): ActionLink = foldTogglesIn(panel).single { text in messageAround(it) }
+
+    private fun clickFoldToggle(panel: ThreadPanel, name: String, text: String) {
+        foldToggle(panel, text).also { check(it.toolTipText == name) { "'$text' offers ${it.toolTipText}" } }.doClick()
+        PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+    }
+
+    private fun messageAround(toggle: Component): String {
+        val holder = generateSequence(toggle.parent) { it.parent }
+            .filterIsInstance<JComponent>()
+            .first { it is FoldedMessageRow || UIUtil.findComponentsOfType(it, JEditorPane::class.java).isNotEmpty() }
+        return if (holder is FoldedMessageRow) holder.openingLine
+        else UIUtil.findComponentsOfType(holder, JEditorPane::class.java).joinToString("\n") { it.document.getText(0, it.document.length) }
     }
 
     fun messageBody(panel: ThreadPanel, text: String): JEditorPane =

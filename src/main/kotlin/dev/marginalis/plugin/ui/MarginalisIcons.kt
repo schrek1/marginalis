@@ -23,7 +23,7 @@ object MarginalisIcons {
         load("mark_${mark.subject.name.lowercase()}_${mark.intent?.name?.lowercase() ?: "none"}")
     }
     private val orphanFrame = load("markOrphanFrame")
-    private val markInState = ConcurrentHashMap<Pair<Mark, AggregateState>, Icon>()
+    private val markInState = ConcurrentHashMap<Triple<Mark, AggregateState, Boolean>, Icon>()
 
     val LineMark = marks.getValue(Mark(MarkSubject.LINE, null))
     val ProjectMark = marks.getValue(Mark(MarkSubject.PROJECT, null))
@@ -39,6 +39,18 @@ object MarginalisIcons {
         StripeBadge.BLOCKER to BadgeIconSupplier(Brand).getErrorIcon(true),
         StripeBadge.AWAITING_YOU to badged(Brand, turnBadges.getValue(Turn.USER_OWES)),
     )
+    private val liveBolt = load("liveBadge")
+    private val toolWindowLive: Map<StripeBadge?, Icon> = mapOf(
+        null to withStripeLiveBadge(Brand),
+        StripeBadge.BLOCKER to withStripeLiveBadge(toolWindowBadged.getValue(StripeBadge.BLOCKER)),
+        StripeBadge.AWAITING_YOU to LiveBadgeIcon(
+            Brand,
+            liveBolt,
+            stripeLive(LiveBadgeIcon.Corner.BOTTOM_LEFT),
+            alongside = badged(EmptyIcon.create(Brand), turnBadges.getValue(Turn.USER_OWES)),
+        ),
+    )
+    private val gutterLive = LiveBadgeIcon.Place(LiveBadgeIcon.Corner.BOTTOM_RIGHT, sizeOfBox = 8f / 16, gapOfBox = 1.25f / 16)
 
     fun mark(mark: Mark): Icon = marks.getValue(mark)
 
@@ -51,10 +63,17 @@ object MarginalisIcons {
 
     fun withTurnBadge(fileIcon: Icon, turn: Turn): Icon = badged(fileIcon, turnBadges.getValue(turn))
 
-    fun toolWindow(badge: StripeBadge?): Icon = badge?.let(toolWindowBadged::getValue) ?: Brand
+    fun toolWindow(badge: StripeBadge?, projectLive: Boolean): Icon =
+        if (projectLive) toolWindowLive.getValue(badge) else badge?.let(toolWindowBadged::getValue) ?: Brand
 
-    fun markOf(threads: List<CommentThread>): Icon =
-        markInState.computeIfAbsent(Mark.of(threads) to AggregateState.of(threads)) { (mark, state) -> inState(marks.getValue(mark), state) }
+    fun markOf(threads: List<CommentThread>, live: Boolean = false): Icon =
+        markInState.computeIfAbsent(Triple(Mark.of(threads), AggregateState.of(threads), live)) { (mark, state, live) ->
+            inState(marks.getValue(mark), state).let { if (live) withGutterLiveBadge(it) else it }
+        }
+
+    fun withGutterLiveBadge(mark: Icon): Icon = LiveBadgeIcon(mark, liveBolt, gutterLive)
+
+    fun withStripeLiveBadge(toolWindowIcon: Icon): Icon = LiveBadgeIcon(toolWindowIcon, liveBolt, stripeLive(LiveBadgeIcon.Corner.BOTTOM_RIGHT))
 
     private fun inState(mark: Icon, state: AggregateState): Icon = when (state) {
         AggregateState.RESOLVED -> IconLoader.getTransparentIcon(mark, 0.33f)
@@ -71,6 +90,11 @@ object MarginalisIcons {
         setIcon(base, 0)
         setIcon(badge, 1, SwingConstants.SOUTH_EAST)
     }
+
+    private fun stripeLive(corner: LiveBadgeIcon.Corner) =
+        LiveBadgeIcon.Place(corner, sizeOfBox = 9f / STRIPE_BOX, gapOfBox = 1.25f / STRIPE_BOX)
+
+    private const val STRIPE_BOX = 20f
 
     private fun load(name: String): Icon = IconLoader.getIcon("/icons/$name.svg", MarginalisIcons::class.java)
 }

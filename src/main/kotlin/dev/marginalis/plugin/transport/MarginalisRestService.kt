@@ -27,6 +27,7 @@ import dev.marginalis.core.Author
 import dev.marginalis.core.Classification
 import dev.marginalis.core.CommentThread
 import dev.marginalis.core.Cursor
+import dev.marginalis.core.GuideSections
 import dev.marginalis.core.Identities
 import dev.marginalis.core.Identity
 import dev.marginalis.core.Intent
@@ -123,11 +124,14 @@ class MarginalisRestService : RestService() {
         val guide = javaClass.classLoader.getResourceAsStream("marginalis/agent-guide.md")
             ?.use { it.readBytes().toString(Charsets.UTF_8) }
             ?: return sendError(HttpResponseStatus.NOT_FOUND, "agent guide resource missing from this build", request, context)
-        val bytes = guide.toByteArray(Charsets.UTF_8)
+        val bytes = GuideSections.served(guide, shownGuideSections()).toByteArray(Charsets.UTF_8)
         val response = DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK, Unpooled.wrappedBuffer(bytes))
         response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/markdown; charset=utf-8")
         sendResponse(request, context, response)
     }
+
+    private fun shownGuideSections(): Set<String> =
+        if (MarginalisSettings.getInstance().state.askForSummaryLine) setOf(GuideSections.SUMMARY_LINE) else emptySet()
 
     private fun pingInfo(): JsonObject = JsonObject().apply {
         addProperty("status", "ok")

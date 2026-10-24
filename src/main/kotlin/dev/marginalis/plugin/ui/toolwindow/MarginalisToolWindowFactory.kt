@@ -61,10 +61,10 @@ import dev.marginalis.plugin.store.Authors
 import dev.marginalis.plugin.store.MarginalisStore
 import dev.marginalis.plugin.ui.AgentPresenceGroup
 import dev.marginalis.plugin.ui.FileLevelThreads
-import dev.marginalis.plugin.ui.LiveByDefaultAction
 import dev.marginalis.plugin.ui.MarginalisIcons
 import dev.marginalis.plugin.ui.MarkdownRenderer
 import dev.marginalis.plugin.ui.ParticipantStackIcon
+import dev.marginalis.plugin.ui.ProjectLiveAction
 import dev.marginalis.plugin.ui.RELAYED_STAYS_DELETED
 import dev.marginalis.plugin.ui.StopAgentsGroup
 import dev.marginalis.plugin.ui.SubmitRoundAction
@@ -90,6 +90,22 @@ import javax.swing.tree.TreeCellRenderer
 import javax.swing.tree.TreePath
 
 class MarginalisToolWindowFactory : ToolWindowFactory, DumbAware {
+    override fun init(toolWindow: ToolWindow) {
+        val project = toolWindow.project
+        val store = MarginalisStore.getInstance(project)
+        val showBadgeLater = {
+            ApplicationManager.getApplication().invokeLater {
+                if (!project.isDisposed && !toolWindow.isDisposed) {
+                    toolWindow.setIcon(MarginalisIcons.toolWindow(StripeBadge.of(store.threads.all()), store.isProjectLive))
+                }
+            }
+        }
+        val watchingThreads = store.threads.observe { showBadgeLater() }
+        Disposer.register(toolWindow.disposable) { watchingThreads.close() }
+        store.onLiveChange(toolWindow.disposable, showBadgeLater)
+        showBadgeLater()
+    }
+
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         val panel = MarginalisToolWindowPanel(project)
         val content = ContentFactory.getInstance().createContent(panel, "", false)
@@ -110,23 +126,12 @@ class MarginalisToolWindowFactory : ToolWindowFactory, DumbAware {
                 GuidedLayoutMenuAction(panel),
                 AgentPresenceGroup(),
                 SubmitRoundAction(),
-                LiveByDefaultAction(),
+                ProjectLiveAction(),
                 StopAgentsGroup(),
                 ResolveAllAction(),
                 ClearAllAction(),
             ),
         )
-
-        val refreshBadge = {
-            val threads = MarginalisStore.getInstance(project).threads.all()
-            toolWindow.setIcon(MarginalisIcons.toolWindow(StripeBadge.of(threads)))
-        }
-        MarginalisStore.getInstance(project).threads.addListener {
-            ApplicationManager.getApplication().invokeLater {
-                if (!project.isDisposed && !toolWindow.isDisposed) refreshBadge()
-            }
-        }
-        refreshBadge()
 
         val refreshToolbar: () -> Unit = { ActivityTracker.getInstance().inc() }
         val handBack = MarginalisStore.getInstance(project).handBack

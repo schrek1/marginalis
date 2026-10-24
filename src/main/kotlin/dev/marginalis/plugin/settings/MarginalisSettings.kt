@@ -8,7 +8,9 @@ import com.intellij.openapi.components.Storage
 import com.intellij.util.xmlb.annotations.Attribute
 import com.intellij.util.xmlb.annotations.Tag
 import com.intellij.util.xmlb.annotations.XCollection
+import dev.marginalis.core.FoldingPrefs
 import dev.marginalis.core.ListWhileInFront
+import dev.marginalis.core.LongThreadFolding
 import dev.marginalis.core.People
 import dev.marginalis.core.ProjectTabPrefs
 import dev.marginalis.core.ReadWhen
@@ -49,6 +51,14 @@ class MarginalisSettings : PersistentStateComponent<MarginalisSettings.State> {
         var projectTabReadWhen: String = ReadWhen.EXPANDED_IN_FRONT.stored
 
         var groupRelayedConversation: Boolean = true
+
+        var showTabOnProjectOpen: Boolean = false
+
+        var longThreadFolding: String = LongThreadFolding.FOLD_EVERY_READ_MESSAGE.stored
+
+        var keepFirstMessageOpen: Boolean = false
+
+        var askForSummaryLine: Boolean = true
     }
 
     @Tag("person")
@@ -116,6 +126,15 @@ class MarginalisSettings : PersistentStateComponent<MarginalisSettings.State> {
         set(value) {
             state.projectTabReadWhen = value.stored
         }
+
+    var longThreadFolding: LongThreadFolding
+        get() = LongThreadFolding.fromStored(state.longThreadFolding)
+        set(value) {
+            state.longThreadFolding = value.stored
+        }
+
+    val foldingPrefs: FoldingPrefs
+        get() = FoldingPrefs(atDefault = longThreadFolding, keepFirstOpen = state.keepFirstMessageOpen)
 
     val projectTabPrefs: ProjectTabPrefs
         get() = ProjectTabPrefs(

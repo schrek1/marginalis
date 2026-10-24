@@ -18,45 +18,59 @@ class ProjectTabStartupTest {
 
     @Test
     fun `a project's first open without project threads leaves the tab closed`() {
-        val outcome = ProjectTabStartup.outcome(emptyList(), wasOpen = false, wasPinned = false, firstOpen = true)
+        val outcome = ProjectTabStartup.outcome(emptyList(), wasOpen = false, wasPinned = false, firstOpen = true, showOnOpen = true)
+
+        assertEquals(Outcome.STAY_CLOSED, outcome)
+    }
+
+    @Test
+    fun `a project's first open with only resolved project threads and file threads leaves the tab closed`() {
+        val threads = listOf(resolvedProjectThread(), fileThread())
+
+        val outcome = ProjectTabStartup.outcome(threads, wasOpen = false, wasPinned = false, firstOpen = true, showOnOpen = true)
 
         assertEquals(Outcome.STAY_CLOSED, outcome)
     }
 
     @Test
     fun `a project's first open with an open project thread opens the tab unpinned`() {
-        val outcome = ProjectTabStartup.outcome(listOf(projectThread()), wasOpen = false, wasPinned = false, firstOpen = true)
+        val outcome = ProjectTabStartup.outcome(listOf(projectThread()), wasOpen = false, wasPinned = false, firstOpen = true, showOnOpen = true)
 
         assertEquals(Outcome.OPEN, outcome)
     }
 
     @Test
-    fun `a tab left open and pinned comes back pinned while it has an open project thread`() {
-        val outcome = ProjectTabStartup.outcome(listOf(projectThread()), wasOpen = true, wasPinned = true, firstOpen = false)
+    fun `a tab open and pinned before a plugin reload comes back pinned, even with nothing in it`() {
+        val outcome = ProjectTabStartup.outcome(emptyList(), wasOpen = true, wasPinned = true, firstOpen = false, showOnOpen = true)
 
         assertEquals(Outcome.OPEN_PINNED, outcome)
     }
 
     @Test
-    fun `a tab left open comes back unpinned when it was not pinned`() {
-        val outcome = ProjectTabStartup.outcome(listOf(projectThread()), wasOpen = true, wasPinned = false, firstOpen = false)
+    fun `a tab open before a plugin reload comes back unpinned when it was not pinned`() {
+        val outcome = ProjectTabStartup.outcome(listOf(projectThread()), wasOpen = true, wasPinned = false, firstOpen = false, showOnOpen = true)
 
         assertEquals(Outcome.OPEN, outcome)
     }
 
     @Test
-    fun `a tab left open stays closed when only resolved project threads and file threads remain`() {
-        val threads = listOf(resolvedProjectThread(), fileThread())
-
-        val outcome = ProjectTabStartup.outcome(threads, wasOpen = true, wasPinned = true, firstOpen = false)
+    fun `a later open leaves the tab to the platform, even with open project threads`() {
+        val outcome = ProjectTabStartup.outcome(listOf(projectThread()), wasOpen = false, wasPinned = false, firstOpen = false, showOnOpen = true)
 
         assertEquals(Outcome.STAY_CLOSED, outcome)
     }
 
     @Test
-    fun `a tab the user closed stays closed even with open project threads`() {
-        val outcome = ProjectTabStartup.outcome(listOf(projectThread()), wasOpen = false, wasPinned = false, firstOpen = false)
+    fun `with the tab not shown on open, a project's first open with an open project thread leaves the tab closed`() {
+        val outcome = ProjectTabStartup.outcome(listOf(projectThread()), wasOpen = false, wasPinned = false, firstOpen = true, showOnOpen = false)
 
         assertEquals(Outcome.STAY_CLOSED, outcome)
+    }
+
+    @Test
+    fun `with the tab not shown on open, a tab open and pinned before a plugin reload still comes back pinned`() {
+        val outcome = ProjectTabStartup.outcome(emptyList(), wasOpen = true, wasPinned = true, firstOpen = false, showOnOpen = false)
+
+        assertEquals(Outcome.OPEN_PINNED, outcome)
     }
 }

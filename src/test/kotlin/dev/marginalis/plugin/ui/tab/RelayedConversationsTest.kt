@@ -1,14 +1,10 @@
 package dev.marginalis.plugin.ui.tab
 
-import dev.marginalis.plugin.testing.Relays
-
 class RelayedConversationsTest : MarginTabTestCase() {
 
-    private fun relay(id: Long, body: String): String = agent.add("body" to body, "relayed" to Relays.conversationComment(id))
-
     fun testAPullRequestsConversationFoldsIntoOneGroup() {
-        relay(1, "Looks good overall")
-        relay(2, "Please add a changelog entry")
+        agent.relay(1, "Looks good overall")
+        agent.relay(2, "Please add a changelog entry")
         agent.ask("Our own question")
 
         assertEquals(
@@ -18,8 +14,8 @@ class RelayedConversationsTest : MarginTabTestCase() {
     }
 
     fun testOpeningTheGroupListsItsCommentsFoldedAndEachOpensOnClick() {
-        relay(1, "Looks good overall")
-        relay(2, "Please add a changelog entry")
+        agent.relay(1, "Looks good overall")
+        agent.relay(2, "Please add a changelog entry")
 
         tab.clickConversation("PR #7")
         val opened = shown()
@@ -35,14 +31,14 @@ class RelayedConversationsTest : MarginTabTestCase() {
     }
 
     fun testASingleRelayedCommentCountsAsOneComment() {
-        relay(1, "Looks good overall")
+        agent.relay(1, "Looks good overall")
 
         assertEquals(listOf("From GitHub · PR #7  ▸ 1 comment · 1 new"), shown())
     }
 
     fun testWithGroupingOffEachRelayedCommentIsItsOwnThread() {
-        relay(1, "Looks good overall")
-        relay(2, "Please add a changelog entry")
+        agent.relay(1, "Looks good overall")
+        agent.relay(2, "Please add a changelog entry")
 
         user.changeProjectTabSettings { groupRelayedConversation(false) }
 
@@ -53,7 +49,7 @@ class RelayedConversationsTest : MarginTabTestCase() {
     }
 
     fun testAReplyInAGroupedCommentReachesTheAgent() {
-        val looks = relay(1, "Looks good overall")
+        val looks = agent.relay(1, "Looks good overall")
         tab.clickConversation("PR #7")
         tab.click("Looks good")
 

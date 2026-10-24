@@ -212,11 +212,14 @@ https://github.com/MuhammadFarag/marginalis#if-you-use-claude-code.
 ### Live threads
 
 The user can switch a thread **live** — several can be live at once —
-but only while you are waiting; going live is their call, never yours.
+only while you are waiting; going live is their call, never yours.
+Switching it off needs no one. A thread that orphans leaves live mode;
+once rescued or reopened it comes back live by itself only when the
+whole project is live, otherwise the user switches it on again.
 While a thread is live, each Submit in it (and an Agree) wakes you at
 once with that thread alone — no Submit round. Switching Live on wakes you
 the same way when the thread already holds messages you haven't seen;
-that wake's `handed_back_at` is the time of the thread's last change.
+that wake's `handed_back_at` is the time it went live.
 Every wake names its `reason`: `"hand_back"` for a Submit round, `"live"`
 for a live submit. A live wake's `awaiting` holds only the live
 thread(s) with something new for you — owed to you, or holding messages
@@ -237,6 +240,18 @@ round is pending too, the round wins and carries the whole
 not seen in a thread where you spoke last — and its `handed_back_at` then
 covers the live submit too, so it can be later than the one in
 `comment_list`'s envelope.
+
+The user can also make the **whole project live** — by hand only while
+an agent is waiting, or by default from Settings; turning it off needs
+no one. Then every open thread is live — including threads opened or
+reopened later — unless they switched that thread off, and each Submit
+in any of them wakes you with that thread, as above. These threads stay
+live while you are away: a Submit you missed answers your next wait at
+once when you pass `since`, and making the project live wakes you the same way
+for a thread already holding messages you haven't seen. A thread no
+agent can be told from — the user started it, `@`-addressed no one,
+and not exactly one agent was waiting — wakes nobody until a Submit in
+it made while one agent alone is waiting, or the next Submit round.
 
 After a live wake, answer the thread and **always wait again** — even
 when `awaiting` comes back empty (the thread was resolved, or you had
@@ -281,9 +296,9 @@ standup rather than in a diff.
   project-level no `file` either. In `comment_list` project-level threads
   come first of all, then each file's file-level threads before its line
   threads.
-- Neither drifts: a file-level thread orphans only when its file
-  disappears (reopening on its own when the path comes back), a
-  project-level one never orphans. `comment_reanchor` refuses both, and
+- Neither drifts: a file-level thread is checked when the project
+  opens — it orphans if its file is gone by then and reopens on its own
+  once the path is back — and a project-level one never orphans. `comment_reanchor` refuses both, and
   `navigate` still needs a `file`.
 - Either may carry a `segment` as provenance — the user's selection
   that sparked it, not an anchor.
@@ -366,9 +381,10 @@ helps: emphasis, ~~strikethrough~~, inline code, links (web links open
 in the user's browser, code links in the editor — see Code links),
 lists, task lists (`- [ ]` and `- [x]` show as ☐ and ☑), headings
 (rescaled to margin proportions) and tables. Bare web addresses become
-links too; only http and https links open in the browser. Line breaks
-show as typed, as in GitHub comments: a single newline starts a new
-line, and extra blank lines stay as empty lines.
+links too; only http and https links open in the browser.
+A single line break renders as typed, so write each paragraph on one
+line and don't hard-wrap prose. Extra blank lines between blocks show as
+empty lines too, so separate paragraphs with exactly one.
 Leave a blank line before a table: one directly after a line of text
 shows as raw pipes, unlike on GitHub. A top-level table keeps its
 natural width and scrolls sideways when it is wider than the panel; a
@@ -378,6 +394,15 @@ tag your fences with a language and prefer them to prose-wrapped code.
 Deliberately outside the scope: images show as `[image]`, and raw HTML
 is reduced to the constructs above — any other tag is dropped, keeping
 its text — so stay within them.
+
+<!-- when:summary-line -->
+Open each reply with a one-line conclusion — what you did, decided or
+need — short enough to read as the message's title, then the detail in
+the paragraphs below. The user folds read messages to that first line,
+so it is what they see of your reply later. This is a recommendation the
+user turned on in their settings; a reply that does not follow it still
+works.
+<!-- end:summary-line -->
 
 ## References
 
@@ -518,7 +543,9 @@ kept, not dropped — and you can rescue them: re-read the file, find
 where the content lives now, `comment_reanchor {thread_id, line,
 anchor_text}`. The thread reopens with a fresh verified anchor. Only
 orphans may move (live anchors answer 409). When a sweep surfaces
-orphans, rescue them before other work; if the content is truly gone,
+orphans, rescue them before other work — not with `comment_reopen`,
+which pins a line thread back on its old line without checking what is
+there now; if the content is truly gone,
 reply saying so and resolve — except an orphaned fyi, which you leave
 for the user. When a whole file was rewritten and its
 threads orphaned together, `comment_reanchor_all {file}` runs the same
@@ -560,7 +587,7 @@ machine-readable `reason` (see Anchoring).
 | `POST comment_add_batch {items: [comment_add payloads], author_name?, author_id?, project?}` | many notes in one call; the envelope's identity and `project` are per-item defaults, `to` and `relayed` are per item only → `{results: [ …success shape… \| {error, reason?, open_projects?} ], created}` in request order, 200 unless the envelope itself is malformed; `created` leaves out items answered `existing: true` |
 | `POST comment_reply {thread_id, body, to?, relayed?, author_name?, author_id?}` | reply in-thread → `{message_id, thread_id, status}`; `to` (an `author_id`, or `user`) addresses the message — omit it to address everyone; `project` is ignored (the thread names it); a blank `body` is a 400; a relayed comment already in the thread adds nothing → `{message_id, thread_id, status, existing: true}`; one already relayed into another thread → 409 `{error, reason: "relayed_elsewhere", thread_id}`, the root of a thread the user deleted → 409 `reason: "deleted_relay"` |
 | `POST comment_resolve {thread_id, author_name?, author_id?}` | outcome landed / moot → `{thread_id, status}` |
-| `POST comment_reopen {thread_id}` | resurface a resolved thread → `{thread_id, status}` |
+| `POST comment_reopen {thread_id}` | resurface a resolved or orphaned thread → `{thread_id, status}`; an orphaned line thread is pinned to whatever now sits on its old line, unverified — rescue orphans with `comment_reanchor` instead |
 | `POST comment_reanchor {thread_id, line, anchor_text?, file?}` | orphan rescue, line threads only (file-level → 400) → `{thread_id, line, status}`; the file is looked up in the thread's own project; `file`, when given, must be the thread's file (cross-file moves → 400); a live thread → 409 `reason: "not_orphaned"` |
 | `POST comment_reanchor_all {file, project?}` | rescue every orphan on one file, searching the whole file by content → `{file, results: [{thread_id, line?, status}], rescued}` |
 | `POST comment_resolve_all {file?, author_name?, author_id?}` | bulk resolve across **every open project** (`project` is ignored; `file` matches that path in each) — every thread not already resolved, fyi and orphaned ones included, so only when the outcomes genuinely all landed — which resolves fyis, the user's to close, so only on the user's explicit request → `{resolved: <count>}` |

@@ -9,12 +9,11 @@ object LiveThread {
     fun hasUnseen(thread: CommentThread?, agentKey: String): Boolean =
         thread != null && !isOver(thread) && thread.unreadCountFor(agentKey) > 0
 
-    // A thread's own switch overrides the project's default until the default is flipped again.
-    fun isLive(thread: CommentThread, byDefault: Boolean, switchedOn: Set<String>, switchedOff: Set<String>): Boolean =
-        !isOver(thread) && if (byDefault) thread.id !in switchedOff else thread.id in switchedOn
+    fun isLive(thread: CommentThread, projectLive: Boolean, ownSwitch: Boolean?): Boolean =
+        !isOver(thread) && (ownSwitch ?: projectLive)
 
     fun goLive(handBack: HandBack, thread: CommentThread, agentKey: String?) {
-        if (agentKey != null && hasUnseen(thread, agentKey)) handBack.recordLive(thread.id, agentKey, thread.updatedAt)
+        if (agentKey != null && hasUnseen(thread, agentKey)) handBack.recordLiveNow(thread.id, agentKey)
     }
 
     fun submit(handBack: HandBack, thread: CommentThread, agentKey: String?) {

@@ -1,12 +1,55 @@
 package dev.marginalis.plugin.ui.tab
 
+import com.intellij.ide.util.PropertiesComponent
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.vfs.VirtualFileManager
 
 class OpeningTheTabTest : MarginTabTestCase() {
 
-    fun testAReloadedPluginBringsThePinnedTabWithAnOpenProjectThreadBackBehindTheFileYouAreReading() {
+    override fun setUp() {
+        super.setUp()
+        showTheTabWhenAProjectOpens()
+    }
+
+    fun testAProjectsFirstOpenWithoutProjectThreadsLeavesTheTabClosed() {
+        sample()
+        tab.close()
+        tab.openFileInFront(SAMPLE)
+
+        openForTheFirstTime()
+
+        assertFalse(tab.isOpen)
+    }
+
+    fun testAProjectsFirstOpenWithAnOpenProjectThreadOpensTheTabUnpinnedBehindTheFileYouAreReading() {
         sample()
         agent.ask("Which release name?")
+        tab.close()
+        tab.openFileInFront(SAMPLE)
+
+        openForTheFirstTime()
+
+        assertTrue(tab.isOpen)
+        assertFalse(tab.isPinned)
+        assertEquals("Sample.kt", tab.editors.selectedFiles.single().name)
+    }
+
+    fun testARevealWhileTheTabOpensBehindTheFileYouAreReadingLeavesTheTabInFront() {
+        sample()
+        val thread = user.thread(agent.ask("Which release name?"))
+        tab.close()
+        tab.openFileInFront(SAMPLE)
+        // Opening the tab runs queued EDT events while its editor is built; a reveal can be one of them.
+        ApplicationManager.getApplication().invokeLater { ProjectTab.reveal(project, thread) }
+
+        ProjectTab.showBehindSelection(project)
+        tab.settle()
+
+        assertTrue(tab.isInFront)
+    }
+
+    fun testAReloadedPluginBringsThePinnedTabBackBehindTheFileYouAreReading() {
+        sample()
         tab.pin()
         tab.openFileInFront(SAMPLE)
 
@@ -19,9 +62,7 @@ class OpeningTheTabTest : MarginTabTestCase() {
         assertEquals(listOf("Margin", "Sample.kt"), tab.openTabs())
     }
 
-    fun testAReloadedPluginBringsAnUnpinnedTabWithAnOpenProjectThreadBackUnpinned() {
-        agent.ask("Which release name?")
-
+    fun testAReloadedPluginBringsAnUnpinnedTabBackUnpinned() {
         tab.reloadPlugin()
 
         assertTrue(tab.isOpen)
@@ -29,48 +70,55 @@ class OpeningTheTabTest : MarginTabTestCase() {
         assertTrue(tab.isInFront)
     }
 
-    fun testAReloadedPluginLeavesATabWithNothingInItClosed() {
-        sample()
-        val resolved = agent.ask("Settled already")
-        agent.post("comment_resolve", "thread_id" to resolved)
-        tab.pin()
-
-        tab.reloadPlugin()
-
-        assertFalse(tab.isOpen)
-    }
-
-    // FixMe: Known issue - #58 updating the plugin while the Margin tab is closed fails in the unload: the open thread panels and the Margin tab outlive the plugin
-    fun testUpdatingThePluginWhileTheTabIsClosedReportsAnErrorAndLeavesThreadPanelsOpen() {
+    fun testUpdatingThePluginWhileTheTabIsClosedTakesThreadPanelsAndTheTabOutOfTheIde() {
         sample()
         val thread = agent.addOnLine(5, "body" to "Still open in the editor")
         user.open(thread)
         tab.close()
-        var tabValidWhileUnloaded = false
+        val address = tab.file.url
+        var tabAddressWhileUnloading: Any? = Unit
 
-        val failure = tab.unloadPluginForUpdate { tabValidWhileUnloaded = MarginFile.isValid }
+        val failure = tab.unloadPluginForUpdate {
+            tabAddressWhileUnloading = VirtualFileManager.getInstance().findFileByUrl(address)
+        }
 
-        assertInstanceOf(failure, IllegalArgumentException::class.java)
-        assertTrue(failure!!.message, failure.message!!.contains("file is not open"))
-        assertEquals(1, user.panels().size)
-        assertTrue(tabValidWhileUnloaded)
+        assertNull(failure)
+        assertEquals(emptyList<Any>(), user.panels())
+        assertNull(tabAddressWhileUnloading)
     }
 
-    fun testWhileThePluginIsUnloadedTheTabCannotBeRestoredByItsAddressYetComesBackWithItsOpenThread() {
-        agent.ask("Which release name?")
-        var found: Any? = MarginFile
-        tab.reloadPlugin { found = VirtualFileManager.getInstance().findFileByUrl(MarginFile.url) }
+    fun testWhileThePluginIsUnloadedTheTabCannotBeRestoredByItsAddress() {
+        val address = tab.file.url
+        var found: Any? = tab.file
+        tab.reloadPlugin { found = VirtualFileManager.getInstance().findFileByUrl(address) }
 
         assertNull(found)
         assertTrue(tab.isOpen)
     }
 
-    fun testAClosedTabStaysClosedWhenTheProjectOpensAgainEvenWithAnOpenProjectThread() {
-        agent.ask("Which release name?")
+    fun testAReloadedPluginBringsBackEveryProjectsTab() {
+        withTwin { second, there ->
+            there.pin()
+
+            tab.reloadPlugin()
+            there.openOnStartup()
+
+            assertEquals(listOf("marginalis://margin/${project.locationHash}"), tab.marginAddresses())
+            assertEquals(listOf("marginalis://margin/${second.project.locationHash}"), there.marginAddresses())
+            assertTrue(there.isPinned)
+        }
+    }
+
+    fun testAClosedTabStaysClosedWhenTheProjectOpensAgain() {
         tab.close()
 
         tab.openOnStartup()
 
         assertFalse(tab.isOpen)
+    }
+
+    private fun openForTheFirstTime() {
+        PropertiesComponent.getInstance(project).unsetValue("marginalis.projectTab.introduced")
+        tab.openOnStartup()
     }
 }

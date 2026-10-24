@@ -33,6 +33,7 @@ import javax.swing.Icon
 import javax.swing.JCheckBox
 import javax.swing.JComboBox
 import javax.swing.JComponent
+import javax.swing.JEditorPane
 import javax.swing.JLabel
 import javax.swing.JList
 import javax.swing.JTextField
@@ -103,6 +104,9 @@ class SettingsPage private constructor(private val disposable: Disposable) {
         combo.renderer.getListCellRendererComponent(JList(), item, 0, false, false).accessibleContext.accessibleName
 
     fun labels(): List<String> = UIUtil.findComponentsOfType(page, JLabel::class.java).mapNotNull { it.text }
+
+    fun comments(): List<String> = UIUtil.findComponentsOfType(page, JEditorPane::class.java)
+        .map { it.document.getText(0, it.document.length).replace(Regex("\\s+"), " ").trim() }
 
     fun legend(): List<Pair<String, Icon?>> =
         UIUtil.findComponentsOfType(page, JLabel::class.java).filter { it.icon != null && it.text?.contains(": ") == true }.map { it.text to it.icon }

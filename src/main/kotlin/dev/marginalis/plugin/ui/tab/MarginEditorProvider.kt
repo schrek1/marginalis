@@ -11,13 +11,13 @@ import com.intellij.openapi.vfs.VirtualFile
 // isn't shows the "not available while indexing" placeholder instead.
 class MarginEditorProvider : FileEditorProvider, DumbAware {
 
-    override fun accept(project: Project, file: VirtualFile): Boolean = file === MarginFile
+    override fun accept(project: Project, file: VirtualFile): Boolean = file is MarginFile
 
-    // accept() reads nothing; under the default read action a pending write elsewhere makes the platform wait 30 s
-    // and then blame Marginalis for "Cannot check provider".
+    // Under the default read action, a stalled write elsewhere makes the platform blame this provider.
     override fun acceptRequiresReadAction(): Boolean = false
 
-    override fun createEditor(project: Project, file: VirtualFile): FileEditor = MarginEditor(project)
+    override fun createEditor(project: Project, file: VirtualFile): FileEditor =
+        MarginEditor(project, MarginFile.adopt(project, file as MarginFile))
 
     override fun getEditorTypeId(): String = "marginalis-project-tab"
 

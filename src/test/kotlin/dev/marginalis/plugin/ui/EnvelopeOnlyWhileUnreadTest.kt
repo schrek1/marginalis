@@ -134,6 +134,6 @@ class EnvelopeOnlyWhileUnreadTest : ToolWindowTestCase() {
 
     private fun assertBadge(badge: StripeBadge?) {
         window.settle()
-        assertSame(MarginalisIcons.toolWindow(badge), window.window.shownIcon)
+        assertSame(MarginalisIcons.toolWindow(badge, projectLive = false), window.window.shownIcon)
     }
 }

@@ -90,6 +90,8 @@ class HandBack(
         return at
     }
 
+    fun recordLiveNow(threadId: String, agentKey: String): Instant = recordLive(threadId, agentKey, clock())
+
     fun forgetLive(threadId: String) {
         synchronized(lock) {
             liveSubmits.keys.removeAll { it.threadId == threadId }

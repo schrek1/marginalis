@@ -228,9 +228,9 @@ class EnvelopeOnlyWhileUnreadTest : SandboxScenario("envelope_only_while_unread"
             shown = inner;
         }
         var verdict = 'unknown:' + (shown == null ? 'null' : shown.getClass().getName());
-        if (shown === icons.toolWindow(null)) verdict = 'NONE';
-        if (shown === icons.toolWindow(badges.getField('AWAITING_YOU').get(null))) verdict = 'AWAITING_YOU';
-        if (shown === icons.toolWindow(badges.getField('BLOCKER').get(null))) verdict = 'BLOCKER';
+        if (shown === icons.toolWindow(null, false)) verdict = 'NONE';
+        if (shown === icons.toolWindow(badges.getField('AWAITING_YOU').get(null), false)) verdict = 'AWAITING_YOU';
+        if (shown === icons.toolWindow(badges.getField('BLOCKER').get(null), false)) verdict = 'BLOCKER';
         String(verdict)
         """,
     )
@@ -243,14 +243,14 @@ class EnvelopeOnlyWhileUnreadTest : SandboxScenario("envelope_only_while_unread"
         val shown = SandboxUi.obj(
             SandboxUi.marginJs(
                 """
-                var marginFile = pluginLoader.loadClass('dev.marginalis.plugin.ui.tab.MarginFile').getField('INSTANCE').get(null);
+                var tab = marginFile();
                 var title = null;
                 var windows = com.intellij.openapi.fileEditor.ex.FileEditorManagerEx.getInstanceEx(project).getWindows();
                 for (var i = 0; i < windows.length && title == null; i++) {
                     var tabs = windows[i].getTabbedPane().getTabs().getTabs();
                     for (var j = 0; j < tabs.size(); j++) {
                         var object = tabs.get(j).getObject();
-                        if (object === marginFile || (object != null && object.getFile && object.getFile() === marginFile)) {
+                        if (tab != null && (object === tab || (object != null && object.getFile && object.getFile() === tab))) {
                             title = String(tabs.get(j).getText());
                         }
                     }

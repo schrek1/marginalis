@@ -100,6 +100,6 @@ class WalkthroughNavigatorTest : MarginalisTestCase() {
         WalkthroughNavigator.navigateTo(project, CommentThread(null, null, anchorText = null))
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
 
-        assertEquals(MarginFile, FileEditorManager.getInstance(project).selectedEditor?.file)
+        assertEquals(MarginFile.of(project), FileEditorManager.getInstance(project).selectedEditor?.file)
     }
 }

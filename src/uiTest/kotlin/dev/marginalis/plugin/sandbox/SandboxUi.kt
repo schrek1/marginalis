@@ -94,13 +94,23 @@ function find(root, test) {
 """
 
     const val MARGIN = """
+// The project's Margin tab among its open files, found by its address, or null while it is closed.
+function marginFile() {
+    var open = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).getOpenFiles();
+    for (var i = 0; i < open.length; i++) {
+        if (String(open[i].getUrl()).indexOf('marginalis://margin/') == 0) return open[i];
+    }
+    return null;
+}
+// Open means its editor exists: a tab opening behind the file in front is selected before that.
 function marginTabOpen() {
-    var marginFile = pluginLoader.loadClass('dev.marginalis.plugin.ui.tab.MarginFile').getField('INSTANCE').get(null);
-    return com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).getAllEditors(marginFile).length > 0;
+    var tab = marginFile();
+    return tab != null && com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).getAllEditors(tab).length > 0;
 }
 function marginPanel() {
-    var marginFile = pluginLoader.loadClass('dev.marginalis.plugin.ui.tab.MarginFile').getField('INSTANCE').get(null);
-    var editors = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).getAllEditors(marginFile);
+    var tab = marginFile();
+    if (tab == null) throw 'the Margin tab is not open';
+    var editors = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).getAllEditors(tab);
     if (editors.length == 0) throw 'the Margin tab is not open';
     var field = editors[0].getClass().getDeclaredField('content');
     field.setAccessible(true);
@@ -440,7 +450,7 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
         threadPanel(threadId),
     )
 
-    fun liveByDefault(): Boolean = js("String(store.getLiveByDefault())") == "true"
+    fun projectLive(): Boolean = js("String(store.isProjectLive())") == "true"
 
     fun isLive(threadId: String): Boolean = js("String(store.isLive(store.getThreads().byId('$threadId')))") == "true"
 
@@ -600,6 +610,11 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
 
     /** Types the body into an open draft's composer and presses its send button. */
     fun userSubmitsDraft(threadId: String, body: String) {
+        val panel = threadPanel(threadId)
+        // A new draft's panel shows before it opens its composer, once its inlay is attached.
+        awaitUntil("the draft's composer is open") {
+            js(FIND + "String(find(component, function (c) { return c instanceof com.intellij.ui.EditorTextField; }) != null)", panel) == "true"
+        }
         js(
             FIND + """
             var area = find(component, function (c) { return c instanceof com.intellij.ui.EditorTextField; });
@@ -609,7 +624,7 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
             send.doClick();
             String(true)
             """,
-            threadPanel(threadId),
+            panel,
         )
     }
 

@@ -9,15 +9,11 @@ History before 0.1.19 lives in git tags.
 
 ### Added
 
-- Line breaks you type in a comment now show up after you send it: a
-  single Enter inside a paragraph is a new line, and a second blank line
-  between paragraphs stays an empty line instead of collapsing.
-- Paragraphs and lists in a message get a small gap between them, so a
-  long reply no longer reads as one dense block.
-- Find any thread in the Marginalis tool window in one click: "Select in
-  Marginalis" in the thread's header opens the tool window on it, and
-  "Select Opened Thread" in the tool window picks the thread on the line
-  your caret is on, or the file when that line has none.
+- The Margin tab no longer opens with the project, after a restart
+  included. It comes by itself once an agent starts a project thread,
+  and you can open it any time. To have it open with the project as
+  before, tick *Show the Margin tab when a project opens* in Settings →
+  Tools → Marginalis → Project Tab.
 
 ### Changed
 
@@ -28,75 +24,101 @@ History before 0.1.19 lives in git tags.
     most-recent-activity order. Each project remembers its choice.
   - A new thread you start, and threads that arrive while the list holds
     still, appear on the side the chosen order puts new threads.
-- Long threads stay readable. You see the opening message, the last two
-  and anything you haven't read yet; the read middle hides behind one line
-  that shows the full history with a click, and Shorten History in the
-  thread header hides it again.
+  - Resting at the bottom of an oldest-first list, a new thread arriving
+    there comes into view, as one arriving at the top does in the other
+    orders.
 - The ✉ envelope now shows only while a thread has a message you have
   not read. Once you read a reply, its envelope goes away in the
   Marginalis tool window, on its stripe button and in the Margin tab,
   so ✉ points at what is new. A thread you read but did not answer
   stays in "Awaiting You" and keeps its badge on the file's editor tab.
-
-### Fixed
-
-- Opening a project no longer freezes IntelliJ 2025.2 and 2025.3 for
-  minutes. When the Margin tab came back while the IDE was still loading
-  the project, both could wait for each other and the IDE stopped
-  responding.
-- A thread whose code an edit removed now always shows as orphaned. When
-  a tool rewrote a file and a reply or another change to the thread came
-  in before anything refreshed the list, the thread could stay open,
-  pinned to whatever code had taken its old line.
-- A busy IDE no longer reports an error that blames Marginalis. When
-  the IDE was stuck for a while, for example during startup, opening a
-  file could show "IDE error occurred" naming Marginalis, although
-  nothing in Marginalis had gone wrong.
-- When an agent starts a project thread, the IDE no longer freezes for
-  up to half a minute while the Margin tab opens for it.
-- Open Thread on a project thread the agent just started always brings
-  the Margin tab to the front. On a busy machine the file you were
-  reading could come back over it a moment later.
-- "Select Opened Thread" in the Marginalis tool window works with a
-  pull or merge request review diff in front too, instead of staying
-  greyed out: it picks the thread on your caret's line in the diff, or
-  the diff's file. While you are writing a reply, it picks the thread
-  you are replying to, in an editor, a diff or the Margin tab.
-- A guided walkthrough you follow in a pull or merge request review diff
-  stays in that diff. Resolve, Previous and Next switch the diff to the
-  next step's file when the review contains it, scroll to the step and
-  open its thread, also when the review branch is not checked out. A step
-  in a file outside the review still opens in a regular editor tab.
-- *Live by default*, a ⚡ toggle in the Marginalis tool window's toolbar: every open
-  thread of the project is live without switching each one. A thread's
-  own ⚡ still switches it off. The choice is kept per project, in your
-  workspace, not in version control; a checkbox in Settings sets where a
-  project starts.
-- Expand and Collapse in the Marginalis tool window's toolbar start at
-  the folder of the selection and work one level further out with each
-  press, up to its section and then every section. Collapse folds
-  everything inside, as IntelliJ's Collapse All does. Folders you fold
-  stay folded when the tree refreshes.
 - A walkthrough in the Marginalis tool window now reads in step order, the
   way Next and Previous walk it. Steps in a row in the same file fold
   under that file, and steps in a row about the whole project under a
   Project node. The Guided Layout menu in the tool window header
   switches to the folder tree as before, or to one node per file, and
   each project remembers its choice.
+
+### Fixed
+
+- The Margin tab shows only when there is something in it. A project
+  without project threads opens without it, and an agent's new project
+  thread opens a closed tab behind the file you are reading. It no
+  longer pins itself on a project's first open.
+
+## [0.2.7] - 2026-10-22
+
+Thanks to [@schrek1](https://github.com/schrek1) for starting the long-thread work in this release.
+
+### Added
+
+- Long threads open folded to what matters. Messages you have read fold
+  to one line with who wrote it and how it starts, while unread messages
+  and the latest two stay open.
+- Fold or open any single message with the arrow beside it.
+- Long runs of folded messages tuck behind one link, so the whole thread
+  fits on screen.
+- Fold or expand the whole thread from its header, one step at a time,
+  and step back to the usual view the same way.
+- Choose how long threads open in Settings: every read message folded,
+  only the long ones, or nothing at all.
+- Keep a thread's first message open to see how it started. Turn it on
+  in Settings.
+- Agents now open each reply with a one-line summary, so a folded
+  message still tells you where things stand. You can turn this off in
+  Settings.
+
+## [0.2.6] - 2026-10-21
+
+Thanks to [@schrek1](https://github.com/schrek1) for the fixes in this release.
+
+### Fixed
+
+- Line breaks you type in a comment now show up after you send it: a
+  single Enter inside a paragraph is a new line, and a second blank line
+  between paragraphs stays an empty line instead of collapsing.
+- Paragraphs and lists in a message get a small gap between them, so a
+  long reply no longer reads as one dense block.
+- A stalled IDE no longer blames Marginalis. While the IDE waited on
+  other work, it reported "Cannot check provider" for the Margin tab.
+- A thread whose code a rewrite removed now shows as orphaned right away,
+  everywhere, and stops being live. Before, a reply that arrived after the
+  rewrite could leave it open, pinned to whatever code took its old line.
+- Updating or uninstalling Marginalis while the Margin tab is closed no
+  longer reports an IDE error or asks you to restart.
+- Opening a second project no longer reports an IDE error from
+  Marginalis. Each project now keeps its own Margin tab.
+
+## [0.2.5] - 2026-10-21
+
+Thanks to [@schrek1](https://github.com/schrek1) for the features and fixes in this release.
+
+### Added
+
+- Make a whole project live with one click. The ⚡ in the Marginalis
+  tool window makes every open thread live, so each Submit wakes the
+  listening agent with that thread. Switch off any thread you want to keep for
+  the next round. While the project is live, the Marginalis icon in the
+  side bar carries a ⚡, so you always know. Your choice stays with the
+  project, and Settings sets the default for projects you have not
+  switched.
+- See at a glance which threads are live. Each live thread's mark in the
+  gutter carries a small ⚡, and a thread you switch off loses it.
+
 ### Fixed
 
 - A thread you left open shows the agent's reply when you come back to
   it. A reply that arrived while its file, or the Margin tab, was in a
   background tab used to stay hidden until something else changed on
   the thread.
-- The Margin tab shows only when there is something in it. A project
-  without project threads opens without it, and the tab appears with
-  the first one. It no longer pins itself, and a tab left empty stays
-  closed after a restart.
-- The reply you are typing in the Margin tab stays where it is when an
-  agent posts into another thread above it, and keeps your cursor. The
-  same goes for a new project thread you are writing. Reading without
-  a draft, the card at the top of your view stays put too.
+- The reply you are typing in the Margin tab stays where it is on
+  screen, with your text and cursor, when other threads grow, move or
+  are resolved, and when the agent answers in the same thread. A
+  message you are editing stays put too, even while you check a file
+  or work in a tool window. When the whole tab fits on screen, your
+  reply shifts with the threads around it but stays in view. Scrolled
+  down to read, the thread at the top of your view stays put; at the
+  very top, new threads and replies still come into view.
 
 ## [0.2.4] - 2026-10-19
 

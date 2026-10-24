@@ -11,11 +11,12 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
+import kotlin.concurrent.thread
 
 /**
  * Everything the user left in the margin survives a real stop and start of the IDE process (MARG-105): line, file and
  * project threads with their replies, what the user has read, a resolved thread, and the project's own settings (Sort,
- * Live by default, Guided layout). After the start the markers sit on their lines, and the Margin tab and the tool
+ * a live project, Guided layout). After the start the markers sit on their lines, and the Margin tab and the tool
  * window hold the same threads.
  */
 @Tag("core")
@@ -50,7 +51,10 @@ class ThreadsSurviveRestartTest : SandboxScenario("threads_survive_restart") {
 
         SandboxUi.openMarginTab(projectLevel)
         SandboxUi.chooseMarginSort("Newest first")
-        ToolWindowUi.pressToolWindowAction("Live by default")
+        // Making the project live needs a listening agent.
+        val listening = thread { runCatching { Agent.agentWaits(6) } }
+        ToolWindowUi.toggleProjectLive()
+        listening.join()
         ToolWindowUi.chooseGuidedLayout("By file")
 
         before = snapshot()
@@ -74,7 +78,7 @@ class ThreadsSurviveRestartTest : SandboxScenario("threads_survive_restart") {
         check("every thread keeps its messages", after.messages == before.messages, "${after.messages} vs ${before.messages}")
         check("what the user had read stays read, and what not, unread", after.unreadByUser == before.unreadByUser,
             "${after.unreadByUser} vs ${before.unreadByUser}")
-        check("the project's settings survive: Sort, Live by default, Guided layout", after.settings == before.settings,
+        check("the project's settings survive: Sort, a live project, Guided layout", after.settings == before.settings,
             "${after.settings} vs ${before.settings}")
 
         SandboxUi.openInEditor(GREETING)
@@ -115,7 +119,7 @@ class ThreadsSurviveRestartTest : SandboxScenario("threads_survive_restart") {
             statuses = threads.mapValues { (_, thread) -> status(thread) },
             messages = threads.mapValues { (_, thread) -> thread.get("messages").asInt },
             unreadByUser = unreadByUser,
-            settings = listOf(SandboxUi.marginSort(), SandboxUi.liveByDefault().toString(), ToolWindowUi.guidedLayout()),
+            settings = listOf(SandboxUi.marginSort(), SandboxUi.projectLive().toString(), ToolWindowUi.guidedLayout()),
         )
     }
 

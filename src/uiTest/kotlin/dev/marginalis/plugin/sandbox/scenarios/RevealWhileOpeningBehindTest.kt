@@ -55,9 +55,9 @@ class RevealWhileOpeningBehindTest : SandboxScenario("reveal_while_opening_behin
         SandboxUi.js(
             SandboxUi.MARGIN +
                 """
-                var marginFile = pluginLoader.loadClass('dev.marginalis.plugin.ui.tab.MarginFile').getField('INSTANCE').get(null);
+                var tab = marginFile();
                 com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater(function () {
-                    com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).closeFile(marginFile);
+                    if (tab != null) com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).closeFile(tab);
                 });
                 String(true)
                 """,

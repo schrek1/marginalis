@@ -232,14 +232,14 @@ class WaitingTest : HttpContractTestCase() {
         sample()
         val id = agent.addOnLine(5)
         user.reply(id, "Typed before you listened.")
-        val updatedAt = Instant.parse(agent.summaryOf(id).string("updated_at"))
         val waiting = agent.startWait()
+        val wentLiveAfter = Instant.now()
 
         user.goLive(id)
 
         val wake = agent.await(waiting)
         assertEquals("live", wake["reason"]!!.asString)
-        assertEquals(updatedAt, wake.instant("handed_back_at"))
+        assertFalse(wake.instant("handed_back_at").isBefore(wentLiveAfter))
         assertEquals(listOf(id), wake.json.getAsJsonArray("awaiting").map { it.asJsonObject.id })
         assertNull(agent.get("comment_list")["handed_back_at"])
     }

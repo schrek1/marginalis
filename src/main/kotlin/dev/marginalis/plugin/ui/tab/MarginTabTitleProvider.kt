@@ -10,5 +10,5 @@ import dev.marginalis.plugin.store.MarginalisStore
 class MarginTabTitleProvider : EditorTabTitleProvider, DumbAware {
 
     override fun getEditorTabTitle(project: Project, file: VirtualFile): String? =
-        if (file === MarginFile) ProjectTabTally.of(MarginalisStore.getInstance(project).threads.all()).title else null
+        if (file is MarginFile) ProjectTabTally.of(MarginalisStore.getInstance(project).threads.all()).title else null
 }

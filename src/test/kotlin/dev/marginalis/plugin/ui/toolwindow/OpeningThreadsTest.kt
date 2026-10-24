@@ -62,7 +62,7 @@ class OpeningThreadsTest : ToolWindowTestCase() {
 
         window.doubleClick("About the whole project")
 
-        assertEquals(MarginFile, selectedEditorFile())
+        assertEquals(MarginFile.of(project), selectedEditorFile())
     }
 
     @DisplayOnly

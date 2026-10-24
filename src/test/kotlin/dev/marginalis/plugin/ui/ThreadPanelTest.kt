@@ -29,7 +29,7 @@ class ThreadPanelTest : HttpContractTestCase() {
         user.reply(id, "Into what?")
         agent.reply(id, "A `sumOf` call.")
 
-        val panel = user.open(id)
+        val panel = user.open(id).also { user.press(it, "Expand All") }
         val shown = user.shownText(panel)
 
         assertTrue(shown, shown.indexOf("Extract this loop.") < shown.indexOf("Into what?"))

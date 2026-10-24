@@ -3,6 +3,7 @@ package dev.marginalis.plugin.ui.diff
 import com.intellij.diff.tools.fragmented.UnifiedDiffViewer
 import com.intellij.diff.tools.util.base.IgnorePolicy
 import dev.marginalis.plugin.testing.Gutter
+import dev.marginalis.plugin.testing.LiveBadge
 import dev.marginalis.plugin.testing.PluginUnload
 import dev.marginalis.plugin.testing.ReviewDiffs
 import dev.marginalis.plugin.transport.HttpContractTestCase
@@ -171,6 +172,30 @@ class ReviewDiffTest : HttpContractTestCase() {
         agent.addOnLine(20, "body" to "Late")
 
         assertEquals(listOf(22), diff.iconRows())
+    }
+
+    fun testAReviewsMarksCarryTheLiveBadgeWhileTheProjectIsLive() {
+        sample()
+        agent.addOnLine(20, "body" to "Check this")
+        val diff = diffs.sideBySide(SAMPLE, base, pullRequest)
+        assertFalse(LiveBadge.shownIn(diff.iconAt(22)))
+
+        user.goProjectLive()
+        assertTrue(LiveBadge.shownIn(diff.iconAt(22)))
+
+        user.stopProjectLive()
+        assertFalse(LiveBadge.shownIn(diff.iconAt(22)))
+    }
+
+    fun testClosingAReviewLeavesNothingListeningForLiveChanges() {
+        sample()
+        agent.addOnLine(20, "body" to "Check this")
+        val listening = store.liveListenerCount
+        val diff = diffs.sideBySide(SAMPLE, base, pullRequest)
+
+        diff.close()
+
+        assertEquals(listening, store.liveListenerCount)
     }
 
     fun testClosingAReviewWhereAThreadWasOpenedLeavesNothingListeningToTheMargin() {

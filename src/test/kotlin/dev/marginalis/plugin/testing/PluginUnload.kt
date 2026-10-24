@@ -15,6 +15,6 @@ object PluginUnload {
         runCatching { MarginalisUnloadListener().beforePluginUnload(of, true) }.exceptionOrNull().also { whileUnloaded() }
     } finally {
         TurnSignalIconPatcher.reinstate()
-        MarginFile.isValid = true
+        MarginFile.reinstate()
     }
 }

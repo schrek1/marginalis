@@ -54,6 +54,31 @@ class ReadingTest : TabInFrontTestCase() {
         assertFalse(user.shownText(tab.panel("Heads-up")).lines().contains("new"))
     }
 
+    fun testAFoldedMessageIsNotReadByBeingOnScreen() {
+        tab.windowActive = false
+        val id = agent.ask("Heads-up: CI moved")
+        agent.reply(id, "Details follow.")
+        user.fold(tab.panel("Heads-up"), "Details follow.")
+
+        tab.windowActive = true
+        tab.openFileInFront(sample())
+        tab.bringToFront()
+
+        assertEquals(listOf(true, false), user.thread(id).messages.map { it.readByUser })
+    }
+
+    fun testOpeningAFoldedMessageReadsItOnceItIsOnScreen() {
+        tab.windowActive = false
+        val id = agent.ask("Heads-up: CI moved")
+        agent.reply(id, "Details follow.")
+        user.fold(tab.panel("Heads-up"), "Details follow.")
+        tab.windowActive = true
+
+        user.expand(tab.panel("Heads-up"), "Details follow.")
+
+        assertEquals(listOf(true, true), user.thread(id).messages.map { it.readByUser })
+    }
+
     fun testWhileTheTabIsBehindAFileNothingInItIsRead() {
         tab.openFileInFront(sample())
 
