@@ -15,8 +15,9 @@ import kotlin.io.path.writeText
 
 /**
  * The Margin tab shows only with something in it (MARG-48): a fresh project opens without it, the agent's first
- * project thread brings it, an empty tab does not come back after a restart, and a project with an open project
- * thread opens it unpinned.
+ * project thread brings it, and an empty tab does not come back after a restart. With "Show the Margin tab when a
+ * project opens" off, the default (MARG-192), even a project with an open project thread opens without it, until the
+ * agent starts the next one.
  *
  * The scenario's first start is the fresh project the base class opens.
  */
@@ -60,7 +61,7 @@ class NoEmptyMarginTabTest : SandboxScenario("no_empty_margin_tab") {
 
     @Test
     @Order(4)
-    fun openThreadOpensTheTabUnpinned() = case("open_thread_opens_the_tab_unpinned") {
+    fun openThreadKeepsTheTabClosedOnOpen() = case("open_thread_keeps_the_tab_closed_on_open") {
         val thread = Agent.agentStartsProjectThread("An open project thread before the project is opened again.")
         awaitOrFail("the open thread on disk") { persistedStatus(thread) == "OPEN" }
         val threadsOnDisk = Sandbox.projectText(THREADS_FILE) ?: error("no $THREADS_FILE in the project")
@@ -71,9 +72,13 @@ class NoEmptyMarginTabTest : SandboxScenario("no_empty_margin_tab") {
             threadsFile.writeText(threadsOnDisk)
         }
         settleAfterStart(threads = 2)
-        val tab = marginTabUntilOpen()
+        settle()
         shot("4-first-open-with-a-project-thread")
-        check("a project with an open project thread opens with the Margin tab", tab.open, tab)
+        check("with the setting off, a project with an open project thread opens without the Margin tab", !marginTab().open, marginTab())
+        Agent.agentStartsProjectThread("A new project thread after the project opened.")
+        val tab = marginTabUntilOpen()
+        shot("5-next-project-thread")
+        check("the agent's next project thread opens the Margin tab", tab.open, tab)
         check("that Margin tab is not pinned", !tab.pinned, tab)
     }
 
@@ -82,15 +87,16 @@ class NoEmptyMarginTabTest : SandboxScenario("no_empty_margin_tab") {
     private fun marginTab(): MarginTab {
         val shown = JsonParser.parseString(
             SandboxUi.js(
-                """
-                var marginFile = pluginLoader.loadClass('dev.marginalis.plugin.ui.tab.MarginFile').getField('INSTANCE').get(null);
+                SandboxUi.MARGIN +
+                    """
+                var tab = marginFile();
                 var manager = com.intellij.openapi.fileEditor.ex.FileEditorManagerEx.getInstanceEx(project);
                 var windows = manager.getWindows();
                 var pinned = false;
                 for (var i = 0; i < windows.length; i++) {
-                    if (windows[i].isFileOpen(marginFile) && windows[i].isFilePinned(marginFile)) pinned = true;
+                    if (tab != null && windows[i].isFileOpen(tab) && windows[i].isFilePinned(tab)) pinned = true;
                 }
-                String(JSON.stringify({open: manager.isFileOpen(marginFile), pinned: pinned}))
+                String(JSON.stringify({open: tab != null, pinned: pinned}))
                 """,
             ),
         ).asJsonObject

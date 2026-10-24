@@ -94,13 +94,21 @@ function find(root, test) {
 """
 
     const val MARGIN = """
+// The project's Margin tab among its open files, found by its address, or null while it is closed.
+function marginFile() {
+    var open = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).getOpenFiles();
+    for (var i = 0; i < open.length; i++) {
+        if (String(open[i].getUrl()).indexOf('marginalis://margin/') == 0) return open[i];
+    }
+    return null;
+}
 function marginTabOpen() {
-    var marginFile = pluginLoader.loadClass('dev.marginalis.plugin.ui.tab.MarginFile').getField('INSTANCE').get(null);
-    return com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).getAllEditors(marginFile).length > 0;
+    return marginFile() != null;
 }
 function marginPanel() {
-    var marginFile = pluginLoader.loadClass('dev.marginalis.plugin.ui.tab.MarginFile').getField('INSTANCE').get(null);
-    var editors = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).getAllEditors(marginFile);
+    var tab = marginFile();
+    if (tab == null) throw 'the Margin tab is not open';
+    var editors = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).getAllEditors(tab);
     if (editors.length == 0) throw 'the Margin tab is not open';
     var field = editors[0].getClass().getDeclaredField('content');
     field.setAccessible(true);
