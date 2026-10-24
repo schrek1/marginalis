@@ -102,8 +102,10 @@ function marginFile() {
     }
     return null;
 }
+// Open means its editor exists: a tab opening behind the file in front is selected before that.
 function marginTabOpen() {
-    return marginFile() != null;
+    var tab = marginFile();
+    return tab != null && com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).getAllEditors(tab).length > 0;
 }
 function marginPanel() {
     var tab = marginFile();
@@ -448,7 +450,7 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
         threadPanel(threadId),
     )
 
-    fun liveByDefault(): Boolean = js("String(store.getLiveByDefault())") == "true"
+    fun projectLive(): Boolean = js("String(store.isProjectLive())") == "true"
 
     fun isLive(threadId: String): Boolean = js("String(store.isLive(store.getThreads().byId('$threadId')))") == "true"
 
