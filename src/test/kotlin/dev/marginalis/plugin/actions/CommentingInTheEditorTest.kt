@@ -269,7 +269,7 @@ class CommentingInTheEditorTest : HttpContractTestCase() {
         assertFalse(thread.has("file"))
         assertEquals("Applies everywhere.", thread.messages().single().string("body"))
         assertEquals(emptyList<ThreadPanel>(), user.panels())
-        assertEquals(MarginFile, FileEditorManager.getInstance(project).selectedEditor?.file)
+        assertEquals(MarginFile.of(project), FileEditorManager.getInstance(project).selectedEditor?.file)
     }
 
     fun testABlankDraftIsNotMovedUp() {

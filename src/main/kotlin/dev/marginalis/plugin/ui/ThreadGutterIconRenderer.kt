@@ -8,6 +8,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.text.StringUtil
 import dev.marginalis.core.CommentThread
 import dev.marginalis.plugin.settings.MarginalisSettings
+import dev.marginalis.plugin.store.MarginalisStore
 import javax.swing.Icon
 
 class ThreadGutterIconRenderer(
@@ -16,7 +17,9 @@ class ThreadGutterIconRenderer(
     private val threads: List<CommentThread>,
 ) : GutterIconRenderer() {
 
-    override fun getIcon(): Icon = MarginalisIcons.markOf(threads)
+    private val live = threads.any(MarginalisStore.getInstance(project)::isLive)
+
+    override fun getIcon(): Icon = MarginalisIcons.markOf(threads, live)
 
     override fun getTooltipText(): String {
         if (threads.size == 1) {
@@ -56,7 +59,8 @@ class ThreadGutterIconRenderer(
         other is ThreadGutterIconRenderer &&
             other.threads.map { it.id } == threads.map { it.id } &&
             other.threads.map { it.status.kind } == threads.map { it.status.kind } &&
-            other.threads.map { it.unreadCount() } == threads.map { it.unreadCount() }
+            other.threads.map { it.unreadCount() } == threads.map { it.unreadCount() } &&
+            other.live == live
 
     override fun hashCode(): Int = threads.first().id.hashCode()
 }

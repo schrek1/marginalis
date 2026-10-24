@@ -2,7 +2,9 @@ package dev.marginalis.plugin.settings
 
 import com.intellij.openapi.util.JDOMUtil
 import com.intellij.util.xmlb.XmlSerializer
+import dev.marginalis.core.FoldingPrefs
 import dev.marginalis.core.ListWhileInFront
+import dev.marginalis.core.LongThreadFolding
 import dev.marginalis.core.People
 import dev.marginalis.core.ReadWhen
 import dev.marginalis.plugin.testing.MarginalisTestCase
@@ -30,6 +32,9 @@ class SavedSettingsTest : MarginalisTestCase() {
             state.notifyOnAgentReply = false
             state.expandOnYourMove = false
             state.groupRelayedConversation = false
+            longThreadFolding = LongThreadFolding.FOLD_LONG_READ_MESSAGES
+            state.keepFirstMessageOpen = true
+            state.askForSummaryLine = false
         }
 
         val after = loaded(saved(before))
@@ -37,6 +42,8 @@ class SavedSettingsTest : MarginalisTestCase() {
         assertEquals(before.rows, after.rows)
         assertEquals(TimeFormat.TWELVE_HOUR, after.timeFormat)
         assertEquals(before.projectTabPrefs, after.projectTabPrefs)
+        assertEquals(FoldingPrefs(LongThreadFolding.FOLD_LONG_READ_MESSAGES, keepFirstOpen = true), after.foldingPrefs)
+        assertFalse(after.state.askForSummaryLine)
         assertEquals(saved(before), saved(after))
     }
 
@@ -104,6 +111,7 @@ class SavedSettingsTest : MarginalisTestCase() {
               <option name="timeFormat" value="13" />
               <option name="projectTabList" value="sideways" />
               <option name="projectTabReadWhen" value="never" />
+              <option name="longThreadFolding" value="unfolded" />
             </State>
             """.trimIndent(),
         )
@@ -111,6 +119,7 @@ class SavedSettingsTest : MarginalisTestCase() {
         assertEquals(TimeFormat.AUTO, settings.timeFormat)
         assertEquals(ListWhileInFront.LIVE, settings.listWhileInFront)
         assertEquals(ReadWhen.EXPANDED_IN_FRONT, settings.readWhen)
+        assertEquals(LongThreadFolding.FOLD_EVERY_READ_MESSAGE, settings.longThreadFolding)
     }
 
     fun testFreshSettingsAllowNavigationNotifyAndAdvance() {
@@ -122,5 +131,19 @@ class SavedSettingsTest : MarginalisTestCase() {
         assertTrue(fresh.state.showGithubAvatars)
         assertEquals(TimeFormat.AUTO, fresh.timeFormat)
         assertEquals(emptyList<People.Row>(), fresh.rows)
+    }
+
+    fun testSettingsSavedBeforeLongThreadChoicesFoldEveryReadMessageAndAskForASummaryLine() {
+        val older = loaded(
+            """
+            <State>
+              <option name="navigationEnabled" value="false" />
+              <option name="timeFormat" value="12" />
+            </State>
+            """.trimIndent(),
+        )
+
+        assertEquals(FoldingPrefs(LongThreadFolding.FOLD_EVERY_READ_MESSAGE, keepFirstOpen = false), older.foldingPrefs)
+        assertTrue(older.state.askForSummaryLine)
     }
 }

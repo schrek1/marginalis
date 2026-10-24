@@ -13,16 +13,19 @@ live code, built for you and your agent.
 question in distinct colors, the user decides, and the agent locks the
 decision in](docs/images/margin-conversation.png)
 
-<sub>Captured on v0.1.22, before the 0.1.29 icon family. More in the
-[screenshot tour](docs/screenshots.md).</sub>
+<sub>Captured on v0.1.22, before the 0.1.29 icon family, the Margin tab,
+avatars and Live. More in the [screenshot tour](docs/screenshots.md).</sub>
 
 ## How it works
 
-Press <kbd>⌥⇧M</kbd> on a line, or on a selection, and write in the panel
-that unfolds. Threads appear as gutter icons. A tool window lists every
-thread as a directory tree with step-by-step walking. Resolving a thread
-means its outcome is in the code: the marker drops and the thread moves
-to the Resolved log.
+Press <kbd>⌥⇧M</kbd> (<kbd>Alt+Shift+M</kbd> on Windows and Linux) on a
+line, or on a selection, or pick *Add Marginalis Comment* from the
+editor menu, and write in the panel that unfolds. Threads appear as
+gutter icons. A tool window lists every thread as a directory tree with
+step-by-step walking. *Select in Marginalis* jumps from a thread or a
+file to its place in the tree, and *Expand* and *Collapse* fold a long
+review one level at a time. Resolving a thread means its outcome is in
+the code: the marker drops and the thread moves to the Resolved log.
 
 Your agent talks to the IDE's built-in server on `127.0.0.1:63342`. It
 reads unread messages at the start of each turn, replies in-thread, and
@@ -41,6 +44,10 @@ editable until an agent has read it.
 - **Beyond the line.** A thread can be about a whole file or the whole
   project. Start one from the editor menu (*Comment on File*), the tool
   window, or by widening a draft with the Submit dropdown.
+- **The Margin tab.** Project conversations (a plan, release notes, a
+  pull request's discussion) live in a tab beside your code that you
+  can pin. Its title shows whose move it is, threads that need you open
+  expanded, and Find narrows the list. Each project keeps its own.
 - **Severity and intent.** Agents mark review findings `blocker` ("act
   before this proceeds") or `nit` ("dismiss guilt-free"), and say what a
   thread wants: a `finding` to fix, `guidance` to follow, a `question` to
@@ -65,23 +72,31 @@ editable until an agent has read it.
 - **Live threads.** Switch a thread to *Live* (⚡) to go back and forth
   on one item without waiting for the next round: each Submit wakes the
   agent you're answering with that thread alone, and the header shows
-  when it is listening or working. *Live by default* (⚡ in the Marginalis
-  tool window's toolbar) makes every open thread of the project live; a thread's
-  own ⚡ still switches it off. Settings → Tools → Marginalis picks where
-  a project starts.
+  when it is listening or working. ⚡ in the Marginalis tool window
+  makes the whole project live: every open thread, unless you switch
+  that thread off. Settings → Tools → Marginalis sets the default for
+  projects you haven't switched. A live thread's gutter mark carries a
+  small ⚡, and so does the Marginalis side-bar icon while the whole
+  project is live. Live needs an agent listening.
 - **Pull request reviews in the margin.** Your agent can bring a PR's
   review discussion — teammates, review bots and your own comments —
   next to the code it is about, each comment attributed to its author
   with a link back to GitHub. Bringing the PR in again adds only what is
-  new. Nothing is written back to GitHub.
+  new. Nothing is written back to GitHub. Thread marks show in the PR's
+  review diff too, so you can open and walk threads without leaving it.
 - **Code links.** Agents (and you) can link straight to code:
   `[Clabo.do_the_thing()](src/Clabo.kt#L42)` opens the file at that
   line, `#L42-L50` selects the range.
 - **A real composer.** Markdown with structure highlighting, code fences
   rendered through the IDE's own color scheme, quote-the-selection in one
-  click, and drafts that survive closing the panel.
+  click, and drafts that survive closing the panel. Messages render
+  GitHub-flavored Markdown (tables, task lists, strikethrough) and keep
+  your line breaks as typed.
 - **Multiple agents.** Agents introduce themselves, get stable
-  per-identity colors, and keep separate read receipts. Type **@** in a
+  per-identity colors, and keep separate read receipts. Every speaker
+  has a picture: a GitHub avatar, one you choose, or initials in their
+  color. Settings → Tools → Marginalis → People sets pictures and
+  nicknames. Type **@** in a
   reply to address one of them; a submitted round wakes only the agents
   that have something to answer.
 - **References.** *Copy Reference* puts `mg:3d4770ad` on the clipboard
@@ -93,8 +108,8 @@ editable until an agent has read it.
 Settings → Plugins → Marketplace → search **Marginalis**. Or download a
 `marginalis-*.zip` from
 [Releases](https://github.com/MuhammadFarag/marginalis/releases) and use
-Settings → Plugins → ⚙ → *Install Plugin from Disk*. Settings live under
-*Tools → Marginalis*.
+Settings → Plugins → ⚙ → *Install Plugin from Disk*. Works in any
+JetBrains IDE 2025.2 or newer. Settings live under *Tools → Marginalis*.
 
 ## Agent integration
 
@@ -152,7 +167,8 @@ Marginalis tool window or at the top of the Margin tab (or pick
 **Submit & send round** on the reply composer). Every agent with
 something to answer wakes up with the list of threads awaiting its
 reply. A thread switched to *Live* wakes its agent on every Submit
-instead, with that thread alone.
+instead, with that thread alone — in a live project, that is every
+open thread you have not switched off.
 
 Beside the button, the indicator shows who is with you: one avatar per
 agent, with a green dot while it is listening and a spinner while it is
@@ -220,10 +236,12 @@ JDK 21+, no other setup:
 ```sh
 ./gradlew buildPlugin    # zip in build/distributions/
 ./gradlew runIde         # sandbox IDE with the plugin
+./gradlew :core:test     # domain tests
+./gradlew test           # platform tests against a real in-memory IDE
 ```
 
 `core/` is pure Kotlin: the model, thread lifecycle, anchoring policy,
-and persistence codec, tested via `scripts/test-core.sh`. The plugin
-module is adapters around it: `transport/`, `store/`, `ui/`, `settings/`.
+and persistence codec. The plugin module is adapters around it:
+`transport/`, `store/`, `ui/`, `settings/`, `actions/`, `avatars/`.
 CI verifies against the declared 2025.2 floor with the Plugin Verifier.
 Releases are tags (`v*`).

@@ -1,10 +1,11 @@
 package dev.marginalis.plugin.testing
 
-import com.intellij.ide.startup.StartupManagerEx
+import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.testFramework.LightProjectDescriptor
 import com.intellij.testFramework.PlatformTestUtil
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import dev.marginalis.plugin.store.MarginalisStore
+import dev.marginalis.plugin.ui.tab.MarginFile
 
 abstract class MarginalisTestCase : BasePlatformTestCase() {
 
@@ -16,18 +17,16 @@ abstract class MarginalisTestCase : BasePlatformTestCase() {
 
     override fun setUp() {
         super.setUp()
-        awaitStartup()
+        awaitFirstRunTab()
     }
 
-    // The startup step decides about the Margin tab from a queued call; left queued, it can open the tab after
-    // tearDown has closed the editors, which then reports the tab's editor as leaked. Without project threads it
-    // opens nothing, so wait for the step itself, not for a tab.
-    private fun awaitStartup() {
+    // A fresh project opens the Margin tab from a queued startup step; left
+    // queued, it can open after tearDown has closed the editors, which then
+    // reports the tab's editor as leaked.
+    private fun awaitFirstRunTab() =
         PlatformTestUtil.waitWithEventsDispatching(
-            "the project's startup activities never finished",
-            { StartupManagerEx.getInstanceEx(project).postStartupActivityPassed() },
+            "the first-run Margin tab never opened",
+            { FileEditorManager.getInstance(project).openFiles.any { it is MarginFile } },
             10,
         )
-        PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
-    }
 }

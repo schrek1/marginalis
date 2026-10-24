@@ -3,9 +3,9 @@ package dev.marginalis.plugin
 import com.intellij.icons.AllIcons
 import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.openapi.project.guessProjectDir
+import com.intellij.openapi.vfs.VirtualFileManager
 import dev.marginalis.plugin.testing.PluginUnload
 import dev.marginalis.plugin.ui.TurnSignalIconPatcher
-import dev.marginalis.plugin.ui.tab.MarginFile
 import dev.marginalis.plugin.ui.tab.MarginTabTestCase
 
 class UnloadingThePluginTest : MarginTabTestCase() {
@@ -28,20 +28,39 @@ class UnloadingThePluginTest : MarginTabTestCase() {
         assertEquals(1, user.panels().size)
         assertNotSame(base, badge())
         var badgeWhileUnloading: Any? = null
-        var tabValidWhileUnloading = true
+        var tabAddressWhileUnloading: Any? = Unit
+        val address = tab.file.url
 
         val failure = tab.unloadPluginForUpdate {
             badgeWhileUnloading = badge()
-            tabValidWhileUnloading = MarginFile.isValid
+            tabAddressWhileUnloading = VirtualFileManager.getInstance().findFileByUrl(address)
         }
 
         assertNull(failure)
         assertSame(base, badgeWhileUnloading)
-        assertFalse(tabValidWhileUnloading)
+        assertNull(tabAddressWhileUnloading)
         assertFalse(tab.isOpen)
         assertEquals(emptyList<Any>(), user.gutterIconsOnLine(SAMPLE, 5))
         assertEquals(emptyList<Any>(), user.gutterIconsOnLine(SAMPLE, 1))
         assertEquals(emptyList<Any>(), user.panels())
+    }
+
+    fun testUpdatingThePluginTakesEveryProjectsTabOutOfTheIde() {
+        withTwin { _, there ->
+            val files = listOf(tab.file, there.file)
+            var foundWhileUnloading: List<Any?> = emptyList()
+
+            val failure = tab.unloadPluginForUpdate {
+                foundWhileUnloading = files.map { VirtualFileManager.getInstance().findFileByUrl(it.url) }
+            }
+            there.settle()
+
+            assertNull(failure)
+            assertEquals(listOf(null, null), foundWhileUnloading)
+            assertEquals(emptyList<String>(), tab.marginAddresses())
+            assertEquals(emptyList<String>(), there.marginAddresses())
+            assertTrue(files.none { it.isValid })
+        }
     }
 
     fun testUnloadingAnotherPluginLeavesTheMarginAsItWas() {

@@ -9,7 +9,7 @@ class HoldStill {
 
     data class View(val shown: Layout, val dimmed: Set<String>, val pending: Int)
 
-    fun update(live: Layout, inFront: Boolean, newOnTop: Boolean = ProjectTabOrder.DEFAULT.newOnTop): View {
+    fun update(live: Layout, inFront: Boolean): View {
         if (!inFront || regrouped(live)) release()
         val held = frozen
         if (held == null) {
@@ -19,13 +19,12 @@ class HoldStill {
             }
             return View(shown = live, dimmed = emptySet(), pending = 0)
         }
-        val now = Arrangement(live, newOnTop)
+        val now = Arrangement(live)
         val heldKeys = held.mapTo(HashSet()) { it.key }
         val (welcome, unseen) = live.active
             .filter { it.key !in heldKeys }
             .partition { entry -> entry.threads.any { it.id in welcomed } }
-        val stillHeld = held.mapNotNull(now::holding)
-        val shown = if (newOnTop) welcome + stillHeld else stillHeld + welcome
+        val shown = welcome + held.mapNotNull(now::holding)
         frozen = shown
         val dimmed = shown.flatMapTo(LinkedHashSet(), now::resolvedJustNow)
         return View(
@@ -49,7 +48,7 @@ class HoldStill {
         return live.active.any { entry -> entry.threads.any { thread -> heldKeyOf[thread.id].let { it != null && it != entry.key } } }
     }
 
-    private class Arrangement(live: Layout, private val newOnTop: Boolean) {
+    private class Arrangement(live: Layout) {
         private val open = live.active.flatMap { it.threads }.associateBy { it.id }
         private val folded = live.resolved.associateBy { it.id }
         private val entries = live.active.associateBy { it.key }
@@ -59,8 +58,7 @@ class HoldStill {
             is Entry.Conversation -> {
                 val heldIds = entry.threads.mapTo(HashSet()) { it.id }
                 val joined = entries[entry.key]?.threads.orEmpty().filter { it.id !in heldIds }
-                val stayed = entry.threads.mapNotNull { find(it.id) }
-                val members = if (newOnTop) joined + stayed else stayed + joined
+                val members = joined + entry.threads.mapNotNull { find(it.id) }
                 members.takeIf { it.isNotEmpty() }?.let { Entry.Conversation(entry.discussion, it) }
             }
         }

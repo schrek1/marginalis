@@ -1,6 +1,6 @@
-# Release: tag v* -> build the zip and attach it to a GitHub Release.
-# (JetBrains Marketplace publishing can hang off this later with a
-# PUBLISH_TOKEN secret and `./gradlew publishPlugin`.)
+# Release: tag v* -> build, sign and publish to the JetBrains Marketplace
+# (when the secrets exist), then create the GitHub Release with the zip
+# and the version's changelog section.
 name: Release
 
 on:

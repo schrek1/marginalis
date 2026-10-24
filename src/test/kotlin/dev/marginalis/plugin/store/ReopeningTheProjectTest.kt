@@ -1,6 +1,7 @@
 package dev.marginalis.plugin.store
 
 import com.google.gson.JsonObject
+import com.intellij.openapi.components.impl.stores.stateStore
 import dev.marginalis.plugin.testing.Agent
 import dev.marginalis.plugin.testing.Relays
 import dev.marginalis.plugin.testing.SavedProjectTestCase
@@ -223,6 +224,41 @@ class ReopeningTheProjectTest : SavedProjectTestCase() {
         reopen()
 
         assertFalse(user.isLive(id))
+    }
+
+    fun testALiveProjectStaysLiveAfterReopeningButAThreadSwitchedOffIsLiveAgain() {
+        openShop()
+        val id = agent.addOnLine(5)
+        user.goProjectLive()
+        user.stopLive(id)
+        assertFalse(user.isLive(id))
+        waitForSave(id)
+        shop.project.stateStore.saveComponent(ProjectLive.getInstance(shop.project))
+
+        reopen()
+
+        assertTrue(user.isProjectLive())
+        assertTrue(user.isLive(id))
+    }
+
+    fun testAThreadResolvedBeforeReopeningWakesTheAgentWhenReopenedInALiveProject() {
+        openShop()
+        val id = agent.addOnLine(5)
+        val later = agent.addOnLine(9)
+        agent.threads()
+        user.reply(id, "One more thing.")
+        user.resolve(id)
+        waitForSave("RESOLVED")
+        waitForSave(later)
+
+        reopen()
+        user.goProjectLive()
+        val waiting = agent.startWait("timeout" to 60)
+        user.reopen(id)
+
+        val woken = agent.await(waiting)
+        assertEquals("live", woken["reason"]!!.asString)
+        assertEquals(listOf(id), woken.json.getAsJsonArray("awaiting").map { it.asJsonObject["thread_id"].asString })
     }
 
     private fun Agent.listing(): String {

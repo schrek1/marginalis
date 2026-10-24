@@ -34,15 +34,17 @@ object ProjectTabLayout {
 
     data class Layout(val active: List<Entry>, val resolved: List<CommentThread>)
 
+    private val latestFirst: Comparator<CommentThread> =
+        compareByDescending<CommentThread> { it.updatedAt }.thenByDescending { it.createdAt }.thenBy { it.id }
+
     fun arrange(
         threads: List<CommentThread>,
         previous: List<Entry> = emptyList(),
         holdsDraft: (String) -> Boolean = { false },
         groupRelayed: Boolean = true,
-        order: ProjectTabOrder = ProjectTabOrder.DEFAULT,
     ): Layout {
         val previouslyActive = previous.flatMapTo(HashSet()) { entry -> entry.threads.map { it.id } }
-        val (open, folded) = stepsInStepOrder(threads.filter { it.isProjectLevel }.sortedWith(order.comparator))
+        val (open, folded) = threads.filter { it.isProjectLevel }.sortedWith(latestFirst)
             .partition { it.status !is ThreadStatus.Resolved || (holdsDraft(it.id) && it.id in previouslyActive) }
         val entries = if (groupRelayed) grouped(open) else open.map { Entry.Single(it) }
         val previousIndex = previous.withIndex().associate { (index, entry) -> entry.key to index }
@@ -53,24 +55,9 @@ object ProjectTabLayout {
         return Layout(active = active, resolved = folded)
     }
 
-    /** A walkthrough's steps keep the slots the order gave them, refilled in step order, so they read 1, 2, 3 in any order. */
-    private fun stepsInStepOrder(sorted: List<CommentThread>): List<CommentThread> {
-        val result = sorted.toMutableList()
-        sorted.withIndex()
-            .filter { (_, thread) -> thread.order != null }
-            .groupBy { (_, thread) -> thread.walkthrough ?: "" }
-            .values
-            .forEach { steps ->
-                val slots = steps.map { it.index }
-                val inStepOrder = steps.map { it.value }.sortedWith(compareBy({ it.order }, { it.createdAt }))
-                slots.zip(inStepOrder).forEach { (slot, step) -> result[slot] = step }
-            }
-        return result
-    }
-
-    private fun grouped(orderedActive: List<CommentThread>): List<Entry> {
-        val byDiscussion = orderedActive.groupBy { it.discussion }
-        return orderedActive.mapNotNull { thread ->
+    private fun grouped(latestFirstActive: List<CommentThread>): List<Entry> {
+        val byDiscussion = latestFirstActive.groupBy { it.discussion }
+        return latestFirstActive.mapNotNull { thread ->
             val discussion = thread.discussion ?: return@mapNotNull Entry.Single(thread)
             val members = byDiscussion.getValue(discussion)
             Entry.Conversation(discussion, members).takeIf { members.first() === thread }

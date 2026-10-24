@@ -12,6 +12,7 @@ import com.intellij.diff.tools.util.side.OnesideTextDiffViewer
 import com.intellij.diff.tools.util.side.TwosideTextDiffViewer
 import com.intellij.diff.util.Side
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.editor.markup.HighlighterLayer
@@ -20,6 +21,7 @@ import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.util.Key
+import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VfsUtilCore
 import dev.marginalis.core.AnchorPolicy
@@ -104,10 +106,14 @@ class ReviewDiffMarkers : DiffExtension() {
         private val highlighters = mutableListOf<RangeHighlighter>()
         private val repaint = CoalescedEdtRunner(project) { paint() }
         private var observer: AutoCloseable? = null
+        private var liveWatch: Disposable? = null
 
         fun install() {
             target.viewer.addListener(this)
             observer = store.threads.observe { thread -> if (thread.file == path) repaint.request() }
+            liveWatch = Disposer.newDisposable("Marginalis review diff live badges").also {
+                store.onLiveChange(it) { repaint.request() }
+            }
             target.editor.putUserData(ThreadInlayManager.THREAD_LINE, ::editorLineOf)
             target.editor.putUserData(PROJECT_PATH, path)
             live += this
@@ -122,6 +128,8 @@ class ReviewDiffMarkers : DiffExtension() {
             live -= this
             observer?.close()
             observer = null
+            liveWatch?.let(Disposer::dispose)
+            liveWatch = null
             clear()
             target.editor.putUserData(ThreadInlayManager.THREAD_LINE, null)
             target.editor.putUserData(PROJECT_PATH, null)

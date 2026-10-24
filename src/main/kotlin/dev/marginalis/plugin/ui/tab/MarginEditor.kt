@@ -9,7 +9,7 @@ import com.intellij.openapi.vfs.VirtualFile
 import java.beans.PropertyChangeListener
 import javax.swing.JComponent
 
-class MarginEditor(private val project: Project) : UserDataHolderBase(), FileEditor {
+class MarginEditor(private val project: Project, private val file: MarginFile) : UserDataHolderBase(), FileEditor {
 
     private val content = ProjectTabPanel(project).also { Disposer.register(this, it) }
 
@@ -35,13 +35,13 @@ class MarginEditor(private val project: Project) : UserDataHolderBase(), FileEdi
 
     override fun getName(): String = "Margin"
 
-    override fun getFile(): VirtualFile = MarginFile
+    override fun getFile(): VirtualFile = file
 
     override fun setState(state: FileEditorState) {}
 
     override fun isModified(): Boolean = false
 
-    override fun isValid(): Boolean = MarginFile.isValid
+    override fun isValid(): Boolean = file.isValid
 
     override fun addPropertyChangeListener(listener: PropertyChangeListener) {}
 

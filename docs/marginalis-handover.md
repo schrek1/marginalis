@@ -2,7 +2,9 @@
 
 **Project:** Marginalis
 **Plugin id:** `marginalis` (suggested FQN `dev.marginalis.plugin`)
-**Status:** design brief, not yet implemented
+**Status:** original design brief (2026-07), implemented; kept as history. The current agent
+contract is `src/main/resources/marginalis/agent-guide.md`, and user-facing behaviour is
+`CHANGELOG.md`.
 **Target:** PyCharm / IntelliJ Platform plugin (2025.2+)
 **Audience:** the implementing agent
 

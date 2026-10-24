@@ -26,20 +26,20 @@ class LiveThreadTest {
     }
 
     @Test
-    fun `without the project default only a thread switched on is live`() {
+    fun `while the project is not live only a thread switched on is live`() {
         val t = thread()
 
-        assertFalse(LiveThread.isLive(t, byDefault = false, switchedOn = emptySet(), switchedOff = emptySet()))
-        assertTrue(LiveThread.isLive(t, byDefault = false, switchedOn = setOf(t.id), switchedOff = emptySet()))
+        assertFalse(LiveThread.isLive(t, projectLive = false, ownSwitch = null))
+        assertTrue(LiveThread.isLive(t, projectLive = false, ownSwitch = true))
     }
 
     @Test
-    fun `with the project default every open thread is live unless switched off`() {
+    fun `while the project is live every open thread is live unless switched off`() {
         val t = thread()
 
-        assertTrue(LiveThread.isLive(t, byDefault = true, switchedOn = emptySet(), switchedOff = emptySet()))
-        assertFalse(LiveThread.isLive(t, byDefault = true, switchedOn = emptySet(), switchedOff = setOf(t.id)))
-        assertFalse(LiveThread.isLive(t.also { it.resolve(user) }, byDefault = true, switchedOn = emptySet(), switchedOff = emptySet()))
+        assertTrue(LiveThread.isLive(t, projectLive = true, ownSwitch = null))
+        assertFalse(LiveThread.isLive(t, projectLive = true, ownSwitch = false))
+        assertFalse(LiveThread.isLive(t.also { it.resolve(user) }, projectLive = true, ownSwitch = true))
     }
 
     @Test
@@ -69,15 +69,32 @@ class LiveThreadTest {
     }
 
     @Test
-    fun `going live delivers what the agent has not seen, stamped with the thread's last change`() {
+    fun `going live delivers what the agent has not seen, stamped with the moment it went live`() {
         val store = ThreadStore()
         val handBack = HandBack.over(store) { t0 }
-        val t = thread(Message(claude, "Done."), Message(user, "One more thing")).also(store::add)
+        val t = thread(Message(claude, "Done.", createdAt = t0.minusSeconds(30)), Message(user, "One more thing", createdAt = t0.minusSeconds(20)))
+            .also(store::add)
         val waited = handBack.await(since = t0.minusSeconds(60), timeout = Duration.ofHours(1), agent = claude)
 
         LiveThread.goLive(handBack, t, claude.receiptKey)
 
-        assertEquals(Wake.Live(t.updatedAt, listOf(t.id)), waited.getNow(null))
+        assertEquals(Wake.Live(t0, listOf(t.id)), waited.getNow(null))
+    }
+
+    @Test
+    fun `going live while the agent is between waits reaches its next wait though its cursor is past the unseen message`() {
+        val store = ThreadStore()
+        var now = t0
+        val handBack = HandBack.over(store) { now }
+        val t = thread(Message(claude, "Done.", createdAt = t0), Message(user, "One more thing", createdAt = t0.plusSeconds(1)))
+            .also { it.restoreUpdatedAt(t0.plusSeconds(1)) }
+            .also(store::add)
+        now = t0.plusSeconds(20)
+
+        LiveThread.goLive(handBack, t, claude.receiptKey)
+
+        val waited = handBack.await(since = t0.plusSeconds(10), timeout = Duration.ofHours(1), agent = claude)
+        assertEquals(Wake.Live(t0.plusSeconds(20), listOf(t.id)), waited.getNow(null))
     }
 
     @Test

@@ -9,7 +9,6 @@ import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.startup.ProjectActivity
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.platform.backend.observation.Observation
 import dev.marginalis.core.AnchorPolicy
 import dev.marginalis.core.CommentThread
 import dev.marginalis.core.ThreadStatus
@@ -34,6 +33,14 @@ class MarginalisStartup : ProjectActivity {
             store.scheduleSave()
         }
         refreshTabOnChange(project, store)
+        store.onLiveChange(store) {
+            ApplicationManager.getApplication().invokeLater {
+                if (!project.isDisposed) refreshAllIcons(project, store)
+            }
+        }
+        ApplicationManager.getApplication().invokeLater {
+            if (!project.isDisposed) ProjectTab.openOnStartup(project)
+        }
 
         val loaded = MarginalisPersistence.load(project)
         store.handBack.restore(loaded.handedBackAt)
@@ -44,7 +51,7 @@ class MarginalisStartup : ProjectActivity {
                 if (project.isDisposed) return@invokeLater
                 for (thread in persisted) {
                     rehydrate(project, thread)
-                    store.threads.addSilently(thread)
+                    store.rehydrate(thread)
                 }
                 // Attach assigns solo icons; group shared lines per file.
                 val files = persisted.mapNotNull { it.file }.distinct()
@@ -54,14 +61,10 @@ class MarginalisStartup : ProjectActivity {
                 persisted.lastOrNull()?.let { store.threads.notifyChanged(it) }
             }
         }
-        // Opening the tab blocks the EDT, holding the write-intent lock, until its editor exists. On 2025.x the project
-        // model loading at startup waits for that lock in a background write action, which holds the editor's read
-        // action back: the IDE froze. The tab therefore comes back once the project's configuration is done.
-        Observation.awaitConfiguration(project)
-        // Queued behind the persisted threads: whether the tab opens depends on them.
-        ApplicationManager.getApplication().invokeLater {
-            if (!project.isDisposed) ProjectTab.openOnStartup(project)
-        }
+    }
+
+    private fun refreshAllIcons(project: Project, store: MarginalisStore) {
+        store.threads.all().mapNotNull { it.file }.distinct().forEach { MarginalisMarkers.refreshIcons(project, it) }
     }
 
     private fun refreshTabOnChange(project: Project, store: MarginalisStore) {
@@ -129,9 +132,7 @@ class MarginalisStartup : ProjectActivity {
 
             thread.line == null -> {}
 
-            // An edit took the thread's line away: it is orphaned, as a listing finds it. A new marker would pin it
-            // onto whatever its old line number holds now.
-            thread.status is ThreadStatus.Open && marker != null && !marker.isValid -> store.syncLine(thread)
+            store.orphanIfItsCodeIsGone(thread) -> store.threads.notifyChanged(thread)
 
             thread.status is ThreadStatus.Open && marker == null -> {
                 val base = project.guessProjectDir() ?: return

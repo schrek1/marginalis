@@ -35,6 +35,7 @@ import dev.marginalis.plugin.ui.ThreadGutterIconRenderer
 import dev.marginalis.plugin.ui.ThreadPanel
 import dev.marginalis.plugin.ui.diff.ReviewDiffMarkers
 import java.awt.Component
+import javax.swing.Icon
 import javax.swing.JComponent
 
 class ReviewDiffs(private val project: Project, private val disposable: Disposable) {
@@ -185,6 +186,8 @@ class ReviewDiff(private val project: Project, val viewer: DiffViewerBase) {
         val document = editor.document
         return document.getText(TextRange(document.getLineStartOffset(row - 1), document.getLineEndOffset(row - 1)))
     }
+
+    fun iconAt(row: Int): Icon = icons().single { it.first == row }.second.icon
 
     fun tooltipAt(row: Int): String = icons().single { it.first == row }.second.tooltipText
 

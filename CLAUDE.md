@@ -21,13 +21,19 @@ is the shipped record and decision log.
   `./gradlew :core:test` runs the domain tests (`scripts/test-core.sh`
   runs them in a single JVM for environments where forked test workers
   can't connect back); `./gradlew test` runs the plugin's platform tests
-  against a real in-memory IDE.
+  against a real in-memory IDE; `./gradlew uiTest` drives an installed
+  IDE with the built zip and runs only when `marginalis.localIde` is
+  set; `koverHtmlReport` and `pitest` give coverage and mutation
+  reports.
 - CI (`.github/workflows/`) is the honest environment: compiles against
   the real `ideaIC-2025.2` floor and runs the Plugin Verifier on the floor
   and on the latest IntelliJ IDEA (`marginalis.latestIde` in
   `gradle.properties`). Local builds may compile against a newer
   local IDE via the `marginalis.localIde` property, so floor violations
-  surface in CI, not locally.
+  surface in CI, not locally. CI also fails when an endpoint in the
+  transport's routing is missing from the served guide's API table, and
+  when the committed IDE layout index (`.github/ide-layout-index/`) no
+  longer matches; the step's comment in `ci.yml` says how to refresh it.
 - Releases: stamp `[Unreleased]` in `CHANGELOG.md` as the new version,
   bump `version` in `build.gradle.kts`, commit, push, tag `v*` → CI
   builds, signs, publishes to the Marketplace stable channel and creates
@@ -57,8 +63,8 @@ is running the plugin:
   the margin. Use a review walkthrough only when the user asks for one;
   resolve demo threads once the change ships.
 - End a turn that expects the user's reply by starting `comment_wait` in
-  the background (the served guide has the pattern); the user's Hand
-  Back — or a Submit in a Live thread — wakes you. After a live wake,
+  the background (the served guide has the pattern); the user's Submit
+  round — or a Submit in a Live thread — wakes you. After a live wake,
   answer and wait again.
 
 ## Project conventions
@@ -104,7 +110,7 @@ is running the plugin:
 - Icons: SVGs in `src/main/resources/icons/`, loaded through
   `MarginalisIcons`. Brand icons are single theme-neutral SVGs (no
   `_dark` twin), designed dark-first; monochrome toolbar icons (e.g.
-  Hand Back) keep the `_dark` pair. Turn signals are ✉ (your move) and ✈
+  Submit round, file `handBack.svg`, and Agree) keep the `_dark` pair. Turn signals are ✉ (your move) and ✈
   (the agent's). Some platform surfaces are plain strings (tab titles,
   tool window titles) and can only carry text.
 - Platform floor: `since-build` 252 (2025.2). Prefer long-stable public

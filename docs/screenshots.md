@@ -4,7 +4,9 @@ Each screenshot notes the release it was captured on. The product moves
 quickly; if your install looks different, trust your install and the
 [changelog](../CHANGELOG.md). Notably, 0.1.29 replaced every icon: gutter
 marks are now outline speech bubbles in the plugin's colors, and the
-● / ○ turn glyphs became ✉ / ✈ badges on file icons.
+● / ○ turn glyphs became ✉ / ✈ badges on file icons. Later releases added
+what these captures predate: the Margin tab for project threads, author
+pictures, Submit round with its listening indicator, and Live.
 
 ## A margin conversation
 
@@ -41,8 +43,9 @@ panel](images/severity-blockers.png)
 
 ## Anatomy of a thread
 
-The header carries the walk arrows and the thread's lifecycle: resolve,
-delete, close. The conversation reads top to bottom with author and
+The header carries the walk arrows, the Live switch, Select in
+Marginalis, Copy Reference and the thread's lifecycle: resolve, delete,
+close. The conversation reads top to bottom with author and
 time; the reply row stays folded until you write.
 
 ![An open thread panel showing the header toolbar and a two-message

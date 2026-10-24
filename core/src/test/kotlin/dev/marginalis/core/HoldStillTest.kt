@@ -33,10 +33,8 @@ class HoldStillTest {
 
     private fun news(thread: CommentThread) = thread.addMessage(Message(agent, "news"))
 
-    private val byActivity = ProjectTabOrder.RECENT_ACTIVITY
-
-    private fun HoldStill.look(vararg threads: CommentThread, inFront: Boolean = true, order: ProjectTabOrder = byActivity) =
-        update(ProjectTabLayout.arrange(threads.toList(), order = order), inFront, order.newOnTop)
+    private fun HoldStill.look(vararg threads: CommentThread, inFront: Boolean = true) =
+        update(ProjectTabLayout.arrange(threads.toList()), inFront)
 
     private fun lookingAt(vararg threads: CommentThread) = HoldStill().also { it.look(*threads) }
 
@@ -149,11 +147,7 @@ class HoldStillTest {
         val (first, second) = listOf(relayed("first"), relayed("second"))
         val hold = lookingAt(first, second)
 
-        val view = hold.update(
-            ProjectTabLayout.arrange(listOf(first, second), groupRelayed = false, order = byActivity),
-            inFront = true,
-            newOnTop = true,
-        )
+        val view = hold.update(ProjectTabLayout.arrange(listOf(first, second), groupRelayed = false), inFront = true)
 
         assertEquals(listOf("second", "first"), keys(view))
         assertEquals(0, view.pending)
@@ -162,9 +156,7 @@ class HoldStillTest {
     @Test
     fun `turning grouping on while looking adopts the grouped arrangement and raises no pending count`() {
         val (first, second) = listOf(relayed("first"), relayed("second"))
-        val hold = HoldStill().also {
-            it.update(ProjectTabLayout.arrange(listOf(first, second), groupRelayed = false, order = byActivity), inFront = true, newOnTop = true)
-        }
+        val hold = HoldStill().also { it.update(ProjectTabLayout.arrange(listOf(first, second), groupRelayed = false), inFront = true) }
 
         val view = hold.look(first, second)
 
@@ -237,40 +229,5 @@ class HoldStillTest {
         news(a)
 
         assertEquals(listOf("yours", "b", "a"), keys(hold.look(a, b, yours)))
-    }
-
-    @Test
-    fun `with oldest first, a thread you start while looking shows at the bottom once admitted`() {
-        val (a, b) = listOf(project("a"), project("b"))
-        val hold = HoldStill().also { it.look(a, b, order = ProjectTabOrder.OLDEST_FIRST) }
-        val yours = project("yours")
-
-        hold.admit(yours.id)
-        val view = hold.look(a, b, yours, order = ProjectTabOrder.OLDEST_FIRST)
-
-        assertEquals(listOf("a", "b", "yours"), keys(view))
-        assertEquals(0, view.pending)
-    }
-
-    @Test
-    fun `with oldest first, a thread joining a held conversation lands after its members`() {
-        val (first, second) = listOf(relayed("first"), relayed("second"))
-        val hold = HoldStill().also { it.look(first, second, order = ProjectTabOrder.OLDEST_FIRST) }
-        val joining = relayed("joining")
-
-        val view = hold.look(first, second, joining, order = ProjectTabOrder.OLDEST_FIRST)
-
-        assertEquals(listOf(first, second, joining), (view.shown.active.single() as Entry.Conversation).threads)
-    }
-
-    @Test
-    fun `with newest first, a thread joining a held conversation lands before its members`() {
-        val (first, second) = listOf(relayed("first"), relayed("second"))
-        val hold = HoldStill().also { it.look(first, second, order = ProjectTabOrder.NEWEST_FIRST) }
-        val joining = relayed("joining")
-
-        val view = hold.look(first, second, joining, order = ProjectTabOrder.NEWEST_FIRST)
-
-        assertEquals(listOf(joining, second, first), (view.shown.active.single() as Entry.Conversation).threads)
     }
 }

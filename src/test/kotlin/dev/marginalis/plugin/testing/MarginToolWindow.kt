@@ -38,6 +38,7 @@ import dev.marginalis.core.Turn
 import dev.marginalis.core.TurnSignal
 import dev.marginalis.plugin.ui.MarginalisIcons
 import dev.marginalis.plugin.ui.ParticipantStackIcon
+import dev.marginalis.plugin.ui.ProjectLiveAction
 import dev.marginalis.plugin.ui.toolwindow.MarginalisToolWindowFactory
 import java.awt.Component
 import java.awt.DefaultKeyboardFocusManager
@@ -62,7 +63,8 @@ import javax.swing.tree.TreePath
 
 class MarginToolWindow(private val project: Project, private val disposable: Disposable) {
 
-    class Window(project: Project) : ToolWindowHeadlessManagerImpl.MockToolWindow(project) {
+    class Window(project: Project, parent: Disposable) : ToolWindowHeadlessManagerImpl.MockToolWindow(project) {
+        private val lifetime = Disposer.newDisposable(parent, "Marginalis test tool window")
         var actions: List<AnAction> = emptyList()
         var shownIcon: Icon? = null
         val titles = mutableListOf<String>()
@@ -71,6 +73,7 @@ class MarginToolWindow(private val project: Project, private val disposable: Dis
         var activations = 0
 
         override fun getId(): String = ID
+        override fun getDisposable(): Disposable = lifetime
         override fun setTitleActions(actions: List<AnAction>) {
             this.actions = actions.toList()
         }
@@ -100,7 +103,7 @@ class MarginToolWindow(private val project: Project, private val disposable: Dis
         }
     }
 
-    val window = Window(project)
+    val window = Window(project, disposable)
 
     val panel: JComponent
 
@@ -114,7 +117,7 @@ class MarginToolWindow(private val project: Project, private val disposable: Dis
             }
         }
         project.replaceService(ToolWindowManager::class.java, manager, disposable)
-        MarginalisToolWindowFactory().createToolWindowContent(project, window)
+        MarginalisToolWindowFactory().also { it.init(window) }.createToolWindowContent(project, window)
         val content = window.contentManager.contents.single()
         Disposer.register(disposable) { Disposer.dispose(content) }
         panel = content.component
@@ -379,6 +382,20 @@ class MarginToolWindow(private val project: Project, private val disposable: Dis
 
     fun emptyText(): String = tree.emptyText.text
 
+    fun isProjectLive(): Boolean = projectLive().let { it.isSelected(event(it)) }
+
+    fun turnProjectLive(on: Boolean) {
+        val toggle = projectLive()
+        if (toggle.isSelected(event(toggle)) != on) toggle.setSelected(event(toggle), on)
+        settle()
+    }
+
+    fun projectLiveText(): String = presented(projectLive()).text
+
+    fun canTurnProjectLive(): Boolean = presented(projectLive()).isEnabled
+
+    private fun projectLive(): ProjectLiveAction = window.actions.filterIsInstance<ProjectLiveAction>().single()
+
     private fun filterChoices(): List<ToggleAction> =
         (action("Filter") as ActionGroup).getChildren(null).filterIsInstance<ToggleAction>()
 
@@ -507,5 +524,11 @@ class MarginToolWindow(private val project: Project, private val disposable: Dis
         const val ID = "Marginalis"
         const val YES = Messages.YES
         const val NO = Messages.NO
+
+        fun stripe(project: Project, disposable: Disposable): Window =
+            Window(project, disposable).also {
+                MarginalisToolWindowFactory().init(it)
+                PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+            }
     }
 }

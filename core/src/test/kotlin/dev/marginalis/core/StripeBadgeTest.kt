@@ -30,11 +30,6 @@ class StripeBadgeTest {
     }
 
     @Test
-    fun `a reply you have read but not answered raises no envelope`() {
-        assertNull(StripeBadge.of(listOf(thread(user), thread(agent).also { it.markReadByUser() })))
-    }
-
-    @Test
     fun `an open blocker wins over the envelope`() {
         assertEquals(StripeBadge.BLOCKER, StripeBadge.of(listOf(thread(agent), thread(user, Severity.BLOCKER))))
     }

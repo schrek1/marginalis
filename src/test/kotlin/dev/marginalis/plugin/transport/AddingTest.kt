@@ -10,7 +10,6 @@ import com.intellij.util.ui.UIUtil
 import dev.marginalis.plugin.settings.MarginalisSettings
 import dev.marginalis.plugin.testing.Relays
 import dev.marginalis.plugin.ui.ThreadPanel
-import dev.marginalis.plugin.ui.tab.MarginFile
 import dev.marginalis.plugin.ui.tab.ProjectTab
 
 class AddingTest : HttpContractTestCase() {
@@ -432,7 +431,6 @@ class AddingTest : HttpContractTestCase() {
     }
 
     fun testAProjectThreadDoesNotNotifyWhileTheMarginTabIsInFront() {
-        FileEditorManager.getInstance(project).openFile(MarginFile, true)
         assertTrue(ProjectTab.isInFront(project))
         val shown = notifications()
 

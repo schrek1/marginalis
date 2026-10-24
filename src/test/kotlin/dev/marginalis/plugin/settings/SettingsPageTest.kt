@@ -5,7 +5,9 @@ import com.intellij.notification.Notifications
 import com.intellij.openapi.options.ConfigurationException
 import com.intellij.testFramework.PlatformTestUtil
 import com.intellij.util.xmlb.XmlSerializerUtil
+import dev.marginalis.core.FoldingPrefs
 import dev.marginalis.core.ListWhileInFront
+import dev.marginalis.core.LongThreadFolding
 import dev.marginalis.core.Mark
 import dev.marginalis.core.MarkSubject
 import dev.marginalis.core.Intent
@@ -42,6 +44,8 @@ class SettingsPageTest : HttpContractTestCase() {
 
     private fun bylines(panel: ThreadPanel): List<String> =
         user.shownText(panel).lines().filter { it.matches(Regex("^.+ · \\d{1,2}:\\d{2}.*$")) }.map { it.substringBefore(" · ") }
+
+    private fun openedInFull(threadId: String): ThreadPanel = user.open(threadId).also { user.press(it, "Expand All") }
 
     private fun relayedBy(login: String, body: String = "From GitHub."): String =
         agent.add("file" to SAMPLE, "line" to 5, "anchor_text" to lineText(5), "body" to body, "relayed" to Relays.reviewComment(101, login = login))
@@ -129,7 +133,7 @@ class SettingsPageTest : HttpContractTestCase() {
         page.apply()
         user.reply(id, "After.")
 
-        assertEquals(listOf("Claude", before, "Grace"), bylines(user.open(id)))
+        assertEquals(listOf("Claude", before, "Grace"), bylines(openedInFull(id)))
         assertEquals(listOf(before, "Grace"), agent.threads().single().messages().drop(1).map { it.getAsJsonObject("author").string("name") })
     }
 
@@ -400,6 +404,49 @@ class SettingsPageTest : HttpContractTestCase() {
         assertFalse(settings.state.groupRelayedConversation)
     }
 
+    fun testTheLongThreadChoicesOpenWithTheirDefaults() {
+        val page = page()
+
+        assertEquals(
+            listOf("Fold every read message", "Fold long read messages", "Fold nothing"),
+            page.options(LongThreadFolding.FOLD_EVERY_READ_MESSAGE),
+        )
+        assertEquals("Fold every read message", page.chosen(LongThreadFolding.FOLD_EVERY_READ_MESSAGE))
+        assertFalse(page.isTicked(ALWAYS_FIRST))
+        assertTrue(page.isTicked(ASK_FOR_SUMMARY))
+        assertTrue(page.labels().contains("Open long threads with:"))
+        assertTrue(page.comments().any { "Agents pick this up from the guide when their next session starts." in it })
+    }
+
+    fun testTheLongThreadChoicesApply() {
+        val page = page()
+
+        page.choose(LongThreadFolding.FOLD_EVERY_READ_MESSAGE, "Fold long read messages")
+        page.tick(ALWAYS_FIRST, true)
+        page.tick(ASK_FOR_SUMMARY, false)
+        assertTrue(page.isModified)
+        page.apply()
+
+        assertFalse(page.isModified)
+        assertEquals(FoldingPrefs(LongThreadFolding.FOLD_LONG_READ_MESSAGES, keepFirstOpen = true), settings.foldingPrefs)
+        assertFalse(settings.state.askForSummaryLine)
+    }
+
+    fun testResetBringsBackTheSavedLongThreadChoices() {
+        settings.longThreadFolding = LongThreadFolding.FOLD_NOTHING
+        val page = page()
+
+        page.choose(LongThreadFolding.FOLD_NOTHING, "Fold long read messages")
+        page.tick(ALWAYS_FIRST, true)
+        page.tick(ASK_FOR_SUMMARY, false)
+        page.reset()
+
+        assertEquals("Fold nothing", page.chosen(LongThreadFolding.FOLD_NOTHING))
+        assertFalse(page.isTicked(ALWAYS_FIRST))
+        assertTrue(page.isTicked(ASK_FOR_SUMMARY))
+        assertFalse(page.isModified)
+    }
+
     fun testTheIntentLegendShowsEachGlyphWithWhatItMeans() {
         val legend = page().legend()
 
@@ -417,5 +464,10 @@ class SettingsPageTest : HttpContractTestCase() {
             listOf(Intent.FINDING, Intent.GUIDANCE, Intent.QUESTION, Intent.FYI, null).map { MarginalisIcons.mark(Mark(MarkSubject.LINE, it)) },
             legend.map { it.second },
         )
+    }
+
+    private companion object {
+        const val ALWAYS_FIRST = "Always show the first message"
+        const val ASK_FOR_SUMMARY = "Ask agents to open each reply with a one-line summary"
     }
 }

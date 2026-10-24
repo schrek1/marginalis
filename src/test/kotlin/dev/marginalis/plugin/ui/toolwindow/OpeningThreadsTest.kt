@@ -62,7 +62,7 @@ class OpeningThreadsTest : ToolWindowTestCase() {
 
         window.doubleClick("About the whole project")
 
-        assertEquals(MarginFile, selectedEditorFile())
+        assertEquals(MarginFile.of(project), selectedEditorFile())
     }
 
     @DisplayOnly
@@ -72,7 +72,7 @@ class OpeningThreadsTest : ToolWindowTestCase() {
 
         window.doubleClick("Sample.kt")
 
-        assertNull(selectedEditorFile())
+        assertEquals(MarginFile.of(project), selectedEditorFile())
         assertFalse(window.isExpanded("Sample.kt"))
     }
 
@@ -113,7 +113,7 @@ class OpeningThreadsTest : ToolWindowTestCase() {
 
         window.pressKey(KeyEvent.VK_ENTER)
 
-        assertNull(selectedEditorFile())
+        assertEquals(MarginFile.of(project), selectedEditorFile())
         assertEquals("✉ L23  second", window.selected())
     }
 

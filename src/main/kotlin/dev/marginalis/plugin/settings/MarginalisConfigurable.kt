@@ -32,6 +32,7 @@ import dev.marginalis.core.Face
 import dev.marginalis.core.Faces
 import dev.marginalis.core.Intent
 import dev.marginalis.core.ListWhileInFront
+import dev.marginalis.core.LongThreadFolding
 import dev.marginalis.core.Mark
 import dev.marginalis.core.MarkSubject
 import dev.marginalis.core.People
@@ -299,8 +300,9 @@ class MarginalisConfigurable : Configurable {
             row {
                 checkBox("Live by default")
                     .comment(
-                        "Every open thread is live, so each Submit wakes the listening agent. " +
-                            "A project takes this when first opened; ⚡ in its Marginalis toolbar changes it there.",
+                        "Live needs an agent listening. While one is, every open thread is live and each Submit " +
+                            "wakes the agent at once, without a Submit round. " +
+                            "A project follows this until you flip ⚡ in its Marginalis tool window.",
                     )
                     .bindSelected(state::liveByDefault)
             }
@@ -311,6 +313,26 @@ class MarginalisConfigurable : Configurable {
                         { settings.timeFormat },
                         { settings.timeFormat = it ?: TimeFormat.AUTO },
                     )
+            }
+            group("Long Threads") {
+                row("Open long threads with:") {
+                    comboBox(LongThreadFolding.entries, textListCellRenderer { it?.let(::labelOf) })
+                        .comment("Unread messages and the latest two always stay open.")
+                        .bindItem(
+                            { settings.longThreadFolding },
+                            { settings.longThreadFolding = it ?: LongThreadFolding.FOLD_EVERY_READ_MESSAGE },
+                        )
+                }
+                row {
+                    checkBox("Always show the first message")
+                        .comment("Keeps how a thread started in view. Fold All still folds it.")
+                        .bindSelected(state::keepFirstMessageOpen)
+                }
+                row {
+                    checkBox("Ask agents to open each reply with a one-line summary")
+                        .comment("A folded message then still says where things stand. Agents pick this up from the guide when their next session starts.")
+                        .bindSelected(state::askForSummaryLine)
+                }
             }
             group("Project Tab") {
                 row("List while the tab is in front:") {
@@ -378,14 +400,17 @@ class MarginalisConfigurable : Configurable {
         }
         val settings = MarginalisSettings.getInstance()
         val bylinesBefore = bylineSettings()
+        val foldingBefore = settings.foldingPrefs
         val tabBefore = settings.projectTabPrefs
+        val liveByDefaultBefore = settings.state.liveByDefault
         panel?.apply()
         settings.rows = edited
         settings.state.userPicture = userPicture
         Pictures.deleteUnreferenced(edited, userPicture)
         resetPeople()
-        if (bylineSettings() != bylinesBefore) refreshThreads()
+        if (bylineSettings() != bylinesBefore || settings.foldingPrefs != foldingBefore) refreshThreads()
         if (settings.projectTabPrefs != tabBefore) ProjectTab.applyPrefs()
+        if (settings.state.liveByDefault != liveByDefaultBefore) MarginalisStore.liveByDefaultChanged(settingsWasLive = liveByDefaultBefore)
     }
 
     private fun bylineSettings(): List<Any> {
@@ -456,6 +481,12 @@ class MarginalisConfigurable : Configurable {
         fun labelOf(list: ListWhileInFront): String = when (list) {
             ListWhileInFront.LIVE -> "Live"
             ListWhileInFront.HOLD_STILL -> "Hold still"
+        }
+
+        fun labelOf(folding: LongThreadFolding): String = when (folding) {
+            LongThreadFolding.FOLD_EVERY_READ_MESSAGE -> "Fold every read message"
+            LongThreadFolding.FOLD_LONG_READ_MESSAGES -> "Fold long read messages"
+            LongThreadFolding.FOLD_NOTHING -> "Fold nothing"
         }
 
         fun labelOf(readWhen: ReadWhen): String = when (readWhen) {

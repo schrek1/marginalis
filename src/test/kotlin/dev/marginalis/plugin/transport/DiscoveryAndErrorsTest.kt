@@ -1,9 +1,11 @@
 package dev.marginalis.plugin.transport
 
 import com.google.gson.JsonParser
+import dev.marginalis.plugin.settings.MarginalisSettings
 import dev.marginalis.plugin.store.Authors
 import dev.marginalis.plugin.testing.Agent
 import dev.marginalis.plugin.testing.Relays
+import dev.marginalis.plugin.testing.SettingsPage
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -25,14 +27,37 @@ class DiscoveryAndErrorsTest : HttpContractTestCase() {
         assertNull(here["branch"])
     }
 
-    fun testAgentGuideIsServedAsTheBundledMarkdown() {
+    fun testAgentGuideIsServedAsTheBundledMarkdownWithoutItsSectionMarkers() {
         val bundled = javaClass.classLoader.getResourceAsStream("marginalis/agent-guide.md")!!.readBytes().toString(Charsets.UTF_8)
 
         val response = raw("GET", "agent_guide")
 
         assertEquals(200, response.statusCode())
-        assertEquals(bundled, response.body())
+        assertEquals(bundled.replace("<!-- when:summary-line -->\n", "").replace("<!-- end:summary-line -->\n", ""), response.body())
         assertTrue(response.headers().firstValue("Content-Type").get().startsWith("text/markdown"))
+    }
+
+    fun testTheGuideAsksForASummaryLineWhileTheSettingIsOn() {
+        val guide = raw("GET", "agent_guide").body()
+
+        assertTrue(guide.contains("so stay within them.\n\n$SUMMARY_LINE_ADVICE"))
+        assertTrue(guide.contains("does not follow it still\nworks.\n\n## References"))
+        assertFalse(guide.contains("<!--"))
+    }
+
+    fun testTheGuideLeavesTheSummaryLineOutOnceTheSettingIsOff() {
+        val page = SettingsPage.open(testRootDisposable)
+        page.tick("Ask agents to open each reply with a one-line summary", false)
+        page.apply()
+        try {
+            val guide = raw("GET", "agent_guide").body()
+
+            assertFalse(guide.contains(SUMMARY_LINE_ADVICE))
+            assertTrue(guide.contains("so stay within them.\n\n## References"))
+            assertFalse(guide.contains("<!--"))
+        } finally {
+            MarginalisSettings.getInstance().state.askForSummaryLine = true
+        }
     }
 
     fun testAgentGuideMentionsEveryEndpoint() {
@@ -218,5 +243,9 @@ class DiscoveryAndErrorsTest : HttpContractTestCase() {
             .method(method, HttpRequest.BodyPublishers.noBody())
             .build()
         return HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build().send(request, HttpResponse.BodyHandlers.ofString())
+    }
+
+    private companion object {
+        const val SUMMARY_LINE_ADVICE = "Open each reply with a one-line conclusion"
     }
 }

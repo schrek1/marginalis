@@ -9,7 +9,7 @@ enum class StripeBadge {
             val open = threads.filter { it.status is ThreadStatus.Open }
             return when {
                 AggregateState.of(open) == AggregateState.OPEN_BLOCKER -> BLOCKER
-                TurnTally.signalled(open).user > 0 -> AWAITING_YOU
+                TurnTally.of(open).user > 0 -> AWAITING_YOU
                 else -> null
             }
         }

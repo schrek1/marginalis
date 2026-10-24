@@ -1,5 +1,6 @@
 package dev.marginalis.plugin.store
 
+import com.intellij.testFramework.PlatformTestUtil
 import dev.marginalis.plugin.transport.HttpContractTestCase
 
 class LiveThreadsTest : HttpContractTestCase() {
@@ -74,6 +75,73 @@ class LiveThreadsTest : HttpContractTestCase() {
 
         assertEquals("orphaned", agent.threads().single().string("status"))
         assertFalse(user.isLive(id))
+    }
+
+    fun testALiveThreadOrphanedByAReplyAfterARewriteStopsBeingLive() {
+        sample()
+        val id = agent.addOnLine(20)
+        goLiveWhileClaudeBrieflyListens(id)
+        rewrite()
+
+        agent.reply(id, "Still relevant after the rewrite?")
+        PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+
+        assertFalse(user.isLive(id))
+        val waiting = agent.startWait("timeout" to 1)
+        user.reply(id, "It went with the rewrite.")
+        assertEquals("timeout", agent.await(waiting)["reason"]!!.asString)
+    }
+
+    fun testAThreadSwitchedLiveOnItsOwnStaysOffOnceRescuedFromOrphaning() {
+        sample()
+        val id = agent.addOnLine(20)
+        goLiveWhileClaudeBrieflyListens(id)
+        rewrite { if (it == 55) lineText(20) else "// rewritten $it" }
+        agent.reply(id, "Still relevant after the rewrite?")
+
+        agent.post("comment_reanchor", "thread_id" to id, "line" to 55, "anchor_text" to lineText(20))
+
+        assertEquals("open", agent.threads().single().string("status"))
+        assertFalse(user.isLive(id))
+    }
+
+    fun testAThreadThatOrphanedInALiveProjectIsLiveAgainOnceRescued() {
+        sample()
+        val id = agent.addOnLine(20)
+        user.goProjectLive()
+        rewrite { if (it == 55) lineText(20) else "// rewritten $it" }
+        agent.reply(id, "Still relevant after the rewrite?")
+        assertFalse(user.isLive(id))
+
+        agent.post("comment_reanchor", "thread_id" to id, "line" to 55, "anchor_text" to lineText(20))
+
+        assertTrue(user.isLive(id))
+    }
+
+    fun testAThreadThatOrphanedInALiveProjectIsLiveAgainOnceReopened() {
+        sample()
+        val id = agent.addOnLine(20)
+        user.goProjectLive()
+        rewrite()
+        agent.reply(id, "Still relevant after the rewrite?")
+        assertFalse(user.isLive(id))
+
+        agent.post("comment_reopen", "thread_id" to id)
+
+        assertTrue(user.isLive(id))
+    }
+
+    fun testTheUserCanSwitchARescuedThreadLiveAgain() {
+        sample()
+        val id = agent.addOnLine(20)
+        goLiveWhileClaudeBrieflyListens(id)
+        rewrite { if (it == 55) lineText(20) else "// rewritten $it" }
+        agent.reply(id, "Still relevant after the rewrite?")
+        agent.post("comment_reanchor", "thread_id" to id, "line" to 55, "anchor_text" to lineText(20))
+
+        goLiveWhileClaudeBrieflyListens(id)
+
+        assertTrue(user.isLive(id))
     }
 
     fun testDeletingALiveThreadEndsLive() {

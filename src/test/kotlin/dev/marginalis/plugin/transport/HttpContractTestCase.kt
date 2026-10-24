@@ -7,12 +7,10 @@ import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.guessProjectDir
-import com.intellij.testFramework.PlatformTestUtil
 import dev.marginalis.plugin.testing.Agent
 import dev.marginalis.plugin.testing.MarginUser
 import dev.marginalis.plugin.testing.MarginalisTestCase
 import java.time.Instant
-import java.util.concurrent.CompletableFuture
 
 abstract class HttpContractTestCase : MarginalisTestCase() {
 
@@ -53,22 +51,6 @@ abstract class HttpContractTestCase : MarginalisTestCase() {
     protected fun Agent.summaryOf(threadId: String): JsonObject =
         threads("summary" to true).single { it.id == threadId }
 
-    protected fun Agent.startWait(vararg params: Pair<String, Any?>): CompletableFuture<Agent.Response> {
-        val waiting = getAsync("comment_wait", *params)
-        val inProject = params.filter { it.first == "project" }.toTypedArray()
-        val deadline = System.nanoTime() + 15_000_000_000
-        while (!waiting.isDone && !isListening(*inProject)) {
-            check(System.nanoTime() < deadline) { "$id never started waiting" }
-            PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
-            Thread.sleep(20)
-        }
-        return waiting
-    }
-
-    private fun Agent.isListening(vararg inProject: Pair<String, Any?>): Boolean =
-        get("comment_identities", *inProject).json.getAsJsonArray("identities").map { it.asJsonObject }
-            .any { it.string("id") == id && it["waiting"].asBoolean }
-
     protected val JsonObject.id: String get() = this["thread_id"].asString
 
     protected fun JsonObject.messages(): List<JsonObject> = getAsJsonArray("messages").map { it.asJsonObject }
@@ -88,6 +70,13 @@ abstract class HttpContractTestCase : MarginalisTestCase() {
         val document = document(path)
         WriteCommandAction.runWriteCommandAction(project) {
             document.deleteString(document.getLineEndOffset(line - 2), document.getLineEndOffset(line - 1))
+        }
+    }
+
+    protected fun rewrite(path: String = SAMPLE, lineAt: (Int) -> String = { "// rewritten $it" }) {
+        val document = document(path)
+        WriteCommandAction.runWriteCommandAction(project) {
+            document.setText((1..60).joinToString("\n", transform = lineAt))
         }
     }
 

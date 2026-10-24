@@ -11,6 +11,8 @@ import dev.marginalis.core.Intent
 import dev.marginalis.core.Mark
 import dev.marginalis.core.MarkSubject
 import dev.marginalis.plugin.store.Authors
+import dev.marginalis.plugin.testing.LiveBadge
+import dev.marginalis.plugin.testing.Pixels
 import dev.marginalis.plugin.transport.HttpContractTestCase
 
 class GutterTest : HttpContractTestCase() {
@@ -254,5 +256,110 @@ class GutterTest : HttpContractTestCase() {
         settle()
 
         assertEquals(whileUnread, user.gutterIcon(SAMPLE, 7))
+    }
+
+    private fun showsTheLiveBadge(line: Int): Boolean {
+        settle()
+        return LiveBadge.shownIn(iconAt(line))
+    }
+
+    fun testNoMarkCarriesTheLiveBadgeWhileNothingIsLive() {
+        sample()
+        agent.addOnLine(5)
+
+        assertFalse(showsTheLiveBadge(5))
+    }
+
+    fun testEveryOpenThreadsMarkCarriesTheLiveBadgeWhileTheProjectIsLive() {
+        sample()
+        agent.addOnLine(5)
+        agent.addOnLine(9)
+
+        user.goProjectLive()
+
+        assertTrue(showsTheLiveBadge(5))
+        assertTrue(showsTheLiveBadge(9))
+    }
+
+    fun testAThreadSwitchedOffInALiveProjectLosesTheLiveBadge() {
+        sample()
+        val switchedOff = agent.addOnLine(5)
+        agent.addOnLine(9)
+        user.goProjectLive()
+
+        user.stopLive(switchedOff)
+
+        assertFalse(showsTheLiveBadge(5))
+        assertTrue(showsTheLiveBadge(9))
+    }
+
+    fun testTurningTheProjectOffTakesTheLiveBadgeOffEveryMark() {
+        sample()
+        agent.addOnLine(5)
+        user.goProjectLive()
+
+        user.stopProjectLive()
+
+        assertFalse(showsTheLiveBadge(5))
+    }
+
+    fun testAThreadSwitchedLiveOnItsOwnCarriesTheLiveBadge() {
+        sample()
+        val switchedOn = agent.addOnLine(5)
+        agent.addOnLine(9)
+        agent.startWait("timeout" to 60)
+
+        user.goLive(switchedOn)
+
+        assertTrue(showsTheLiveBadge(5))
+        assertFalse(showsTheLiveBadge(9))
+    }
+
+    fun testAResolvedThreadLeavesNoLiveMarkBehind() {
+        sample()
+        val id = agent.addOnLine(5)
+        user.goProjectLive()
+
+        user.resolve(id)
+        settle()
+
+        assertNull(user.gutterIcon(SAMPLE, 5))
+    }
+
+    fun testAnUnreadThreadsMarkCarriesTheLiveBadge() {
+        sample()
+        user.comment(SAMPLE, 7, "Why a val here?")
+
+        user.goProjectLive()
+
+        assertTrue(showsTheLiveBadge(7))
+    }
+
+    fun testTheLiveBadgeLeavesThePlatformDotWhole() {
+        val dotted = LiveBadge.withPlatformDot(MarginalisIcons.LineMark)
+        val dot = LiveBadge.platformDotArea(dotted.iconWidth, dotted.iconHeight, scale = 4)
+        val before = Pixels.onTransparent(dotted, scale = 4)
+        assertTrue(dot.any { (x, y) -> before.alphaAt(x, y) > 0 && Pixels.close(before.at(x.toDouble(), y.toDouble()), LiveBadge.DOT) })
+
+        val live = Pixels.onTransparent(MarginalisIcons.withGutterLiveBadge(dotted), scale = 4)
+
+        assertTrue(live.sameAs(before, dot))
+    }
+
+    fun testTheLiveBadgeSitsInAGapCutAlongTheBoltsOutline() {
+        sample()
+        agent.addOnLine(5)
+        settle()
+        val mark = Pixels.onTransparent(iconAt(5), scale = 4)
+
+        user.goProjectLive()
+        settle()
+
+        val cleared = Pixels.onTransparent(iconAt(5), scale = 4).clearedFrom(mark)
+        val bolt = LiveBadge.InTheCorner(box = 16, size = 8)
+        val reach = bolt.distancesOf(cleared, scale = 4)
+        assertFalse(cleared.isEmpty())
+        assertTrue("cut reaches ${reach.max()}", reach.max() <= LiveBadge.GAP + bolt.strokeHalf + 0.1)
+        assertTrue("cut reaches only ${reach.max()}", reach.max() >= LiveBadge.GAP + bolt.strokeHalf - 0.4)
     }
 }

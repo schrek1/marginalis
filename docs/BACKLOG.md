@@ -402,3 +402,17 @@ declined, captured from real use.
   One round in flight: Submit round is off while nobody listens.
   Stopped and disconnected agents vanish from the indicator, since
   every session is different.
+- **Correction to "Project threads live in a pinned tab"** (2026-10-21,
+  #37): the plugin pins the Margin tab itself on a project's first run,
+  and pins it again after a plugin reload if it was pinned. The entry
+  above said the user pins it once.
+- **Live can cover a whole project** (2026-10-21, #43): a project toggle
+  makes every open thread live, and a thread's own switch opts out. The
+  choice persists per project in the workspace file; a project never
+  switched follows the Settings default. Turning live on needs a
+  listening agent. Extends "Live is a wake trigger, not a transport".
+- **The plugin module has platform tests** (2026-10, reverses "Plugin
+  module stays test-free for now"): escaped shell bugs kept coming, so
+  the plugin module gained platform tests against a real in-memory IDE
+  (`./gradlew test`, in CI against the 2025.2 floor). Tests that pin a
+  known defect carry a FixMe marker naming its issue.
