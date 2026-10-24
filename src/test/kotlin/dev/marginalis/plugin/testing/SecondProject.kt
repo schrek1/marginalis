@@ -1,8 +1,8 @@
 package dev.marginalis.plugin.testing
 
+import com.intellij.ide.startup.StartupManagerEx
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.fileEditor.FileDocumentManager
-import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.util.Disposer
@@ -12,7 +12,6 @@ import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.testFramework.PlatformTestUtil
 import dev.marginalis.plugin.store.MarginalisPersistence
 import dev.marginalis.plugin.store.MarginalisStore
-import dev.marginalis.plugin.ui.tab.MarginFile
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -88,11 +87,14 @@ class SecondProject private constructor(
                 throw e
             }
             val persisted = MarginalisPersistence.load(project).threads.size
+            val startup = StartupManagerEx.getInstanceEx(project)
+            val loaded = { MarginalisStore.getInstance(project).threads.all().size }
             PlatformTestUtil.waitWithEventsDispatching(
-                "the margin never loaded",
-                { FileEditorManager.getInstance(project).openFiles.any { it is MarginFile } && MarginalisStore.getInstance(project).threads.all().size == persisted },
+                { "the margin never loaded: startup passed=${startup.postStartupActivityPassed()}, threads ${loaded()} of $persisted" },
+                { startup.postStartupActivityPassed() && loaded() == persisted },
                 30,
             )
+            PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
             return SecondProject(root, project, base, lifetime)
         }
     }

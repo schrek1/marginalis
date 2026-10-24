@@ -214,6 +214,8 @@ class ReopeningTheProjectTest : SavedProjectTestCase() {
     fun testALiveThreadIsNoLongerLiveAfterReopening() {
         openShop()
         val id = agent.addOnLine(5)
+        // The first editor in a fresh project takes seconds to open; opened later, it would outlast the 1 s wait.
+        user.open(id)
         val waiting = agent.getAsync("comment_wait", "timeout" to 1)
         waitUntil("Claude listens") { user.canGoLive(id) }
         user.goLive(id)

@@ -290,6 +290,8 @@ standup rather than in a diff.
 - A project-level `comment_add` has no path to resolve by, so pass
   `project` whenever more than one is open — otherwise it fails with
   `open_projects` for you to pick from.
+- A new project-level thread lands in the user's Margin tab, which opens
+  behind the file they are reading if it was closed.
 - Responses and listings say only what the thread has: no `line`, and for
   project-level no `file` either. In `comment_list` project-level threads
   come first of all, then each file's file-level threads before its line

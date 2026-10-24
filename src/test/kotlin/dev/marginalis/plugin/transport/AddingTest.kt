@@ -10,6 +10,7 @@ import com.intellij.util.ui.UIUtil
 import dev.marginalis.plugin.settings.MarginalisSettings
 import dev.marginalis.plugin.testing.Relays
 import dev.marginalis.plugin.ui.ThreadPanel
+import dev.marginalis.plugin.ui.tab.MarginFile
 import dev.marginalis.plugin.ui.tab.ProjectTab
 
 class AddingTest : HttpContractTestCase() {
@@ -431,12 +432,26 @@ class AddingTest : HttpContractTestCase() {
     }
 
     fun testAProjectThreadDoesNotNotifyWhileTheMarginTabIsInFront() {
+        FileEditorManager.getInstance(project).openFile(MarginFile.of(project), true)
         assertTrue(ProjectTab.isInFront(project))
         val shown = notifications()
 
         agent.add("body" to "Build is slow")
 
         assertEquals(emptyList<Notification>(), shown)
+    }
+
+    fun testAProjectThreadOpensTheClosedMarginTabBehindTheFileYouAreReading() {
+        sample()
+        myFixture.openFileInEditor(myFixture.findFileInTempDir(SAMPLE))
+        val editors = FileEditorManager.getInstance(project)
+        assertFalse(editors.isFileOpen(MarginFile.of(project)))
+
+        agent.add("body" to "Build is slow")
+        PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+
+        assertTrue(editors.isFileOpen(MarginFile.of(project)))
+        assertEquals(SAMPLE.substringAfterLast('/'), editors.selectedFiles.first().name)
     }
 
     fun testAnAgentCommentInTheFileTheUserIsReadingDoesNotNotify() {

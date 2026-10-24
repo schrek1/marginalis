@@ -14,8 +14,8 @@ import dev.marginalis.plugin.ui.tab.MarginFile
 
 class MarginalisStartupTest : HttpContractTestCase() {
 
-    fun testTheMarginTabOpensTheFirstTimeAProjectOpens() {
-        assertTrue(FileEditorManager.getInstance(project).isFileOpen(MarginFile.of(project)))
+    fun testAFreshProjectWithoutProjectThreadsOpensWithoutTheMarginTab() {
+        assertFalse(FileEditorManager.getInstance(project).isFileOpen(MarginFile.of(project)))
     }
 
     fun testAnAgentsThreadGetsAGutterIconOnItsLine() {
