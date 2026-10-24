@@ -53,7 +53,19 @@ class ProjectTabTallyTest {
     fun `resolved threads count toward none of the header numbers`() {
         val resolved = project(agent).also { it.resolve(user) }
 
-        assertEquals(ProjectTabTally(open = 0, turns = TurnTally(user = 0, agent = 0), newCount = 0), ProjectTabTally.of(listOf(resolved)))
+        val nothing = TurnTally(user = 0, agent = 0)
+        assertEquals(ProjectTabTally(open = 0, turns = nothing, signals = nothing, newCount = 0), ProjectTabTally.of(listOf(resolved)))
+    }
+
+    @Test
+    fun `a thread you read but did not answer leaves the title and stays in your move`() {
+        val unread = project(agent)
+        val readNotAnswered = project(agent).also { it.markReadByUser() }
+
+        val tally = ProjectTabTally.of(listOf(unread, readNotAnswered))
+
+        assertEquals("✉ 1", tally.title)
+        assertEquals(TurnTally(user = 2, agent = 0), tally.turns)
     }
 
     @Test
