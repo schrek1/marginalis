@@ -205,6 +205,20 @@ class WaitingTest : HttpContractTestCase() {
         assertFalse(user.canSubmitRound())
     }
 
+    fun testAnAgentsOwnReplyDoesNotEndItsWait() {
+        sample()
+        val id = agent.addOnLine(5)
+        val waiting = agent.startWait("timeout" to 60)
+
+        agent.reply(id, "A reply posted while the agent also waits.")
+        PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+        val openAfterTheReply = !waiting.isDone
+        user.submitRound()
+
+        assertTrue(openAfterTheReply)
+        assertEquals("hand_back", agent.await(waiting)["reason"]!!.asString)
+    }
+
     fun testWaitingMakesTheAgentListeningInIdentities() {
         val waiting = agent.startWait("timeout" to 1)
 
