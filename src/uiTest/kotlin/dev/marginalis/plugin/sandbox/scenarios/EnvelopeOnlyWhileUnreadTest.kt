@@ -228,9 +228,9 @@ class EnvelopeOnlyWhileUnreadTest : SandboxScenario("envelope_only_while_unread"
             shown = inner;
         }
         var verdict = 'unknown:' + (shown == null ? 'null' : shown.getClass().getName());
-        if (shown === icons.toolWindow(null)) verdict = 'NONE';
-        if (shown === icons.toolWindow(badges.getField('AWAITING_YOU').get(null))) verdict = 'AWAITING_YOU';
-        if (shown === icons.toolWindow(badges.getField('BLOCKER').get(null))) verdict = 'BLOCKER';
+        if (shown === icons.toolWindow(null, false)) verdict = 'NONE';
+        if (shown === icons.toolWindow(badges.getField('AWAITING_YOU').get(null), false)) verdict = 'AWAITING_YOU';
+        if (shown === icons.toolWindow(badges.getField('BLOCKER').get(null), false)) verdict = 'BLOCKER';
         String(verdict)
         """,
     )

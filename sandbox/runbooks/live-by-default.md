@@ -1,29 +1,33 @@
-# Live by default
+# A whole project live
 
-- **Key:** MARG-22 (schrek1/marginalis#22)
+- **Key:** MARG-22 (schrek1/marginalis#22), upstream's implementation since 0.2.5
 - **Scenario:** `LiveByDefaultTest`
 
 ## Protects
 
-- The ⚡ toggle in the tool window's toolbar makes every open thread of the project live.
-- A thread's own ⚡ still switches it off, and flipping the project default clears that override.
-- The Settings checkbox sets where a new project starts. Changing it leaves existing projects alone.
+- The ⚡ toggle in the tool window's toolbar ("Make every open thread live") makes every open thread of the project
+  live; it is disabled while no agent listens, and going live hands the listening agent a reply it missed.
+- A thread's own ⚡ still switches it off, and turning the project off and on again clears that switch.
+- A project follows the Settings default until it makes its own choice with the toggle.
 - The project's choice survives a restart and lives in `workspace.xml`, not in version control.
 
 ## Automated
 
 `./gradlew uiSandboxTest --tests '*LiveByDefaultTest'`
 
-- without the default a reply does not wake the agent
-- the toolbar switches the project's default on
+- with no agent listening the toggle is disabled
+- without it a reply does not wake the agent
+- the toolbar makes the project live while an agent listens
 - every open thread is live
+- going live hands the listening agent the reply it missed
 - a reply in any thread wakes the agent with that thread
 - a thread's own switch turns it off under the default
 - a thread switched off stays quiet
-- flipping the default clears the thread's override
-- a new project takes the Settings default
-- changing Settings leaves an existing project alone
-- the project's own choice survives a restart
+- turning the project off and on again clears the thread's own switch
+- a new project follows the Settings default
+- a project without its own choice follows a change in Settings
+- the toolbar makes the project live
+- the project's own choice survives a restart, over the Settings default
 - the choice lives in `workspace.xml`
 
 ## Manual

@@ -6,7 +6,8 @@
 ## Protects
 
 - A single Enter inside a paragraph is a line break. A second blank line stays an empty line.
-- Paragraphs and lists get a small gap. The first block sits flush with the header.
+- Paragraphs get a gap; a list sits close under its lead-in, its items together (upstream's layout since 0.2.6).
+  The first block sits flush with the header.
 
 ## Automated
 
@@ -17,9 +18,9 @@
 - a second blank line adds an empty line
 - paragraphs are set apart
 - the first paragraph sits flush with the header
-- a list is set off from the text above
-- list items get a small gap
-- the gap below a list matches a paragraph gap
+- a list sits close under the text above, closer than a paragraph
+- list items sit together
+- the text below a list is set apart as a paragraph
 - a message starting with a list has no gap on top (guard)
 
 ## Manual

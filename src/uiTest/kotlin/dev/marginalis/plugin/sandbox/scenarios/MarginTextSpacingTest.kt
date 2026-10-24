@@ -9,7 +9,8 @@ import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
 
 /**
- * Margin text spacing: a single Enter is a line break, paragraphs and lists get a gap, the first block sits flush.
+ * Margin text spacing as upstream lays it out: a single Enter is a line break, paragraphs get a gap, a list sits close
+ * under its lead-in with its items together, and the first block sits flush.
  * Measured in the rendered message panes, in pixels.
  */
 class MarginTextSpacingTest : SandboxScenario("margin_text_spacing") {
@@ -68,11 +69,11 @@ class MarginTextSpacingTest : SandboxScenario("margin_text_spacing") {
         val thread = posted("Alphaintro text:\n\n- Bravoitem one\n- Charlieitem two\n\nDeltaoutro text.")
         val boxes = laidOut(thread, listOf("Alphaintro", "Bravoitem", "Charlieitem", "Deltaoutro"))
         val above = boxes["Bravoitem"].top - boxes["Alphaintro"].bottom
-        check("a list is set off from the text above", above >= MIN_GAP_PX, "gap ${px(above)}")
+        check("a list sits close under the text above, closer than a paragraph", above >= 1 && above < MIN_GAP_PX, "gap ${px(above)}")
         val between = boxes["Charlieitem"].top - boxes["Bravoitem"].bottom
-        check("list items get a small gap", between >= 1, "gap ${px(between)}")
+        check("list items sit together", between <= 1, "gap ${px(between)}")
         val below = boxes["Deltaoutro"].top - boxes["Charlieitem"].bottom
-        check("the gap below a list matches a paragraph gap", below >= MIN_GAP_PX && below <= 10, "gap ${px(below)}")
+        check("the text below a list is set apart as a paragraph", below >= MIN_GAP_PX && below <= 16, "gap ${px(below)}")
         SandboxUi.screenshotThread(thread, shots.resolve("spacing-lists.png"))
     }
 

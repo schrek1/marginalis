@@ -102,6 +102,40 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
         return enabled
     }
 
+    /**
+     * Presses the header's "Make every open thread live" toggle once its own update enables it (turning it on needs a
+     * listening agent): the toolbar repaints its text asynchronously, so the button is found by its action.
+     */
+    fun toggleProjectLive() {
+        val enabled = readUntil("the project's live toggle is enabled", read = { projectLiveToggle(press = false) == "enabled" }) { it }
+        check(enabled) { "the project's live toggle stayed disabled: no agent is listening" }
+        SandboxUi.awaitActionRan("Make every open thread live", projectLiveToggle(press = true))
+    }
+
+    fun isProjectLiveToggleEnabled(): Boolean = projectLiveToggle(press = false) == "enabled"
+
+    private fun projectLiveToggle(press: Boolean): String {
+        var outcome = ""
+        retryWhileHeaderIsBuilt("no live toggle in the tool window header") {
+            outcome = js(
+                FIND + HEADER + """
+                var button = find(root, function (c) {
+                    return c instanceof com.intellij.openapi.actionSystem.impl.ActionButton
+                        && c.getAction().getClass().getSimpleName() == 'ProjectLiveAction';
+                });
+                if (button == null) throw '$NO_HEADER_BUTTON ProjectLiveAction';
+                var action = button.getAction();
+                var event = com.intellij.openapi.actionSystem.AnActionEvent.createEvent(
+                    action, com.intellij.ide.DataManager.getInstance().getDataContext(button), button.getPresentation().clone(),
+                    'MarginalisSandbox', com.intellij.openapi.actionSystem.ActionUiKind.NONE, null);
+                action.update(event);
+                ${if (press) "String(performLater(action, event))" else "String(event.getPresentation().isEnabled() ? 'enabled' : 'disabled')"}
+                """,
+            )
+        }
+        return outcome
+    }
+
     /** Picks an entry of the header's Guided Layout menu through the button's own action group. */
     fun chooseGuidedLayout(label: String) {
         val escaped = lit(label)
