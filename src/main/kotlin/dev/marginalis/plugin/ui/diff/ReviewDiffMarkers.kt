@@ -32,6 +32,7 @@ import dev.marginalis.plugin.ui.CoalescedEdtRunner
 import dev.marginalis.plugin.ui.ThreadGutterIconRenderer
 import dev.marginalis.plugin.ui.ThreadInlayManager
 import dev.marginalis.plugin.ui.WalkthroughNavigator
+import java.util.WeakHashMap
 
 /**
  * Gutter icons in diffs whose right side is a project file shown from a
@@ -50,6 +51,7 @@ class ReviewDiffMarkers : DiffExtension() {
         val path = projectPath(project, target.content) ?: return
         val local = target.content.highlightFile?.let { FileDocumentManager.getInstance().getCachedDocument(it) }
         if (target.content.document !== local) DiffPainter(project, target, path).install()
+        OpenThreadsKeeper(project, target, openWhenShownAgain(context), path).install()
         ReviewDiffSteps.takePending(context, path)?.let { step -> StepOpener(project, target, step).install() }
     }
 
@@ -65,9 +67,16 @@ class ReviewDiffMarkers : DiffExtension() {
 
         private val live = mutableSetOf<DiffPainter>()
 
+        // Weak, as ReviewDiffSteps' pending steps: what a review remembers must not outlive it.
+        private val openThreadsByFile = WeakHashMap<DiffContext, MutableMap<String, List<String>>>()
+
+        private fun openWhenShownAgain(context: DiffContext): MutableMap<String, List<String>> =
+            openThreadsByFile.getOrPut(context) { mutableMapOf() }
+
         /** Strips our highlighters and listeners from open diffs before a dynamic unload. */
         fun disposeAll() {
             live.toList().forEach { it.uninstall() }
+            openThreadsByFile.clear()
         }
     }
 
@@ -180,6 +189,36 @@ class ReviewDiffMarkers : DiffExtension() {
             document.getText(TextRange(document.getLineStartOffset(line), document.getLineEndOffset(line)))
     }
 
+    /**
+     * A review builds a new viewer for a file it shows again, on every refresh of its data as well: the threads open
+     * in the file's last viewer open again in the new one once its text has landed.
+     */
+    private class OpenThreadsKeeper(
+        private val project: Project,
+        private val target: RightSide,
+        private val openByFile: MutableMap<String, List<String>>,
+        private val path: String,
+    ) : DiffViewerListener() {
+
+        private var reopening = openByFile.remove(path).orEmpty()
+
+        fun install() = target.viewer.addListener(this)
+
+        override fun onAfterRediff() {
+            if (reopening.isEmpty() || target.editor.isDisposed) return
+            val store = MarginalisStore.getInstance(project)
+            reopening.mapNotNull(store.threads::byId)
+                .filter { it.status !is ThreadStatus.Resolved }
+                .forEach { ThreadInlayManager.open(project, target.editor, it) }
+            reopening = emptyList()
+        }
+
+        // The viewer is iterating its listeners right now; the list dies with the viewer anyway.
+        override fun onDispose() {
+            if (!target.editor.isDisposed) openByFile[path] = ThreadInlayManager.openThreadIds(target.editor)
+        }
+    }
+
     /** Opens a step [ReviewDiffSteps] switched this diff to, once the diff's text has landed. */
     private class StepOpener(
         private val project: Project,
@@ -191,15 +230,17 @@ class ReviewDiffMarkers : DiffExtension() {
 
         fun install() = target.viewer.addListener(this)
 
+        // The viewer is iterating its listeners right now: removing ourselves, or leaving the diff for a file tab,
+        // changes that list mid-iteration and throws ConcurrentModificationException.
         override fun onAfterRediff() {
-            if (opened || target.editor.isDisposed) return
+            if (opened) return
             opened = true
-            // The viewer is iterating its listeners right now; removing one in place fails that iteration.
             ApplicationManager.getApplication().invokeLater {
-                if (!target.viewer.isDisposed) target.viewer.removeListener(this)
-            }
-            if (!WalkthroughNavigator.navigateWithin(target.editor, project, step.thread, step.revealing)) {
-                WalkthroughNavigator.openStepInFileTab(project, step.thread, step.revealing)
+                if (target.viewer.isDisposed || target.editor.isDisposed) return@invokeLater
+                target.viewer.removeListener(this)
+                if (!WalkthroughNavigator.navigateWithin(target.editor, project, step.thread, step.revealing)) {
+                    WalkthroughNavigator.openStepInFileTab(project, step.thread, step.revealing)
+                }
             }
         }
     }

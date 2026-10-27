@@ -52,6 +52,9 @@ object ThreadInlayManager {
         }
     }
 
+    fun openThreadIds(editor: Editor): List<String> =
+        editor.getUserData(OPEN_INLAYS)?.filterValues { (inlay, _) -> inlay.isValid }?.keys?.toList().orEmpty()
+
     private fun openInlays(editor: Editor): MutableMap<String, Pair<Inlay<*>, ThreadPanel>> =
         editor.getUserData(OPEN_INLAYS) ?: mutableMapOf<String, Pair<Inlay<*>, ThreadPanel>>()
             .also { editor.putUserData(OPEN_INLAYS, it) }
