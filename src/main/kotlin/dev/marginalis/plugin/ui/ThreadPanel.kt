@@ -48,6 +48,7 @@ import dev.marginalis.core.FoldingPrefs
 import dev.marginalis.core.Identities
 import dev.marginalis.core.Identity
 import dev.marginalis.core.Intent
+import dev.marginalis.core.LeavingAStep
 import dev.marginalis.core.LiveThread
 import dev.marginalis.core.Mark
 import dev.marginalis.core.Message
@@ -591,7 +592,7 @@ class ThreadPanel(
         override fun actionPerformed(e: AnActionEvent) {
             val (walk, i) = WalkthroughNavigator.walkFrom(project, thread)
             val destination = target(walk, i) ?: return
-            onClose()
+            if (MarginalisSettings.getInstance().leavingAStep == LeavingAStep.FOLD) onClose()
             stayOrNavigateTo(destination)
         }
     }

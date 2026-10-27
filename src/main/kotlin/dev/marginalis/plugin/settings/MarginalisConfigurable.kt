@@ -31,6 +31,7 @@ import com.intellij.util.ui.UIUtil
 import dev.marginalis.core.Face
 import dev.marginalis.core.Faces
 import dev.marginalis.core.Intent
+import dev.marginalis.core.LeavingAStep
 import dev.marginalis.core.ListWhileInFront
 import dev.marginalis.core.LongThreadFolding
 import dev.marginalis.core.Mark
@@ -289,6 +290,14 @@ class MarginalisConfigurable : Configurable {
                     .comment("While walking a guided walkthrough, resolving a step opens the next one.")
                     .bindSelected(state::walkthroughAutoAdvance)
             }
+            row("When stepping to another step:") {
+                comboBox(LeavingAStep.entries, textListCellRenderer { it?.let(::labelOf) })
+                    .comment("A thread's own Next, Previous, First and Last Step, in a file's editor and in a review.")
+                    .bindItem(
+                        { settings.leavingAStep },
+                        { settings.leavingAStep = it ?: LeavingAStep.FOLD },
+                    )
+            }
             row {
                 checkBox("Notify when the agent posts elsewhere")
                     .comment(
@@ -481,6 +490,11 @@ class MarginalisConfigurable : Configurable {
         fun labelOf(kind: People.Kind): String = when (kind) {
             People.Kind.PERSON -> "Person"
             People.Kind.AGENT -> "Agent"
+        }
+
+        fun labelOf(leaving: LeavingAStep): String = when (leaving) {
+            LeavingAStep.FOLD -> "Fold the step you leave"
+            LeavingAStep.KEEP_OPEN -> "Keep it open"
         }
 
         fun labelOf(list: ListWhileInFront): String = when (list) {
