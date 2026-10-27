@@ -163,18 +163,31 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
      */
     fun openInEditor(file: String) {
         js(EDITORS + "com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).requestOpenFile(projectFile('$file')); String(true)")
-        awaitUntil("$file in front with its editor", Duration.ofSeconds(60)) {
-            js(
-                EDITORS +
-                    """
-                    var target = projectFile('$file');
-                    var manager = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project);
-                    var selected = manager.getSelectedFiles();
-                    String(selected.length > 0 && selected[0].equals(target) && manager.getAllEditors(target).length > 0)
-                    """,
-            ) == "true"
+        val shown = readUntil("$file in front with its editor", Duration.ofSeconds(60), read = { frontEditorState(file) }) { state ->
+            state.get("front").asBoolean && state.get("editors").asInt > 0
         }
+        check(shown.get("front").asBoolean && shown.get("editors").asInt > 0) { "$file in front with its editor: not within 60s, last $shown" }
     }
+
+    private fun frontEditorState(file: String): JsonObject = obj(
+        js(
+            EDITORS +
+                """
+                // By path: a refresh of the project files may replace the file with a new instance while it is open.
+                var target = String(projectFile('$file').getPath());
+                var manager = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project);
+                var selected = manager.getSelectedFiles();
+                var names = [];
+                for (var i = 0; i < selected.length; i++) names.push(String(selected[i].getPath()));
+                var front = selected.length > 0 && names[0] == target;
+                String(JSON.stringify({
+                    front: front,
+                    editors: front ? manager.getAllEditors(selected[0]).length : 0,
+                    selected: names
+                }))
+                """,
+        ),
+    )
 
     fun closeAllEditors() {
         js(
