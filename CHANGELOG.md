@@ -19,6 +19,10 @@ History before 0.1.19 lives in git tags.
   the code reads clean behind you, or keep it open, so every step you
   passed stays in view. Set it under *When stepping to another step* in
   Settings → Tools → Marginalis. Folding stays the default.
+- Mark a thread unread from its context menu in the tool window, so it
+  waits for you like a new message until you open it again. On a thread
+  with something new, the same entry marks it read, and with several
+  threads selected it acts on all of them.
 
 ### Changed
 

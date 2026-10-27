@@ -253,6 +253,11 @@ class MarginToolWindow(private val project: Project, private val disposable: Dis
         settle()
     }
 
+    fun selectAlso(text: String, under: String? = null) {
+        tree.addSelectionPath(tree.getPathForRow(rowOf(text, under)))
+        settle()
+    }
+
     fun selectNothing() {
         tree.clearSelection()
         settle()
