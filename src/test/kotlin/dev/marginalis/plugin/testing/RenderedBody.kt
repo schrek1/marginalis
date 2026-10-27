@@ -25,13 +25,13 @@ class RenderedBody private constructor(private val parts: List<JComponent>) {
 
     val prose: List<JEditorPane> get() = parts.map(::unwrapped).filterIsInstance<JEditorPane>()
 
-    val codeBlocks: List<EditorTextField> get() = parts.filterIsInstance<EditorTextField>()
+    val codeBlocks: List<EditorTextField> get() = parts.map(::unwrapped).filterIsInstance<EditorTextField>()
 
     fun kinds(): List<String> = parts.map {
-        when (it) {
-            is JScrollPane -> "table"
-            is JEditorPane -> "prose"
-            else -> "code"
+        when {
+            unwrapped(it) is EditorTextField -> "code"
+            it is JScrollPane -> "table"
+            else -> "prose"
         }
     }
 
@@ -40,10 +40,10 @@ class RenderedBody private constructor(private val parts: List<JComponent>) {
     fun text(): String = prose.joinToString("\n") { textOf(it) }
 
     fun screen(): List<String> = parts.flatMap { part ->
-        when (part) {
-            is JScrollPane -> listOf("[table]")
-            is JEditorPane -> screenLinesOf(part)
-            else -> listOf("[code]")
+        when {
+            unwrapped(part) is EditorTextField -> listOf("[code]")
+            part is JScrollPane -> listOf("[table]")
+            else -> screenLinesOf(part as JEditorPane)
         }
     }
 
@@ -149,7 +149,7 @@ class RenderedBody private constructor(private val parts: List<JComponent>) {
             val bodies = UIUtil.uiTraverser(panel).filter(Box::class.java)
                 .filter { box -> box.components.isNotEmpty() && box.components.map(::unwrapped).all { it is JEditorPane || it is EditorTextField || it is Box.Filler } }
                 .toList()
-            return RenderedBody(bodies.single().components.filter { unwrapped(it) is JEditorPane || it is EditorTextField }.map { it as JComponent })
+            return RenderedBody(bodies.single().components.filter { unwrapped(it) is JEditorPane || unwrapped(it) is EditorTextField }.map { it as JComponent })
         }
 
         private fun unwrapped(part: Component): Component = (part as? JScrollPane)?.viewport?.view ?: part

@@ -53,6 +53,8 @@ History before 0.1.19 lives in git tags.
 - The buttons in a thread's header and the Margin tab's Sort menu no
   longer wait for a busy IDE, so they stop holding up the editor while
   the IDE is under load.
+- A code block with lines wider than the thread scrolls sideways in its
+  own pane, so its end is no longer cut off at the panel's edge.
 
 ## [0.2.7] - 2026-10-22
 
