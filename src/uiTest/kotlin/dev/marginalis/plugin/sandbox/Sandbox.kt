@@ -405,7 +405,14 @@ object Sandbox {
                 return
             }
             if (project.exists()) project.deleteRecursively()
-            Files.move(pulled, project)
+            runCatching { Files.move(pulled, project) }.onFailure { failure ->
+                val state = dockerOutput("inspect", "-f", "{{.State.Status}}", name)?.trim()
+                error(
+                    "moving $pulled -> $project failed: ${failure::class.simpleName}: ${failure.message}; " +
+                        "after the delete project exists=${project.exists()}, its children=${project.toFile().list()?.size}; " +
+                        "container $name is $state",
+                )
+            }
         }
 
         /** A thread dump in the IDE log and a shot of the frame, for a wait that timed out. */
