@@ -7,6 +7,11 @@ History before 0.1.19 lives in git tags.
 
 ## [Unreleased]
 
+### Fixed
+
+- Updating Marginalis without restarting the IDE no longer logs an
+  error while the tool window repaints during the update.
+
 ## [0.2.7] - 2026-10-22
 
 Thanks to [@schrek1](https://github.com/schrek1) for starting the long-thread work in this release.

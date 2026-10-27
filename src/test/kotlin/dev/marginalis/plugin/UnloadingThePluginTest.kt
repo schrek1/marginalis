@@ -63,6 +63,22 @@ class UnloadingThePluginTest : MarginTabTestCase() {
         }
     }
 
+    fun testUpdatingThePluginWithTheTabInOnlyOneHalfOfASplitTakesItOutOfTheIde() {
+        // GIVEN - the Margin tab is open beside a file, and that file alone is split off into a second half
+        sample()
+        tab.open()
+        tab.openFileInFront(SAMPLE)
+        tab.splitOffWithout(SAMPLE)
+        assertEquals(listOf(1, 0), tab.marginTabsInEachHalf())
+
+        // WHEN - the plugin unloads for an update
+        val failure = tab.unloadPluginForUpdate()
+
+        // THEN - the half without the tab is no reason to fail, and the tab is gone from the IDE
+        assertNull(failure)
+        assertFalse(tab.isOpen)
+    }
+
     fun testUnloadingAnotherPluginLeavesTheMarginAsItWas() {
         sample()
         val thread = agent.addOnLine(5, "body" to "Still open in the editor")
