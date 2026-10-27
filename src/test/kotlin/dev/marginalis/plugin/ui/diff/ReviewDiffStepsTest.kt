@@ -7,7 +7,9 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.impl.FileEditorManagerImpl
 import com.intellij.testFramework.PlatformTestUtil
+import dev.marginalis.core.LeavingAStep
 import dev.marginalis.plugin.ProjectPaths
+import dev.marginalis.plugin.settings.MarginalisSettings
 import dev.marginalis.plugin.testing.MarginTab
 import dev.marginalis.plugin.testing.ReviewDiff
 import dev.marginalis.plugin.testing.ReviewProcessorTab
@@ -101,6 +103,33 @@ class ReviewDiffStepsTest : HttpContractTestCase() {
         assertEquals(emptyList<Int>(), panelRows())
     }
 
+    fun testNextStepFoldsTheStepYouLeaveInTheReviewByDefault() {
+        walkthrough(CART to 5, ORDER to 8, CART to 20)
+        val review = reviewOf(reviewed(CART), reviewed(ORDER))
+        openStepInTheReview(rowOf(5))
+
+        user.press(user.panel(shownDiff().editor), "Next Step")
+        waitFor("the review never switched to $ORDER") { review.shownFile() == ORDER && panelRows() == listOf(rowOf(8)) }
+        user.press(user.panel(shownDiff().editor), "Next Step")
+
+        assertStepOpensInTheReview(review, CART, rowOf(20))
+    }
+
+    fun testStepsYouLeaveStayOpenInTheReviewWhenChosen() = leavingAStep(LeavingAStep.KEEP_OPEN) {
+        walkthrough(CART to 5, ORDER to 8, CART to 20)
+        val review = reviewOf(reviewed(CART), reviewed(ORDER))
+        openStepInTheReview(rowOf(5))
+
+        user.press(user.panel(shownDiff().editor), "Next Step")
+        waitFor("the review never switched to $ORDER") { review.shownFile() == ORDER && panelRows() == listOf(rowOf(8)) }
+        user.press(user.panel(shownDiff().editor), "Next Step")
+
+        waitFor("the review never came back to $CART with both steps open") {
+            review.shownFile() == CART && panelRows() == listOf(rowOf(5), rowOf(20))
+        }
+        assertEquals("the caret moves to the step's row", rowOf(20), shownDiff().editor.caretModel.logicalPosition.line + 1)
+    }
+
     fun testAStepInAFileOutsideTheReviewOpensInThatFilesTab() {
         walkthrough(CART to 5, INVOICE to 4)
         val review = reviewOf(reviewed(CART), reviewed(ORDER))
@@ -120,6 +149,17 @@ class ReviewDiffStepsTest : HttpContractTestCase() {
         user.press(user.panel(shownDiff().editor), "Next Step")
 
         assertStepOpensInItsFileTab(ORDER, line = 8)
+    }
+
+    private fun leavingAStep(choice: LeavingAStep, test: () -> Unit) {
+        val settings = MarginalisSettings.getInstance()
+        val before = settings.leavingAStep
+        settings.leavingAStep = choice
+        try {
+            test()
+        } finally {
+            settings.leavingAStep = before
+        }
     }
 
     private fun walkthrough(vararg steps: Pair<String, Int>) {
