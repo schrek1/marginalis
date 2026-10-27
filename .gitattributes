@@ -1,0 +1,2 @@
+# The plugin serves this file to agents as-is: it must not depend on the OS it was checked out and built on.
+src/main/resources/marginalis/agent-guide.md text eol=lf
