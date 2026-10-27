@@ -11,7 +11,6 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
-import kotlin.concurrent.thread
 
 /**
  * Everything the user left in the margin survives a real stop and start of the IDE process (MARG-105): line, file and
@@ -52,9 +51,7 @@ class ThreadsSurviveRestartTest : SandboxScenario("threads_survive_restart") {
         SandboxUi.openMarginTab(projectLevel)
         SandboxUi.chooseMarginSort("Newest first")
         // Making the project live needs a listening agent.
-        val listening = thread { runCatching { Agent.agentWaits(6) } }
-        ToolWindowUi.toggleProjectLive()
-        listening.join()
+        Agent.listensWhile { ToolWindowUi.toggleProjectLive() }
         ToolWindowUi.chooseGuidedLayout("By file")
 
         before = snapshot()

@@ -63,7 +63,7 @@ class LiveByDefaultTest : SandboxScenario("live_by_default") {
         check("a thread switched off stays quiet", quiet.reason == "timeout", quiet)
 
         ToolWindowUi.toggleProjectLive()
-        whileAnAgentListens { ToolWindowUi.toggleProjectLive() }
+        Agent.listensWhile { ToolWindowUi.toggleProjectLive() }
         check("turning the project off and on again clears the thread's own switch", SandboxUi.isLive(thread))
     }
 
@@ -78,7 +78,7 @@ class LiveByDefaultTest : SandboxScenario("live_by_default") {
         restart(fresh = false)
         check("a project without its own choice follows a change in Settings", !SandboxUi.projectLive())
 
-        whileAnAgentListens { ToolWindowUi.toggleProjectLive() }
+        Agent.listensWhile { ToolWindowUi.toggleProjectLive() }
         check("the toolbar makes the project live", SandboxUi.projectLive())
         SandboxUi.saveProjectState()
         restart(fresh = false)
@@ -118,16 +118,6 @@ class LiveByDefaultTest : SandboxScenario("live_by_default") {
             awaiting = result.getAsJsonArray("awaiting")?.map { it.asJsonObject.get("thread_id").asString }.orEmpty(),
             raw = result,
         )
-    }
-
-    /** Runs [action] while an agent waits in `comment_wait`; the wait then runs out on its own. */
-    private fun whileAnAgentListens(action: () -> Unit) {
-        val waiting = thread { runCatching { Agent.agentWaits(QUIET_WAIT_SECONDS) } }
-        try {
-            action()
-        } finally {
-            waiting.join()
-        }
     }
 
     private fun wokeLive(wake: Wake, threadId: String) = wake.reason == "live" && wake.awaiting == listOf(threadId)
