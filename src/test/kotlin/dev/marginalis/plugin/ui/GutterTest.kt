@@ -109,6 +109,20 @@ class GutterTest : HttpContractTestCase() {
         assertFalse(shown, shown.contains("first thought"))
     }
 
+    fun testChoosingAnOpenThreadFromASharedIconFoldsItAsASingleIconDoes() {
+        sample()
+        agent.addOnLine(5, "body" to "first thought")
+        reviewer.addOnLine(5, "body" to "second thought")
+        settle()
+        user.choose(mutableListOf(), "second thought")
+        user.clickGutter(SAMPLE, 5)
+        user.choose(mutableListOf(), "second thought")
+
+        user.clickGutter(SAMPLE, 5)
+
+        assertEquals(emptyList<ThreadPanel>(), user.panels())
+    }
+
     fun testTheChooserQuotesTheSelectionASpanThreadIsAbout() {
         sample()
         agent.addOnLine(12, "body" to "whole line")

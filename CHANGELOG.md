@@ -7,6 +7,12 @@ History before 0.1.19 lives in git tags.
 
 ## [Unreleased]
 
+### Fixed
+
+- On a line with several threads, choosing an open thread in the
+  chooser folds it again, just as clicking the icon of a single thread
+  does.
+
 ## [0.2.7] - 2026-10-22
 
 Thanks to [@schrek1](https://github.com/schrek1) for starting the long-thread work in this release.
