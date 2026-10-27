@@ -42,6 +42,18 @@ class WaitingTest : HttpContractTestCase() {
         assertEquals("Here is my batch.", wake.json.getAsJsonArray("awaiting")[0].asJsonObject.messages().last().string("body"))
     }
 
+    fun testTheComposerOffersSendRoundUnderItsLabelAsWritten() {
+        sample()
+        val id = agent.addOnLine(5)
+        val waiting = agent.startWait()
+
+        val shown = user.sendOptions(user.open(id))
+
+        assertTrue("send options shown: $shown", "Submit & send round" in shown)
+        user.replyAndSendRound(id, "Done.")
+        agent.await(waiting)
+    }
+
     fun testSubmitRoundIsEnabledOnlyWhileSomeAgentIsListening() {
         assertFalse(user.canSubmitRound())
 

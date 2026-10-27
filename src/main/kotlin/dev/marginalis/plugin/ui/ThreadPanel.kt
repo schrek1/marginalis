@@ -141,7 +141,8 @@ class ThreadPanel(
         override fun actionPerformed(e: ActionEvent?) = submitWiderThan(file = null)
     }
     private val handBack = MarginalisStore.getInstance(project).handBack
-    private val submitAndSendRoundAction = object : AbstractAction("Submit & send round") {
+    // The option popup reads a single "&" as a mnemonic marker; "&&" shows one "&".
+    private val submitAndSendRoundAction = object : AbstractAction("Submit && send round") {
         override fun actionPerformed(e: ActionEvent?) {
             if (replyArea.text.isBlank()) return
             sendReply()

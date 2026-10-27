@@ -7,6 +7,11 @@ History before 0.1.19 lives in git tags.
 
 ## [Unreleased]
 
+### Fixed
+
+- The reply composer's send menu reads "Submit & send round" again,
+  instead of losing the ampersand to an underlined letter.
+
 ## [0.2.7] - 2026-10-22
 
 Thanks to [@schrek1](https://github.com/schrek1) for starting the long-thread work in this release.
