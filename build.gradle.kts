@@ -342,6 +342,10 @@ tasks.test {
                 "(intellij-platform-gradle-plugin#2192): run the build again, it indexes the IDE anew"
         }
     }
+    // Every test's agent calls come from this one JVM, which the server's per-client limit counts as a single agent.
+    systemProperty("marginalis.api.requestsPerMinute", Int.MAX_VALUE)
+    // The short format names only the failing line; the message (an HTTP status, a measured value) says why.
+    testLogging { exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL }
 }
 
 allprojects {

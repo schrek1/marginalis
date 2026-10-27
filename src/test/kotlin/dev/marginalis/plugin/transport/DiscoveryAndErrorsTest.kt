@@ -1,6 +1,7 @@
 package dev.marginalis.plugin.transport
 
 import com.google.gson.JsonParser
+import com.intellij.testFramework.PlatformTestUtil
 import dev.marginalis.plugin.settings.MarginalisSettings
 import dev.marginalis.plugin.store.Authors
 import dev.marginalis.plugin.testing.Agent
@@ -229,6 +230,18 @@ class DiscoveryAndErrorsTest : HttpContractTestCase() {
 
     fun testWithOneProjectOpenIdentitiesNeedNoProject() {
         assertEquals(project.name, agent.get("comment_identities", "project" to null)["project"]!!.asString)
+    }
+
+    // The server counts calls per client in one-minute windows, and this whole suite is one client: 2001 calls within
+    // a minute put at least 1001 into one window, the pace a fast machine reaches across the suite.
+    fun testTheSuiteIsNeverThrottledHoweverFastItCallsTheServer() {
+        val statuses = (1..2001).chunked(100).flatMap { batch ->
+            val calls = batch.map { agent.getAsync("ping") }
+            PlatformTestUtil.waitWithEventsDispatching("calls unanswered within 15 s", { calls.all { it.isDone } }, 15)
+            calls.map { call -> call.get().status }
+        }
+
+        assertEquals(mapOf(200 to 2001), statuses.groupingBy { it }.eachCount())
     }
 
     private fun agentNamed(name: String, id: String) = Agent(project, name, id)
