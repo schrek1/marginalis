@@ -106,10 +106,9 @@ class AgreeShowsThumbsUpTest : SandboxScenario("agree_shows_thumbs_up") {
         settle()
         Agent.agentReplies(id("B"), "Renamed to `order_total`.")
         // B's panel is still open from the Agree, so the reply may be read at once; ✉ shows only while it is unread.
-        val signal = readUntil("B's signal after the agent's reply", read = { threadSignals()["B"] }) { it != "working" }
-        val expected = if (unreadByUser(id("B")) > 0) "you" else "none"
+        val shown = readUntil("B's signal to match its read state", read = { signalAndUnread("B") }) { it.matchesReadState() }
         shot("3-agent-reported")
-        check("tree: the agent's reply on B replaces ⏳ with the usual signal ($expected)", signal == expected, signal)
+        check("tree: the agent's reply on B replaces ⏳ with the usual signal (✉ while unread, none once read)", shown.matchesReadState(), shown)
         check("API: B is the user's move again", id("B") in awaitingUserIds(), awaitingUserIds())
         check("API: B no longer carries an agent_state", agentStates()[id("B")] == null, agentStates())
     }
@@ -147,6 +146,13 @@ class AgreeShowsThumbsUpTest : SandboxScenario("agree_shows_thumbs_up") {
         summaries().firstOrNull { it.get("thread_id").asString == threadId }?.get("status")?.asString
 
     private fun unreadByUser(threadId: String): Int = SandboxUi.js("String(store.getThreads().byId('$threadId').unreadByUserCount())").toInt()
+
+    private data class SignalAndUnread(val signal: String?, val unreadByUser: Int) {
+        fun matchesReadState() = signal == if (unreadByUser > 0) "you" else "none"
+    }
+
+    // The panel may mark the reply read between the two reads; a mismatch then only means "read again".
+    private fun signalAndUnread(name: String) = SignalAndUnread(threadSignals()[name], unreadByUser(id(name)))
 
     private fun awaitingUserIds(): Set<String> =
         Agent.apiGet("comment_list", mapOf("awaiting" to "user", "summary" to "true"))
