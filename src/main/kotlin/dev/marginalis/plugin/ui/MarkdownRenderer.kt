@@ -176,7 +176,7 @@ object MarkdownRenderer {
     private fun parse(markdown: String, flavour: Flavour = Flavour()): ASTNode =
         MarkdownParser(flavour, true, CancellationToken.NonCancellable).buildMarkdownTreeFromString(markdown)
 
-    private val GENERATED_TASK_CHECKBOX =Regex("<input type=\"checkbox\" class=\"task-list-item-checkbox\"( checked)? disabled />")
+    private val GENERATED_TASK_CHECKBOX = Regex("<input type=\"checkbox\" class=\"task-list-item-checkbox\"( checked)? disabled />")
 
     private class TypedLineBreaks(private val prose: Prose) : GeneratingProvider {
         override fun processNode(visitor: HtmlGenerator.HtmlGeneratingVisitor, text: String, node: ASTNode) {
