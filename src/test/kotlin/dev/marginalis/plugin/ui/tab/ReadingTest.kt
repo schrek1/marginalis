@@ -151,6 +151,23 @@ class ReadingTest : TabInFrontTestCase() {
         assertFalse(user.shownText(tab.panel("Heads-up")).lines().contains("new"))
     }
 
+    fun testAThreadMarkedUnreadWhileOpenStaysUnreadUntilYouOpenItAgain() {
+        // GIVEN - an fyi already read in the open tab
+        agent.ask("Heads-up: CI moved", "intent" to "fyi")
+        assertEquals(listOf("Heads-up: CI moved [expanded]"), shown())
+        val window = user.openToolWindow()
+
+        // WHEN - the user marks it unread from the tool window while it stays open
+        window.rebuiltBy { window.chooseFromContextMenu("Heads-up: CI moved", "Mark as Unread") }
+
+        // THEN - it is new again, and only opening it again reads it
+        assertEquals(listOf("✉ Heads-up: CI moved ● [expanded]"), shown())
+        assertEquals("1 open · 1 your move · 0 agent's move · 1 new", tab.counts())
+        tab.click("Heads-up")
+        tab.click("Heads-up")
+        assertEquals(listOf("Heads-up: CI moved [expanded]"), shown())
+    }
+
     fun testOpenThreadsFollowTheWidthOfTheTab() {
         agent.ask("Which release name?")
         val wide = tab.panel("Which release name?").preferredSize.width

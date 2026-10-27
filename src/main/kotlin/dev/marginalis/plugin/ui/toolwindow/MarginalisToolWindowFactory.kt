@@ -35,6 +35,7 @@ import com.intellij.ui.treeStructure.Tree
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import com.intellij.util.ui.components.BorderLayoutPanel
+import dev.marginalis.core.Author
 import dev.marginalis.core.CommentThread
 import dev.marginalis.core.Faces
 import dev.marginalis.core.Intent
@@ -360,9 +361,11 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
         tree.addMouseListener(object : PopupHandler() {
             override fun invokePopup(comp: java.awt.Component, x: Int, y: Int) {
                 val path = tree.getPathForLocation(x, y) ?: return
-                tree.selectionPath = path
+                if (!tree.isPathSelected(path)) tree.selectionPath = path
                 val node = path.lastPathComponent as? DefaultMutableTreeNode ?: return
-                buildContextMenu(node)?.show(comp, x, y)
+                val selectedThreads = selectedThreads()
+                val menu = if (selectedThreads.size > 1) severalThreadsMenu(selectedThreads) else buildContextMenu(node)
+                menu?.show(comp, x, y)
             }
         })
         add(JBScrollPane(tree), BorderLayout.CENTER)
@@ -442,6 +445,11 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
         return (node.userObject as? NodeData.ThreadNode)?.thread
     }
 
+    private fun selectedThreads(): List<CommentThread> =
+        tree.selectionPaths.orEmpty()
+            .mapNotNull { ((it.lastPathComponent as? DefaultMutableTreeNode)?.userObject as? NodeData.ThreadNode)?.thread }
+            .distinctBy { it.id }
+
     private fun threadsUnder(node: DefaultMutableTreeNode): List<CommentThread> =
         node.preorderEnumeration().asSequence()
             .filterIsInstance<DefaultMutableTreeNode>()
@@ -456,6 +464,7 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
             is NodeData.ThreadNode -> {
                 val thread = data.thread
                 menu.add(JMenuItem("Navigate").apply { addActionListener { navigateTo(thread) } })
+                readMarkItem(listOf(thread))?.let(menu::add)
                 if (thread.status is ThreadStatus.Resolved) {
                     menu.add(JMenuItem("Reopen").apply {
                         addActionListener {
@@ -480,19 +489,41 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
                         addActionListener { FileLevelThreads.startDraft(project, data.path) }
                     })
                 }
-                val open = threads.filter { it.status !is ThreadStatus.Resolved }
-                if (open.isNotEmpty()) {
-                    menu.add(JMenuItem("Resolve ${open.size} Open Thread(s)…").apply {
-                        addActionListener { resolveThreads(open) }
-                    })
-                }
-                menu.add(JMenuItem("Delete ${threads.size} Thread(s)…").apply {
-                    addActionListener { deleteThreads(threads) }
-                })
+                addResolveAndDeleteAll(menu, threads)
             }
             else -> return null
         }
         return menu
+    }
+
+    private fun severalThreadsMenu(threads: List<CommentThread>): JPopupMenu {
+        val menu = JPopupMenu()
+        readMarkItem(threads)?.let(menu::add)
+        addResolveAndDeleteAll(menu, threads)
+        return menu
+    }
+
+    private fun addResolveAndDeleteAll(menu: JPopupMenu, threads: List<CommentThread>) {
+        val open = threads.filter { it.status !is ThreadStatus.Resolved }
+        if (open.isNotEmpty()) {
+            menu.add(JMenuItem("Resolve ${open.size} Open Thread(s)…").apply { addActionListener { resolveThreads(open) } })
+        }
+        menu.add(JMenuItem("Delete ${threads.size} Thread(s)…").apply { addActionListener { deleteThreads(threads) } })
+    }
+
+    /** Mark as Read while anything in the selection is new, as in a mail client; null when nobody else wrote in it. */
+    private fun readMarkItem(threads: List<CommentThread>): JMenuItem? {
+        if (threads.all { thread -> thread.messages.all { it.author is Author.User } }) return null
+        val store = MarginalisStore.getInstance(project)
+        val markRead = threads.any { it.unreadByUserCount() > 0 }
+        return JMenuItem(if (markRead) "Mark as Read" else "Mark as Unread").apply {
+            addActionListener {
+                for (thread in threads) {
+                    val changed = if (markRead) thread.markReadByUser() else thread.markUnreadByUser()
+                    if (changed) store.threads.notifyChanged(thread)
+                }
+            }
+        }
     }
 
     private fun resolveThreads(threads: List<CommentThread>) {

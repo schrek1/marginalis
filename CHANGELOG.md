@@ -7,6 +7,13 @@ History before 0.1.19 lives in git tags.
 
 ## [Unreleased]
 
+### Added
+
+- Mark a thread unread from its context menu in the tool window, so it
+  waits for you like a new message until you open it again. On a thread
+  with something new, the same entry marks it read, and with several
+  threads selected it acts on all of them.
+
 ## [0.2.7] - 2026-10-22
 
 Thanks to [@schrek1](https://github.com/schrek1) for starting the long-thread work in this release.

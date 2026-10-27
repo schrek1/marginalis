@@ -227,6 +227,10 @@ class ThreadPanel(
     private var level = ThreadFolding.Level.DEFAULT
     private val keptOpen = mutableSetOf<String>()
     private val readWhileOpen = mutableSetOf<String>()
+    private val seenRead = thread.messages.filter { it.readByUser }.mapTo(mutableSetOf()) { it.id }
+
+    /** Marked unread elsewhere while shown here: only clicking into the thread, or opening it again, reads it. */
+    private val keptUnread = mutableSetOf<String>()
     private var foldedBy: FoldingPrefs? = null
     private var messagesRendered: Set<String>? = null
     private val openedHere = mutableSetOf<String>()
@@ -728,13 +732,31 @@ class ThreadPanel(
     }
 
     fun markReadIfSeen() {
+        keepWhatWasMarkedUnread()
         if (!mayMarkRead(false) || !isShowing || visibleRect.isEmpty || !ApplicationManager.getApplication().isActive) return
-        if (thread.markReadByUser(openMessages)) MarginalisStore.getInstance(project).threads.notifyChanged(thread)
+        readHere(openMessages.filterNot { it.id in keptUnread })
     }
 
     fun markRead() {
         if (!mayMarkRead(true) || isDraft() || !ApplicationManager.getApplication().isActive) return
-        if (thread.markReadByUser(openMessages)) MarginalisStore.getInstance(project).threads.notifyChanged(thread)
+        keptUnread.clear()
+        readHere(openMessages)
+    }
+
+    private fun readHere(shown: List<Message>) {
+        shown.mapTo(seenRead) { it.id }
+        if (thread.markReadByUser(shown)) MarginalisStore.getInstance(project).threads.notifyChanged(thread)
+    }
+
+    private fun keepWhatWasMarkedUnread() {
+        for (message in thread.messages) {
+            if (message.readByUser) {
+                seenRead += message.id
+                keptUnread -= message.id
+            } else if (message.id in seenRead) {
+                keptUnread += message.id
+            }
+        }
     }
 
     private fun markReadIfSeenLater() {
