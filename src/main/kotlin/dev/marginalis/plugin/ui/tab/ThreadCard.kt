@@ -5,6 +5,7 @@ import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
+import dev.marginalis.core.AgreementSignal
 import dev.marginalis.core.CommentThread
 import dev.marginalis.core.People
 import dev.marginalis.core.ThreadStatus
@@ -37,6 +38,7 @@ internal class ThreadCard(
         val updatedAt: Instant,
         val status: ThreadStatus,
         val turn: Turn?,
+        val agreement: AgreementSignal?,
         val unread: Int,
         val messages: Int,
         val lastSpeaker: String?,
@@ -102,13 +104,14 @@ internal class ThreadCard(
             updatedAt = thread.updatedAt,
             status = thread.status,
             turn = TurnSignal.of(thread),
+            agreement = AgreementSignal.of(thread),
             unread = thread.unreadByUserCount(),
             messages = thread.messages.size,
             lastSpeaker = thread.messages.lastOrNull()?.speaker(people),
         )
         if (next == look) return
         look = next
-        val mark = MarginalisIcons.withLeadingTurnSignal(MarginalisIcons.markOf(listOf(thread)), next.turn)
+        val mark = MarginalisIcons.withLeadingTurnSignal(MarginalisIcons.markOf(listOf(thread)), next.turn, next.agreement)
         markLabel.icon = if (dimmed) IconLoader.getTransparentIcon(mark, DIMMED_ALPHA) else mark
         title.text = MarkdownRenderer.previewText(thread.messages.firstOrNull()?.body.orEmpty())
         title.foreground = if (dimmed) UIUtil.getContextHelpForeground() else UIUtil.getLabelForeground()

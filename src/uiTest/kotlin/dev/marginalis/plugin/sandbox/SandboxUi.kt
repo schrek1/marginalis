@@ -628,6 +628,21 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
         )
     }
 
+    /** Presses the thread's real "Agree" link, which replies "Agreed." to the agent's latest word. */
+    fun userAgrees(threadId: String) {
+        js(
+            FIND + """
+            var link = find(component, function (c) {
+                return c instanceof com.intellij.ui.components.ActionLink && c.getText() == 'Agree';
+            });
+            if (link == null || !link.isVisible()) throw 'no Agree link on the thread: nothing to agree with';
+            link.doClick();
+            String(true)
+            """,
+            threadPanel(threadId),
+        )
+    }
+
     /** Opens the composer with the real "Reply…" link, types the body into it and presses the send button. */
     fun userReplies(threadId: String, body: String) {
         js(

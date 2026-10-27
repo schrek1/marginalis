@@ -1000,7 +1000,7 @@ class ThreadPanel(
         val agreeable = thread.agreeable()
         agreeableId = agreeable?.id
         agreeLink.isVisible = agreeable != null && !isDraft()
-        agreeLink.toolTipText = agreeable?.let { "Agree with ${it.author.displayName}: replies \"Agreed.\" and passes the turn" }
+        agreeLink.toolTipText = agreeable?.let { "Agree with ${it.author.displayName}: replies \"Agreed.\"; the agent then says whether it takes it on" }
         refreshAgentNames()
         addressTo(addressee)
         replyArea.setPlaceholder(

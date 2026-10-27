@@ -65,6 +65,11 @@ object Agent {
         apiPost("comment_reply", mapOf("thread_id" to threadId, "body" to body) + identity)
     }
 
+    /** Answers the Agree that is the thread's last word: `working` or `acknowledged`. */
+    fun agentAnswersAgree(threadId: String, state: String) {
+        apiPost("comment_agent_state", mapOf("thread_id" to threadId, "state" to state) + identity)
+    }
+
     fun resolveThread(threadId: String) {
         apiPost("comment_resolve", mapOf("thread_id" to threadId) + identity)
     }
