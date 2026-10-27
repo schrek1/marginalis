@@ -26,6 +26,7 @@ import dev.marginalis.core.Parsed
 import dev.marginalis.core.Reference
 import dev.marginalis.core.Resolution
 import dev.marginalis.plugin.store.MarginalisStore
+import org.intellij.markdown.ExperimentalApi
 import org.intellij.markdown.IElementType
 import org.intellij.markdown.MarkdownElementTypes
 import org.intellij.markdown.MarkdownTokenTypes
@@ -36,6 +37,7 @@ import org.intellij.markdown.flavours.gfm.GFMTokenTypes
 import org.intellij.markdown.html.GeneratingProvider
 import org.intellij.markdown.html.HtmlGenerator
 import org.intellij.markdown.html.SimpleInlineTagProvider
+import org.intellij.markdown.parser.CancellationToken
 import org.intellij.markdown.parser.LinkMap
 import org.intellij.markdown.parser.MarkdownParser
 import java.awt.Component
@@ -107,7 +109,7 @@ object MarkdownRenderer {
     }
 
     private fun topLevelTables(markdown: String): List<IntRange> =
-        MarkdownParser(Flavour()).buildMarkdownTreeFromString(markdown).children
+        parse(markdown).children
             .filter { it.type == GFMElementTypes.TABLE }
             .map { it.startOffset until it.endOffset }
 
@@ -128,7 +130,7 @@ object MarkdownRenderer {
     }
 
     private fun proseWithoutGfmSyntax(markdown: String): String =
-        withoutGfmSyntax(MarkdownParser(Flavour()).buildMarkdownTreeFromString(markdown), markdown)
+        withoutGfmSyntax(parse(markdown), markdown)
 
     private fun withoutGfmSyntax(node: ASTNode, markdown: String): String = when (node.type) {
         GFMElementTypes.TABLE -> node.children
@@ -166,6 +168,13 @@ object MarkdownRenderer {
                 (GFMElementTypes.STRIKETHROUGH to SimpleInlineTagProvider("s", 2, -2)) +
                 listOfNotNull(lineBreaks?.let { MarkdownTokenTypes.EOL to it })
     }
+
+    // The CharSequence overload that 2026.2.3 points to is missing from the
+    // markdown library bundled with the 2025.2 floor; move once the floor has it.
+    // CancellationToken is stable from 2026.2.3 on, experimental before.
+    @OptIn(ExperimentalApi::class)
+    private fun parse(markdown: String, flavour: Flavour = Flavour()): ASTNode =
+        MarkdownParser(flavour, true, CancellationToken.NonCancellable).buildMarkdownTreeFromString(markdown)
 
     private val GENERATED_TASK_CHECKBOX = Regex("<input type=\"checkbox\" class=\"task-list-item-checkbox\"( checked)? disabled />")
 
@@ -215,7 +224,7 @@ object MarkdownRenderer {
     private fun toHtml(prose: Prose): String {
         val markdown = prose.markdown
         val flavour = Flavour(TypedLineBreaks(prose))
-        val tree = MarkdownParser(flavour).buildMarkdownTreeFromString(markdown)
+        val tree = parse(markdown, flavour)
         return HtmlGenerator(markdown, tree, flavour).generateHtml()
             .removePrefix("<body>").removeSuffix("</body>")
             .replace(GENERATED_TASK_CHECKBOX) { checkbox -> if (checkbox.groupValues[1].isEmpty()) "☐ " else "☑ " }
