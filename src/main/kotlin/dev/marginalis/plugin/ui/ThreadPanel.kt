@@ -166,7 +166,10 @@ class ThreadPanel(
         private set
     private var whileAttached: Disposable? = null
     private var composerExpanded = false
+    // The header's actions read these fields while they update in the background.
+    @Volatile
     private var addressee: Addressee? = null
+    @Volatile
     private var agentNames: Map<String, String> = emptyMap()
     private val addresseeLink = ActionLink("") {
         addressTo(null)
@@ -222,6 +225,7 @@ class ThreadPanel(
         }
     }
     private var editingMessageId: String? = null
+    @Volatile
     private var level = ThreadFolding.Level.DEFAULT
     private val keptOpen = mutableSetOf<String>()
     private val readWhileOpen = mutableSetOf<String>()
@@ -407,7 +411,7 @@ class ThreadPanel(
     private fun isDraft(): Boolean = MarginalisStore.getInstance(project).isDraft(thread)
 
     private fun resolveAction(): AnAction = object : AnAction() {
-        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
         override fun update(e: AnActionEvent) {
             e.presentation.isEnabledAndVisible = !isDraft()
@@ -429,7 +433,7 @@ class ThreadPanel(
 
     private fun levelAction(name: String, icon: Icon, step: (ThreadFolding.Level) -> ThreadFolding.Level?): AnAction =
         object : AnAction(name, null, icon) {
-            override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+            override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
             override fun update(e: AnActionEvent) {
                 val next = step(level)
@@ -454,7 +458,7 @@ class ThreadPanel(
     }
 
     private fun liveAction(): AnAction = object : ToggleAction() {
-        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
         override fun isSelected(e: AnActionEvent): Boolean = MarginalisStore.getInstance(project).isLive(thread)
 
@@ -463,7 +467,6 @@ class ThreadPanel(
 
         override fun update(e: AnActionEvent) {
             super.update(e)
-            refreshLive()
             e.presentation.icon = AllIcons.Actions.Lightning
             e.presentation.isVisible = !isDraft() && thread.status is ThreadStatus.Open
             e.presentation.isEnabled = isSelected(e) || liveAgentWaiting()
@@ -509,7 +512,7 @@ class ThreadPanel(
     }
 
     private fun deleteAction(): AnAction = object : AnAction("Delete Thread", null, AllIcons.Actions.GC) {
-        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
         override fun update(e: AnActionEvent) {
             e.presentation.isEnabledAndVisible = !isDraft()
@@ -531,7 +534,7 @@ class ThreadPanel(
     }
 
     private fun copyReferenceAction(): AnAction = object : AnAction("Copy Reference", null, AllIcons.Actions.Copy) {
-        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
         override fun update(e: AnActionEvent) {
             e.presentation.isEnabledAndVisible = !isDraft()
@@ -543,7 +546,7 @@ class ThreadPanel(
 
     private fun selectInToolWindowAction(): AnAction =
         object : AnAction("Select in Marginalis", "Show this thread in the Marginalis tool window", AllIcons.General.Locate) {
-            override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+            override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
             override fun update(e: AnActionEvent) {
                 e.presentation.isEnabledAndVisible = !isDraft()
@@ -568,7 +571,7 @@ class ThreadPanel(
     }
 
     private fun closeAction(): AnAction = object : AnAction("Close", null, AllIcons.Actions.Close) {
-        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
         override fun actionPerformed(e: AnActionEvent) = closeAndRefocus()
     }
@@ -578,7 +581,7 @@ class ThreadPanel(
         icon: Icon,
         target: (walk: List<CommentThread>, index: Int?) -> CommentThread?,
     ): AnAction = object : AnAction(name, null, icon) {
-        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
         override fun update(e: AnActionEvent) {
             val (walk, i) = WalkthroughNavigator.walkFrom(project, thread)

@@ -50,6 +50,9 @@ History before 0.1.19 lives in git tags.
 - On a line with several threads, choosing an open thread in the
   chooser folds it again, just as clicking the icon of a single thread
   does.
+- The buttons in a thread's header and the Margin tab's Sort menu no
+  longer wait for a busy IDE, so they stop holding up the editor while
+  the IDE is under load.
 
 ## [0.2.7] - 2026-10-22
 
