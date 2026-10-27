@@ -13,6 +13,11 @@ plugins=/work/runtime/ide/plugins_runIdeForUiTests
 rm -f /work/runtime/ide/config_runIdeForUiTests/.lock /work/runtime/ide/config_runIdeForUiTests/.port \
       /work/runtime/ide/system_runIdeForUiTests/.lock /work/runtime/ide/system_runIdeForUiTests/.port
 
+# An IDE that finds the global workspace model (SDKs, global libraries) cached starts from that copy and reloads it
+# from the config 5 s later, in a background write that a scenario must wait out. Without the cache it reads the config
+# at once: no reload, no write, and no SDK from an earlier container's settings.
+rm -rf /work/runtime/ide/system_runIdeForUiTests/global-model-cache
+
 # The volume outlives its container, and the next scenario that claims the port gets it: app settings a scenario
 # changed and could not restore would carry over. A new container starts from the defaults; its own restarts keep them.
 if [ -n "${MARGINALIS_SANDBOX_APP_CONFIG_PER_CONTAINER:-}" ]; then

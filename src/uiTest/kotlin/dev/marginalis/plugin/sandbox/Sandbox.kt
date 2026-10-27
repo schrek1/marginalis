@@ -494,10 +494,11 @@ object Sandbox {
 
         // The IDE restores its tool window layout during the project's startup; the Project view it shows then takes
         // the left side from a Marginalis tool window a scenario has just shown. And while the platform's own startup
-        // write (the JPS global model reloaded from disk, about 4 s after the IDE answers) waits for the lock, a file
-        // opened on the EDT blocks the editor providers' reads until their 30 s timeout. The Margin tab's startup
-        // decision waits for the project's configuration and comes after the platform's post-startup mark; a scenario
-        // must not race it. Smart mode flickers on right after startup, so it must hold three samples in a row.
+        // write (the JPS global model reloaded from disk 5 s after a start from its cache; a Docker sandbox drops the
+        // cache, so there it loads at once) waits for the lock, a file opened on the EDT blocks the editor providers'
+        // reads until their 30 s timeout. The Margin tab's startup decision waits for the project's configuration and
+        // comes after the platform's post-startup mark; a scenario must not race it. Smart mode flickers on right after
+        // startup, so it must hold three samples in a row.
         private fun awaitProjectStartup() {
             var settledPolls = 0
             var noted = false

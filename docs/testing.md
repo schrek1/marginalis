@@ -231,9 +231,13 @@ than the property, it opens a fork issue (or updates the open one) with both lin
 
   Never read the host folder for something the running IDE wrote.
 - **A start counts as up once the IDE has settled:** indexing over, startup activities passed, the global workspace
-  model reloaded from disk (the platform does it in a background write seconds after start), no write action
-  pending. Opening an editor while the platform's own startup writes are queued blocks the EDT for 30 s on a busy
-  machine.
+  model loaded from disk, no write action pending, the Margin tab's startup decision made, three polls 1 s apart.
+  Opening an editor while the platform's own startup writes are queued blocks the EDT for 30 s on a busy machine.
+  The scenario log's `project settled in …` line says how long that took and since when each condition held.
+- **The global model loads at once:** an IDE that finds the global workspace model cached in its system folder starts
+  from the cache and reloads the model from disk 5 s later (a fixed delay in the platform), in a background write
+  every start had to wait out. The container's entrypoint deletes that cache before each start, so the IDE reads the
+  model from its config right away.
 
 ## The manual sandbox (demos, hands-on work)
 
