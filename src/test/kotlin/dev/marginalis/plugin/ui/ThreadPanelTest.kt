@@ -267,7 +267,17 @@ class ThreadPanelTest : HttpContractTestCase() {
         assertEquals("Shortcut reply.", agent.threads().single().messages().last().string("body"))
     }
 
-    fun testEscapeClosesThePanelAndKeepsTheDraft() {
+    fun testEscapeOnAThreadWithItsReplyBoxClosedFoldsIt() {
+        sample()
+        val id = agent.addOnLine(5)
+        val panel = user.open(id)
+
+        user.pressEscape(panel)
+
+        assertEquals(emptyList<ThreadPanel>(), user.panels())
+    }
+
+    fun testEscapeOnTheThreadClosesAnOpenReplyBoxFirst() {
         sample()
         val id = agent.addOnLine(5)
         val panel = user.open(id)
@@ -275,8 +285,9 @@ class ThreadPanelTest : HttpContractTestCase() {
 
         user.pressEscape(panel)
 
-        assertEquals(emptyList<ThreadPanel>(), user.panels())
-        assertEquals("half a thought", user.composer(user.open(id)).text)
+        assertEquals(listOf(panel), user.panels())
+        assertTrue(user.visibleLinks(panel).contains("Reply…"))
+        assertEquals("half a thought", user.composer(panel).text)
         assertEquals(1, agent.threads().single().messages().size)
     }
 
@@ -625,6 +636,28 @@ class ThreadPanelTest : HttpContractTestCase() {
         assertEquals("Keyed in.", agent.threads().single().messages().last().string("body"))
     }
 
+    fun testControlShiftEnterInTheComposerSubmitsToo() {
+        sample()
+        val id = agent.addOnLine(5)
+        val panel = user.open(id)
+        user.type(panel, "Keyed in.")
+
+        user.pressKeyInComposer(panel, KeyEvent.VK_ENTER, InputEvent.CTRL_DOWN_MASK or InputEvent.SHIFT_DOWN_MASK)
+
+        assertEquals("Keyed in.", agent.threads().single().messages().last().string("body"))
+    }
+
+    fun testTheControlEnterShortcutSubmitsTheReply() {
+        sample()
+        val id = agent.addOnLine(5)
+        val panel = user.open(id)
+        user.type(panel, "Shortcut reply.")
+
+        user.pressSubmitShortcut(panel, "control ENTER")
+
+        assertEquals("Shortcut reply.", agent.threads().single().messages().last().string("body"))
+    }
+
     fun testAPlainEnterInTheComposerOnlyTypes() {
         sample()
         val id = agent.addOnLine(5)
@@ -636,7 +669,7 @@ class ThreadPanelTest : HttpContractTestCase() {
         assertEquals(1, agent.threads().single().messages().size)
     }
 
-    fun testEscapeInTheComposerClosesThePanel() {
+    fun testEscapeInTheComposerClosesTheReplyBoxAndKeepsTheThreadOpen() {
         sample()
         val id = agent.addOnLine(5)
         val panel = user.open(id)
@@ -644,8 +677,39 @@ class ThreadPanelTest : HttpContractTestCase() {
 
         user.pressKeyInComposer(panel, KeyEvent.VK_ESCAPE)
 
+        assertEquals(listOf(panel), user.panels())
+        assertTrue(user.visibleLinks(panel).contains("Reply…"))
+        assertEquals("keep me", user.composer(panel).text)
+    }
+
+    fun testASecondEscapeFoldsTheThreadAndKeepsTheDraft() {
+        sample()
+        val id = agent.addOnLine(5)
+        val panel = user.open(id)
+        user.type(panel, "keep me")
+        user.pressKeyInComposer(panel, KeyEvent.VK_ESCAPE)
+
+        user.pressEscape(panel)
+
         assertEquals(emptyList<ThreadPanel>(), user.panels())
         assertEquals("keep me", user.composer(user.open(id)).text)
+        assertEquals(1, agent.threads().single().messages().size)
+    }
+
+    fun testEscapeWhileEditingAMessageCancelsTheEditAndKeepsTheThreadOpen() {
+        sample()
+        val id = agent.addOnLine(5)
+        user.reply(id, "Typo hre.")
+        val panel = user.open(id)
+        user.clickLink(panel, "Edit")
+        user.type(panel, "Typo here, half-fixed")
+
+        user.pressKeyInComposer(panel, KeyEvent.VK_ESCAPE)
+
+        assertEquals(listOf(panel), user.panels())
+        assertTrue(user.visibleLinks(panel).contains("Reply…"))
+        assertEquals("Reply", user.submitLabel(panel))
+        assertEquals("Typo hre.", agent.threads().single().messages().last().string("body"))
     }
 
     fun testBylinesFollowTheChosenClock() {

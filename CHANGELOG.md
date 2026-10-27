@@ -7,6 +7,11 @@ History before 0.1.19 lives in git tags.
 
 ## [Unreleased]
 
+### Fixed
+
+- Escape in a reply box now closes just the reply box: the thread stays
+  open with your draft kept, and a second Escape folds the thread.
+
 ## [0.2.7] - 2026-10-22
 
 Thanks to [@schrek1](https://github.com/schrek1) for starting the long-thread work in this release.

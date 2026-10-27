@@ -566,9 +566,9 @@ class MarginUser(private val project: Project, private val disposable: Disposabl
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
     }
 
-    fun pressSubmitShortcut(panel: ThreadPanel) {
-        val commandEnter = KeyboardShortcut(KeyStroke.getKeyStroke("meta ENTER"), null)
-        performIfEnabled(ActionUtil.getActions(composer(panel)).single { action -> action.shortcutSet.shortcuts.any { it == commandEnter } })
+    fun pressSubmitShortcut(panel: ThreadPanel, keyStroke: String = "meta ENTER") {
+        val pressed = KeyboardShortcut(KeyStroke.getKeyStroke(keyStroke), null)
+        performIfEnabled(ActionUtil.getActions(composer(panel)).single { action -> action.shortcutSet.shortcuts.any { it == pressed } })
     }
 
     private fun performIfEnabled(action: AnAction) {
