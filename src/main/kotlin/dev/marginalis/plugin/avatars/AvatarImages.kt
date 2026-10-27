@@ -158,6 +158,7 @@ class AvatarImages : Disposable {
         private const val CONNECT_TIMEOUT_MILLIS = 5_000
         private const val READ_TIMEOUT_MILLIS = 10_000
 
-        fun getInstance(): AvatarImages = ApplicationManager.getApplication().getService(AvatarImages::class.java)
+        /** Null while the plugin unloads: the platform hands out no light service of a class loader on its way out. */
+        fun getInstance(): AvatarImages? = ApplicationManager.getApplication().getService(AvatarImages::class.java)
     }
 }
