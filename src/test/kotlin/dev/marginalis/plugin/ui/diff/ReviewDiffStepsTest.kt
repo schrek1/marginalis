@@ -66,6 +66,41 @@ class ReviewDiffStepsTest : HttpContractTestCase() {
         assertStepOpensInTheReview(review, ORDER, rowOf(8))
     }
 
+    fun testTheStepYouLandOnStaysOpenWhenTheReviewRefreshes() {
+        walkthrough(CART to 5, CART to 20)
+        val review = reviewOf(reviewed(CART), reviewed(ORDER))
+        openStepInTheReview(rowOf(5))
+        user.press(user.panel(shownDiff().editor), "Next Step")
+        assertStepOpensInTheReview(review, CART, rowOf(20))
+
+        refreshed(review)
+
+        assertEquals("the step's thread opens on its row", listOf(rowOf(20)), panelRows())
+    }
+
+    fun testTheStepYouLandOnInAnotherFileStaysOpenWhenTheReviewRefreshes() {
+        walkthrough(CART to 5, ORDER to 8)
+        val review = reviewOf(reviewed(CART), reviewed(ORDER))
+        openStepInTheReview(rowOf(5))
+        user.press(user.panel(shownDiff().editor), "Next Step")
+        assertStepOpensInTheReview(review, ORDER, rowOf(8))
+
+        refreshed(review)
+
+        assertEquals("the step's thread opens on its row", listOf(rowOf(8)), panelRows())
+    }
+
+    fun testAStepYouClosedStaysClosedWhenTheReviewRefreshes() {
+        walkthrough(CART to 5, CART to 20)
+        val review = reviewOf(reviewed(CART), reviewed(ORDER))
+        openStepInTheReview(rowOf(5))
+        user.press(user.panel(shownDiff().editor), "Close")
+
+        refreshed(review)
+
+        assertEquals(emptyList<Int>(), panelRows())
+    }
+
     fun testAStepInAFileOutsideTheReviewOpensInThatFilesTab() {
         walkthrough(CART to 5, INVOICE to 4)
         val review = reviewOf(reviewed(CART), reviewed(ORDER))
@@ -115,6 +150,14 @@ class ReviewDiffStepsTest : HttpContractTestCase() {
     }
 
     private fun rowOf(line: Int) = line + ADDED_ON_TOP.size
+
+    private fun refreshed(review: ReviewProcessorTab) {
+        val viewerBefore = shownDiff().viewer
+        review.refresh()
+        waitFor("the review never showed the file again") {
+            shownDiffOrNull()?.takeIf { it.viewer !== viewerBefore }?.editor?.document?.textLength?.let { it > 0 } == true
+        }
+    }
 
     private fun openStepInTheReview(row: Int) {
         shownDiff().clickIcon(row)

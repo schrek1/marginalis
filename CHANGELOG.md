@@ -16,6 +16,13 @@ History before 0.1.19 lives in git tags.
   the file the review already shows stays in the review too, even when
   the review branch is not checked out.
 
+### Fixed
+
+- The step you move to in a pull or merge request review stays open.
+  The review rebuilds a file's view whenever its data refreshes, and that
+  folded the thread you had just stepped to, leaving only its gutter icon;
+  threads open in the review now open again with it.
+
 ## [0.2.7] - 2026-10-22
 
 Thanks to [@schrek1](https://github.com/schrek1) for starting the long-thread work in this release.

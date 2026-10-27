@@ -41,6 +41,7 @@ public final class ReviewProcessorTab {
     private final List<ReviewedFile> files;
     private MutableDiffRequestProcessor processor;
     private int shown = -1;
+    private DiffRequest shownRequest;
 
     private ReviewProcessorTab(Project project, List<ReviewedFile> files) {
         this.project = project;
@@ -64,6 +65,11 @@ public final class ReviewProcessorTab {
         return shown < 0 ? null : files.get(shown).path();
     }
 
+    /** Shows the same file's diff again in a new viewer, as the review does whenever its data refreshes. */
+    public void refresh() {
+        processor.applyRequest(Objects.requireNonNull(shownRequest, "the review shows no file's diff yet"));
+    }
+
     private MutableDiffRequestProcessor createProcessor() {
         processor = new MutableDiffRequestProcessor(project);
         processor.setNavigator(new FileNavigator());
@@ -76,7 +82,9 @@ public final class ReviewProcessorTab {
         ReviewedFile file = files.get(index);
         processor.applyRequest(new LoadingDiffRequest(file.path()));
         ApplicationManager.getApplication().invokeLater(() -> {
-            if (shown == index && !processor.isDisposed()) processor.applyRequest(requestFor(file));
+            if (shown != index || processor.isDisposed()) return;
+            shownRequest = requestFor(file);
+            processor.applyRequest(shownRequest);
         });
     }
 
