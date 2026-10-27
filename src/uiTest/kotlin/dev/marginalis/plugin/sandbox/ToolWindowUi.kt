@@ -7,6 +7,7 @@ import dev.marginalis.plugin.sandbox.SandboxUi.lit
 import dev.marginalis.plugin.sandbox.SandboxUi.obj
 import java.nio.file.Path
 import java.time.Duration
+import java.util.Locale
 
 /**
  * The Marginalis tool window as the user sees it: its header buttons and its tree (a port of the tool window part of
@@ -107,8 +108,17 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
      * listening agent): the toolbar repaints its text asynchronously, so the button is found by its action.
      */
     fun toggleProjectLive() {
-        val enabled = readUntil("the project's live toggle is enabled", read = { projectLiveToggle(press = false) == "enabled" }) { it }
-        check(enabled) { "the project's live toggle stayed disabled: no agent is listening" }
+        val begun = System.nanoTime()
+        var headerAnsweredAfter: Double? = null
+        val enabled = readUntil("the project's live toggle is enabled", read = {
+            val state = projectLiveToggle(press = false)
+            headerAnsweredAfter = headerAnsweredAfter ?: ((System.nanoTime() - begun) / 1e9)
+            state == "enabled"
+        }) { it }
+        check(enabled) {
+            "the project's live toggle stayed disabled: no agent is listening" +
+                " (the header first answered after %.1f s)".format(Locale.ROOT, headerAnsweredAfter)
+        }
         SandboxUi.awaitActionRan("Make every open thread live", projectLiveToggle(press = true))
     }
 

@@ -13,6 +13,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.CompletableFuture
 
 /** The agent's side of a sandbox scenario: the plugin's REST API, called as an agent calls it. */
 object Agent {
@@ -69,11 +70,13 @@ object Agent {
     }
 
     /** A read of the API as the agent makes it: the project and the agent's identity go with `params`. */
-    fun apiGet(route: String, params: Map<String, String>, timeout: Duration = Duration.ofSeconds(30)): JsonObject {
+    fun apiGet(route: String, params: Map<String, String>, timeout: Duration = Duration.ofSeconds(30)): JsonObject =
+        parsed(http.send(getRequest(route, params, timeout), HttpResponse.BodyHandlers.ofString()), route)
+
+    private fun getRequest(route: String, params: Map<String, String>, timeout: Duration?): HttpRequest {
         val query = (mapOf("project" to PROJECT_NAME) + params + identity)
             .entries.joinToString("&") { (key, value) -> "$key=${URLEncoder.encode(value, StandardCharsets.UTF_8)}" }
-        val request = HttpRequest.newBuilder(URI("$apiBase/$route?$query")).timeout(timeout).GET().build()
-        return parsed(http.send(request, HttpResponse.BodyHandlers.ofString()), route)
+        return HttpRequest.newBuilder(URI("$apiBase/$route?$query")).apply { timeout?.let(::timeout) }.GET().build()
     }
 
     /**
@@ -82,11 +85,43 @@ object Agent {
      * a round that already woke it, which would then wake it again at once. Before any round, `since` is now.
      */
     fun agentWaits(timeoutSeconds: Int): JsonObject =
-        apiGet(
-            "comment_wait",
-            mapOf("since" to (Sandbox.lastRoundAt ?: since.format(Instant.now())), "timeout" to timeoutSeconds.toString()),
-            Duration.ofSeconds(timeoutSeconds + 30L),
-        ).also { wake -> wake.get("handed_back_at")?.takeUnless { it.isJsonNull }?.let { Sandbox.lastRoundAt = it.asString } }
+        apiGet("comment_wait", waitSince() + ("timeout" to timeoutSeconds.toString()), Duration.ofSeconds(timeoutSeconds + 30L))
+            .also(::rememberRound)
+
+    /**
+     * Runs [action] while the agent holds a `comment_wait` open, then hangs up as an agent that stops waiting does. The
+     * action starts only once the IDE counts the agent as listening, and the wait has no deadline of its own that a busy
+     * IDE could outlast before the action reaches it.
+     */
+    fun <T> listensWhile(action: () -> T): T {
+        val wait = http.sendAsync(getRequest("comment_wait", waitSince(), timeout = null), HttpResponse.BodyHandlers.ofString())
+        val result = try {
+            val counted = waitUntil("the IDE counts the agent as listening", Duration.ofSeconds(30)) { wait.isDone || listeningAgents() > 0 }
+            check(counted && !wait.isDone) { "the IDE does not count the agent as listening" }
+            action()
+        } catch (error: IllegalStateException) {
+            throw IllegalStateException("${error.message}; the agent's comment_wait ${outcomeOf(wait)}", error)
+        } finally {
+            wait.cancel(true)
+        }
+        if (!wait.isCompletedExceptionally) rememberRound(parsed(wait.join(), "comment_wait"))
+        awaitUntil("the IDE lets the agent go once it hangs up") { listeningAgents() == 0 }
+        return result
+    }
+
+    private fun waitSince() = mapOf("since" to (Sandbox.lastRoundAt ?: since.format(Instant.now())))
+
+    private fun rememberRound(wake: JsonObject) {
+        wake.get("handed_back_at")?.takeUnless { it.isJsonNull }?.let { Sandbox.lastRoundAt = it.asString }
+    }
+
+    private fun listeningAgents(): Int = SandboxUi.js("String(store.getHandBack().getWaitingAgents().size())").toInt()
+
+    private fun outcomeOf(wait: CompletableFuture<HttpResponse<String>>): String = when {
+        !wait.isDone -> "was still open"
+        wait.isCompletedExceptionally -> "failed: ${runCatching { wait.join() }.exceptionOrNull()}"
+        else -> "returned ${wait.join().body()}"
+    }
 
     private fun parsed(response: HttpResponse<String>, route: String): JsonObject {
         check(response.statusCode() < 400) { "$route answered ${response.statusCode()}: ${response.body()}" }
