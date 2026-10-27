@@ -55,6 +55,10 @@ History before 0.1.19 lives in git tags.
   the IDE is under load.
 - A code block with lines wider than the thread scrolls sideways in its
   own pane, so its end is no longer cut off at the panel's edge.
+- The step you move to in a pull or merge request review stays open.
+  The review rebuilds a file's view whenever its data refreshes, and that
+  folded the thread you had just stepped to, leaving only its gutter icon;
+  threads open in the review now open again with it.
 
 ## [0.2.7] - 2026-10-22
 
