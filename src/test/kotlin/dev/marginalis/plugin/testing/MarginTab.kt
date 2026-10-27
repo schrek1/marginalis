@@ -235,6 +235,12 @@ class MarginTab(private val project: Project, private val disposable: Disposable
 
     fun settle() {
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+        // A tab opened without waiting gets its editors once the providers' checks finish in the background.
+        PlatformTestUtil.waitWithEventsDispatching(
+            "an opened tab never got its editors",
+            { editors.windows.flatMap { it.allComposites }.all { it.isAvailable() } },
+            10,
+        )
         screen?.rootPane?.validate()
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
     }

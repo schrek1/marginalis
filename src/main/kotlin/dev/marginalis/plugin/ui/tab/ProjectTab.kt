@@ -70,9 +70,11 @@ object ProjectTab {
         val editors = FileEditorManager.getInstance(project)
         val selected = editors.selectedFiles.firstOrNull()
         val tab = MarginFile.of(project)
-        editors.openFile(tab, false, true)
+        // openFile waits on the EDT until every editor provider has checked the file; at startup a pending write holds
+        // their checks back for 30 s. requestOpenFile adds the tab at once and lets the checks finish in the background.
+        editors.requestOpenFile(tab)
         if (pin) pin(project, tab)
-        selected?.let { editors.openFile(it, false, true) }
+        selected?.let(editors::requestOpenFile)
     }
 
     private fun openTabs(project: Project): List<MarginFile> =

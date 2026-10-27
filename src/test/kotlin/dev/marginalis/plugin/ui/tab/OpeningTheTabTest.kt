@@ -1,6 +1,7 @@
 package dev.marginalis.plugin.ui.tab
 
 import com.intellij.openapi.vfs.VirtualFileManager
+import dev.marginalis.plugin.testing.HeldBackEditorChecks
 
 class OpeningTheTabTest : MarginTabTestCase() {
 
@@ -14,6 +15,31 @@ class OpeningTheTabTest : MarginTabTestCase() {
         assertTrue(tab.isOpen)
         assertTrue(tab.isPinned)
         assertFalse(tab.isInFront)
+        assertEquals("Sample.kt", tab.editors.selectedFiles.single().name)
+        assertEquals(listOf("Margin", "Sample.kt"), tab.openTabs())
+    }
+
+    fun testAtStartupTheTabOpensWithoutWaitingForTheEditorChecksTheIdeHoldsBack() {
+        // GIVEN - the pinned tab sits behind Sample.kt, and the IDE holds back its editor checks, as a write pending at startup does
+        sample()
+        tab.pin()
+        tab.openFileInFront(SAMPLE)
+        ProjectTab.closeEverywhere()
+        MarginFile.reinstate()
+        val heldBack = HeldBackEditorChecks.install(testRootDisposable)
+
+        // WHEN - the project opens the tab at startup
+        try {
+            ProjectTab.openOnStartup(project)
+            val returnedWhileHeldBack = heldBack.isHolding
+
+            // THEN - opening returned at once, and the tab is back once the checks finish
+            assertTrue("opening the tab waited on the EDT until the held-back editor check gave up", returnedWhileHeldBack)
+        } finally {
+            heldBack.release()
+        }
+        tab.settle()
+        assertTrue(tab.isPinned)
         assertEquals("Sample.kt", tab.editors.selectedFiles.single().name)
         assertEquals(listOf("Margin", "Sample.kt"), tab.openTabs())
     }

@@ -7,6 +7,12 @@ History before 0.1.19 lives in git tags.
 
 ## [Unreleased]
 
+### Fixed
+
+- Opening a project no longer freezes the IDE for up to 30 seconds
+  while the Margin tab comes back. The tab now appears right away and
+  finishes loading in the background.
+
 ## [0.2.7] - 2026-10-22
 
 Thanks to [@schrek1](https://github.com/schrek1) for starting the long-thread work in this release.
