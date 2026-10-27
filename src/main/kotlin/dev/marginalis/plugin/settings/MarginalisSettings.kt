@@ -9,6 +9,7 @@ import com.intellij.util.xmlb.annotations.Attribute
 import com.intellij.util.xmlb.annotations.Tag
 import com.intellij.util.xmlb.annotations.XCollection
 import dev.marginalis.core.FoldingPrefs
+import dev.marginalis.core.LeavingAStep
 import dev.marginalis.core.ListWhileInFront
 import dev.marginalis.core.LongThreadFolding
 import dev.marginalis.core.People
@@ -39,6 +40,8 @@ class MarginalisSettings : PersistentStateComponent<MarginalisSettings.State> {
         var timeFormat: String = TimeFormat.AUTO.stored
 
         var walkthroughAutoAdvance: Boolean = true
+
+        var leavingAStep: String = LeavingAStep.FOLD.stored
 
         var notifyOnAgentReply: Boolean = true
 
@@ -111,6 +114,12 @@ class MarginalisSettings : PersistentStateComponent<MarginalisSettings.State> {
         get() = TimeFormat.fromStored(state.timeFormat)
         set(value) {
             state.timeFormat = value.stored
+        }
+
+    var leavingAStep: LeavingAStep
+        get() = LeavingAStep.fromStored(state.leavingAStep)
+        set(value) {
+            state.leavingAStep = value.stored
         }
 
     var listWhileInFront: ListWhileInFront

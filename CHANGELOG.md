@@ -7,6 +7,14 @@ History before 0.1.19 lives in git tags.
 
 ## [Unreleased]
 
+### Added
+
+- Choose what happens to the step you leave when you walk a walkthrough
+  with a thread's own Next, Previous, First and Last Step: fold it, so
+  the code reads clean behind you, or keep it open, so every step you
+  passed stays in view. Set it under *When stepping to another step* in
+  Settings → Tools → Marginalis. Folding stays the default.
+
 ### Changed
 
 - Walking a walkthrough inside a pull or merge request review, Next,
