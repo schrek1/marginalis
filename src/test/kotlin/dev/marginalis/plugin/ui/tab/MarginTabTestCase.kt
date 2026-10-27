@@ -3,6 +3,7 @@ package dev.marginalis.plugin.ui.tab
 import dev.marginalis.plugin.settings.MarginalisSettings
 import dev.marginalis.plugin.testing.Agent
 import dev.marginalis.plugin.testing.LongThreadSettings
+import dev.marginalis.plugin.testing.MarginFileEditors
 import dev.marginalis.plugin.testing.MarginTab
 import dev.marginalis.plugin.testing.ProjectTabSettings
 import dev.marginalis.plugin.testing.Relays
@@ -13,8 +14,11 @@ abstract class MarginTabTestCase : HttpContractTestCase() {
 
     protected lateinit var tab: MarginTab
 
+    private val marginFileEditors = MarginFileEditors()
+
     override fun setUp() {
         super.setUp()
+        marginFileEditors.watch()
         tab = user.openMarginTab()
     }
 
@@ -25,7 +29,7 @@ abstract class MarginTabTestCase : HttpContractTestCase() {
         } catch (e: Throwable) {
             addSuppressedException(e)
         } finally {
-            super.tearDown()
+            marginFileEditors.namingTheirOpeners { super.tearDown() }
         }
     }
 
