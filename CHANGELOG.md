@@ -7,6 +7,13 @@ History before 0.1.19 lives in git tags.
 
 ## [Unreleased]
 
+### Changed
+
+- A long thread stays folded as the conversation goes on: each new
+  message folds the read ones before the latest two again, so the
+  thread no longer grows round after round. While you are scrolled up
+  reading the middle, or have expanded the whole thread, nothing folds.
+
 ## [0.2.7] - 2026-10-22
 
 Thanks to [@schrek1](https://github.com/schrek1) for starting the long-thread work in this release.

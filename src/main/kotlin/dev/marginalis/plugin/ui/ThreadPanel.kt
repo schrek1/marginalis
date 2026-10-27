@@ -989,6 +989,7 @@ class ThreadPanel(
         )
 
         val messageWithFocusedToggle = messageWithFocusedToggle()
+        takeInArrivals()
         messagesBox.removeAll()
         messageComponents.clear()
         foldToggles.clear()
@@ -998,7 +999,6 @@ class ThreadPanel(
         var previous: Message? = null
         var previousOpen: Message? = null
         var githubBlock: JPanel? = null
-        keepArrivalsOpen()
         val foldingPrefs = MarginalisSettings.getInstance().foldingPrefs
         releaseKeptOpenOnNewFoldingPrefs(foldingPrefs)
         val rows = ThreadFolding.rows(
@@ -1151,13 +1151,24 @@ class ThreadPanel(
         maximumSize = Dimension(Int.MAX_VALUE, preferredSize.height)
     }
 
-    private fun keepArrivalsOpen() {
+    private fun takeInArrivals() {
         messagesRendered?.let { rendered ->
-            val arrivals = thread.messages.filterNot { it.id in rendered }.map { it.id }
-            keptOpen += arrivals
+            val arrivals = thread.messages.filterNot { it.id in rendered }.mapTo(mutableSetOf()) { it.id }
+            if (arrivals.isEmpty()) return@let
+            val stillOpen = ThreadFolding.keptOpenAfter(arrivals, keptOpen, thread.messages, level, readingAboveTheEnd())
+            keptOpen.retainAll(stillOpen)
+            keptOpen += stillOpen
             readWhileOpen += arrivals
         }
         messagesRendered = thread.messages.mapTo(mutableSetOf()) { it.id }
+    }
+
+    /** Laid out as before the arrivals: refresh() calls this before it rebuilds the rows. */
+    private fun readingAboveTheEnd(): Boolean {
+        val seen = visibleRect
+        val lastRow = messagesBox.components.lastOrNull()
+        if (!isShowing || seen.isEmpty || lastRow == null) return false
+        return seen.maxY <= SwingUtilities.convertPoint(messagesBox, 0, lastRow.y, this).y
     }
 
     private fun releaseKeptOpenOnNewFoldingPrefs(prefs: FoldingPrefs) {

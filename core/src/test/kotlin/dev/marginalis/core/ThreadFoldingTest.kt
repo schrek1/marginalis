@@ -73,6 +73,62 @@ class ThreadFoldingTest {
         assertEquals(listOf("(m1)", "m2", "(m3)", "m4", "m5"), shape(reads(5), View(opened = setOf("m2"))))
     }
 
+    private fun keptOpenAfterTwoArrive(
+        keptBefore: Set<String>,
+        messages: List<Message> = reads(9),
+        level: Level = Level.DEFAULT,
+        readingAboveTheEnd: Boolean = false,
+    ) = ThreadFolding.keptOpenAfter(setOf("m8", "m9"), keptBefore, messages, level, readingAboveTheEnd)
+
+    @Test
+    fun `new messages fold back what the panel kept open before them`() {
+        // GIVEN - a read thread open with its last two messages
+        val shownBefore = setOf("m6", "m7")
+
+        // WHEN - two new messages arrive
+        val keptOpen = keptOpenAfterTwoArrive(shownBefore)
+
+        // THEN - only the last two stay open, everything before them folds again
+        assertEquals(listOf("(m1)", "stack(m2,m3,m4,m5,m6,m7)", "m8", "m9"), shape(reads(9), View(keptOpen = keptOpen)))
+    }
+
+    @Test
+    fun `new messages fold nothing while the reader is above the end of the thread`() {
+        val keptOpen = keptOpenAfterTwoArrive(setOf("m6", "m7"), readingAboveTheEnd = true)
+
+        assertEquals(listOf("(m1)", "stack(m2,m3,m4,m5)", "m6", "m7", "m8", "m9"), shape(reads(9), View(keptOpen = keptOpen)))
+    }
+
+    @Test
+    fun `new messages fold nothing while the whole thread is expanded`() {
+        val keptOpen = keptOpenAfterTwoArrive(setOf("m6", "m7"), level = Level.ALL_EXPANDED)
+
+        assertEquals(listOf("(m1)", "stack(m2,m3,m4,m5)", "m6", "m7", "m8", "m9"), shape(reads(9), View(keptOpen = keptOpen)))
+    }
+
+    @Test
+    fun `new messages keep a message the user opened open`() {
+        val keptOpen = keptOpenAfterTwoArrive(setOf("m6", "m7"))
+
+        assertEquals(
+            listOf("(m1)", "m2", "stack(m3,m4,m5,m6,m7)", "m8", "m9"),
+            shape(reads(9), View(keptOpen = keptOpen, opened = setOf("m2"))),
+        )
+    }
+
+    @Test
+    fun `a message still unread when new ones arrive does not fold once it is read`() {
+        // GIVEN - message 4 is unread, so the panel shows it open, when two new messages arrive
+        val unreadFour = reads(9).toMutableList().apply { this[3] = unread("m4") }
+        val keptOpen = keptOpenAfterTwoArrive(setOf("m4", "m6", "m7"), messages = unreadFour)
+
+        // WHEN - the reader reads it
+        val readFour = reads(9)
+
+        // THEN - it stays open under the reader, while the read ones before the last two fold
+        assertEquals(listOf("(m1)", "(m2)", "(m3)", "m4", "(m5)", "(m6)", "(m7)", "m8", "m9"), shape(readFour, View(keptOpen = keptOpen)))
+    }
+
     @Test
     fun `a message the user folded folds even when it would stay open`() {
         val messages = listOf(read("m1"), unread("m2"), read("m3"))

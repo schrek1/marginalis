@@ -8,9 +8,12 @@ class LongThreadsInTheTabTest : TabInFrontTestCase() {
 
     override fun setUp() {
         super.setUp()
+        // The thread arrives while you are away, so its card shows it unread rather than reading it message by message.
+        tab.windowActive = false
         thread = agent.ask(body(1))
         (2..7).forEach { agent.reply(thread, body(it)) }
         tab.settle()
+        tab.windowActive = true
     }
 
     fun testNothingFoldsUnderTheReaderInTheTab() {
@@ -27,6 +30,19 @@ class LongThreadsInTheTabTest : TabInFrontTestCase() {
         assertEquals(listOf(6, 7), opened(tab.panel("Point 1.")))
         assertEquals(listOf("Point 1."), user.foldedRows(tab.panel("Point 1.")))
         assertEquals(listOf("Show 4 more messages"), stacks(tab.panel("Point 1.")))
+    }
+
+    fun testRepliesFoldWhatCameBeforeTheLastTwoInTheTab() {
+        readElsewhere()
+        tab.reopen("Point 1.")
+
+        agent.reply(thread, body(8))
+        tab.settle()
+        agent.reply(thread, body(9))
+        readElsewhere()
+
+        assertEquals(listOf(8, 9), opened(tab.panel("Point 1.")))
+        assertEquals(listOf("Show 6 more messages"), stacks(tab.panel("Point 1.")))
     }
 
     fun testReopeningACardReturnsToTheDefaultView() {

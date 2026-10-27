@@ -54,6 +54,24 @@ object ThreadFolding {
     fun isLong(body: String): Boolean =
         body.lines().filter(String::isNotBlank).sumOf { (it.length + LINE_WIDTH - 1) / LINE_WIDTH } > LONGER_THAN_LINES
 
+    /**
+     * What an open panel keeps open once [arrivals] land. In the default view it lets go of every kept message already
+     * read, so the read messages before the last two fold again; one still unread stays kept, so reading it later folds
+     * nothing under the reader. While the reader is above the end of the thread nothing folds, because folding would
+     * move the text they are reading.
+     */
+    fun keptOpenAfter(
+        arrivals: Set<String>,
+        keptOpen: Set<String>,
+        messages: List<Message>,
+        level: Level,
+        readingAboveTheEnd: Boolean,
+    ): Set<String> {
+        if (level != Level.DEFAULT || readingAboveTheEnd) return keptOpen + arrivals
+        val unread = messages.filterNot(Message::readByUser).mapTo(mutableSetOf()) { it.id }
+        return arrivals + keptOpen.filter { it in unread }
+    }
+
     fun rows(messages: List<Message>, view: View, prefs: FoldingPrefs = FoldingPrefs()): List<Row> {
         val openByRule = messages.filterNot(Message::agrees).takeLast(OPEN_AT_THE_END).mapTo(mutableSetOf()) { it.id }
         if (prefs.keepFirstOpen) messages.firstOrNull()?.let { openByRule += it.id }
