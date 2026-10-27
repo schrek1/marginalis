@@ -75,7 +75,7 @@ object MarkdownRenderer {
         for (fence in closedFences(body)) {
             addProse(box, project, Prose(body.substring(consumedUpTo, fence.start), afterCodeBlock, beforeBlock = true), wrapWidth)
             box.add(Box.createVerticalStrut(JBUI.scale(4)))
-            box.add(codeBlock(project, fence.language, body.substring(fence.codeStart, fence.codeEnd).trimEnd('\n')))
+            box.add(codeBlock(project, fence.language, body.substring(fence.codeStart, fence.codeEnd).trimEnd('\n'), wrapWidth))
             box.add(Box.createVerticalStrut(JBUI.scale(4)))
             consumedUpTo = fence.end
             afterCodeBlock = true
@@ -342,7 +342,7 @@ object MarkdownRenderer {
             .show((click.inputEvent as? MouseEvent)?.let(::RelativePoint) ?: RelativePoint.getCenterOf(source), Balloon.Position.above)
     }
 
-    private fun codeBlock(project: Project, language: String?, code: String): JComponent {
+    private fun codeBlock(project: Project, language: String?, code: String, wrapWidth: Int): JComponent {
         val document = EditorFactory.getInstance().createDocument(code)
         val field = EditorTextField(document, project, CodeFenceFileTypes.of(language), true, false)
         field.addSettingsProvider { editor ->
@@ -356,7 +356,25 @@ object MarkdownRenderer {
             )
         }
         field.border = JBUI.Borders.customLine(JBColor.border(), 1)
-        field.alignmentX = Component.LEFT_ALIGNMENT
-        return field
+        return scrollingSideways(field, wrapWidth)
+    }
+
+    /** The field keeps its natural width and scrolls sideways once that is wider than the prose wraps. */
+    private fun scrollingSideways(field: EditorTextField, wrapWidth: Int): JComponent {
+        // Sized on demand: the field measures its code only once its editor exists.
+        val scroll = object : JBScrollPane(field, ScrollPaneConstants.VERTICAL_SCROLLBAR_NEVER, ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED) {
+            override fun getPreferredSize(): Dimension {
+                val natural = field.preferredSize
+                val scrollbar = if (natural.width > wrapWidth) horizontalScrollBar.preferredSize.height else 0
+                return Dimension(minOf(natural.width, wrapWidth), natural.height + scrollbar)
+            }
+
+            override fun getMaximumSize(): Dimension = preferredSize
+        }
+        scroll.border = JBUI.Borders.empty()
+        scroll.isOpaque = false
+        scroll.viewport.isOpaque = false
+        scroll.alignmentX = Component.LEFT_ALIGNMENT
+        return scroll
     }
 }

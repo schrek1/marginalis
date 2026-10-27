@@ -1,9 +1,12 @@
 package dev.marginalis.plugin.ui
 
 import com.intellij.openapi.fileTypes.PlainTextFileType
+import com.intellij.util.ui.UIUtil
 import dev.marginalis.plugin.testing.Browser
 import dev.marginalis.plugin.testing.RenderedBody
 import dev.marginalis.plugin.transport.HttpContractTestCase
+import java.awt.Container
+import javax.swing.JScrollPane
 import javax.swing.text.DefaultCaret
 import javax.swing.text.html.HTML
 
@@ -54,6 +57,38 @@ class MessageBodiesTest : HttpContractTestCase() {
 
         assertEquals(listOf(0), body.prose.map { it.caretPosition })
         assertEquals(listOf(DefaultCaret.NEVER_UPDATE), body.prose.map { (it.caret as DefaultCaret).updatePolicy })
+    }
+
+    fun testALongQuoteAndANestedListItemWrapInsideThePanel() {
+        val long = "Suggestion to consider: DEFAULT now() gives every existing order a link expiry nobody chose, so the report reads wrong"
+        val panel = laidOut(panelSaying("> $long\n\n- top item\n  - nested $long"))
+
+        val prose = RenderedBody.of(panel).prose.single()
+
+        val textEnd = (0 until prose.document.length).maxOf { prose.modelToView2D(it)?.maxX ?: 0.0 }
+        assertTrue("text ends at $textEnd in a pane ${prose.width} wide", textEnd <= prose.width)
+    }
+
+    fun testACodeBlockWiderThanThePanelScrollsSidewaysInItsOwnPane() {
+        val line = "WHEN EXISTS (SELECT 1 FROM shop_order_entry e WHERE e.payment_check_id = c.id) " + "AND e.created_at < now() ".repeat(5)
+        val panel = laidOut(panelSaying("Before.\n\n```sql\n$line\n```\n\nAfter."))
+
+        val code = RenderedBody.of(panel).codeBlocks.single()
+
+        val scroll = code.parent?.parent as? JScrollPane
+        assertNotNull("the code block sits in no pane of its own", scroll)
+        assertTrue("the pane is ${scroll!!.width} wide in a body ${scroll.parent.width} wide", scroll.width <= scroll.parent.width)
+        assertTrue(
+            "the code is ${scroll.viewport.viewSize.width} wide, the pane shows ${scroll.viewport.extentSize.width}",
+            scroll.viewport.viewSize.width > scroll.viewport.extentSize.width,
+        )
+        assertEquals(code.preferredSize.width, scroll.viewport.viewSize.width)
+    }
+
+    private fun laidOut(panel: ThreadPanel): ThreadPanel {
+        panel.size = panel.preferredSize
+        UIUtil.uiTraverser(panel).filter(Container::class.java).forEach { it.doLayout() }
+        return panel
     }
 
     fun testAQuoteIsSetApartAsAQuote() {
