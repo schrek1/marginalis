@@ -360,6 +360,7 @@ object Sandbox {
                 .start()
 
         private fun awaitUp(process: Process?) {
+            val launched = System.nanoTime()
             val port = awaitValue(
                 "the sandbox IDE answers on robot port $robotPort", startTimeout, Duration.ofSeconds(1), retryOn = { it !is IdeExited },
             ) {
@@ -369,7 +370,10 @@ object Sandbox {
             cachedPort = port
             val frame = sizeTheFrame()
             awaitProjectStartup()
-            println("sandbox up: robot http://127.0.0.1:$robotPort, marginalis http://127.0.0.1:$port, frame $frame")
+            println(
+                "sandbox up in ${seconds(Duration.ofNanos(System.nanoTime() - launched))}: robot http://127.0.0.1:$robotPort, " +
+                    "marginalis http://127.0.0.1:$port, frame $frame",
+            )
         }
 
         private fun containerRunning(): Boolean = container?.let { name ->
@@ -497,6 +501,9 @@ object Sandbox {
         private fun awaitProjectStartup() {
             var settledPolls = 0
             var noted = false
+            val started = System.nanoTime()
+            // Since when each condition has held without a break: the last one to hold is what the start waited for.
+            val heldSince = linkedMapOf<String, Duration?>()
             awaitUntil(
                 "the project has started up, is out of dumb mode, has its global model from disk, no write pending and " +
                     "the Margin tab's startup decision made, 3 s in a row",
@@ -539,12 +546,14 @@ object Sandbox {
                                 && !properties.isValueSet('marginalis.projectTab.reopen');
                         })(com.intellij.ide.util.PropertiesComponent.getInstance(projects[0]));
                         String(JSON.stringify({
-                            settled: projects.length > 0
-                                && com.intellij.ide.startup.StartupManagerEx.getInstanceEx(projects[0]).postStartupActivityPassed()
-                                && !com.intellij.openapi.project.DumbService.isDumb(projects[0])
-                                && !com.intellij.openapi.application.ApplicationManager.getApplication().isWriteActionPending()
-                                && globalModel
-                                && tabDecided,
+                            conditions: {
+                                'post-startup': projects.length > 0
+                                    && com.intellij.ide.startup.StartupManagerEx.getInstanceEx(projects[0]).postStartupActivityPassed(),
+                                'smart mode': projects.length > 0 && !com.intellij.openapi.project.DumbService.isDumb(projects[0]),
+                                'no write pending': !com.intellij.openapi.application.ApplicationManager.getApplication().isWriteActionPending(),
+                                'global model from disk': globalModel,
+                                'Margin tab decided': tabDecided
+                            },
                             globalModelUnavailable: globalModelUnavailable
                         }))
                         """,
@@ -554,10 +563,19 @@ object Sandbox {
                     println("note  the start does not wait for the global workspace model loaded from disk: ${reason.asString}")
                     noted = true
                 }
-                settledPolls = if (probe.get("settled").asBoolean) before + 1 else 0
+                val elapsed = Duration.ofNanos(System.nanoTime() - started)
+                val conditions = probe.getAsJsonObject("conditions").entrySet().associate { (name, held) -> name to held.asBoolean }
+                conditions.forEach { (name, held) -> heldSince[name] = if (held) heldSince[name] ?: elapsed else null }
+                settledPolls = if (conditions.values.all { it }) before + 1 else 0
                 settledPolls >= 3
             }
+            println(
+                "project settled in ${seconds(Duration.ofNanos(System.nanoTime() - started))}; each condition held from " +
+                    heldSince.entries.joinToString { (name, since) -> "$name ${since?.let(::seconds)}" },
+            )
         }
+
+        private fun seconds(duration: Duration) = "%.1f s".format(Locale.ROOT, duration.toMillis() / 1000.0)
 
         @OptIn(ExperimentalPathApi::class)
         private fun freshProject() {
