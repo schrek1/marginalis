@@ -257,6 +257,33 @@ class ThreadPanelToolbarTest : HttpContractTestCase() {
         assertTrue(shownIn(panel).lines().contains("Claude is working…"))
     }
 
+    fun testTheAgentsReplyEndsItsWorkingSignWithoutTheToolbarUpdating() {
+        sample()
+        val id = agent.addOnLine(5)
+        val waiting = agent.startWait()
+        val panel = user.open(id)
+        user.press(panel, "Go Live: each Submit wakes Claude with this thread")
+        user.type(panel, "Over to you.")
+        user.submit(panel)
+        agent.await(waiting)
+        settle()
+        assertTrue(shownIn(panel).lines().contains("Claude is working…"))
+
+        agent.post("comment_reply", "thread_id" to id, "body" to "Done.")
+        settle()
+
+        assertFalse(shownIn(panel), shownIn(panel).lines().contains("Claude is working…"))
+    }
+
+    fun testEveryHeaderActionUpdatesOffTheUiThread() {
+        sample()
+        val panel = user.open(agent.addOnLine(5))
+
+        val onTheUiThread = user.headerActionsUpdatingOnTheUiThread(panel)
+
+        assertEquals(emptyList<String>(), onTheUiThread)
+    }
+
     fun testLiveAsksForAMentionWhenSeveralAgentsListenOnTheUsersThread() {
         sample()
         user.comment(SAMPLE, 5, "Anyone?")

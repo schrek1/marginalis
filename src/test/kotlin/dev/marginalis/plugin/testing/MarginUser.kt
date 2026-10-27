@@ -5,6 +5,7 @@ import com.intellij.ide.impl.HeadlessDataManager
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionToolbar
+import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.actionSystem.DataContext
@@ -577,6 +578,11 @@ class MarginUser(private val project: Project, private val disposable: Disposabl
         if (event.presentation.isEnabled) action.actionPerformed(event)
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
     }
+
+    /** A header action updating on the EDT waits for it, so a busy EDT stalls the whole toolbar. */
+    fun headerActionsUpdatingOnTheUiThread(panel: ThreadPanel): List<String> = toolbarActions(panel)
+        .filter { it !is Separator && it.actionUpdateThread == ActionUpdateThread.EDT }
+        .map { it.templatePresentation.text ?: it.javaClass.name }
 
     private fun toolbarActions(panel: ThreadPanel): List<AnAction> {
         val toolbar = UIUtil.uiTraverser(panel).filter(ActionToolbar::class.java).first()!!
