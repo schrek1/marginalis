@@ -256,6 +256,12 @@ class MarginTab(private val project: Project, private val disposable: Disposable
 
     val editor: MarginEditor get() = editors.getAllEditors(file).filterIsInstance<MarginEditor>().single()
 
+    @AllowReflection("The tab's own sense of being in front has no public read, and a headless frame gives a tab behind the file no window for it to show through")
+    fun countsItselfInFront(): Boolean {
+        val panel = MarginEditor::class.java.getDeclaredField("content").apply { isAccessible = true }.get(editor)
+        return panel.javaClass.getDeclaredField("selected").apply { isAccessible = true }.getBoolean(panel)
+    }
+
     private val root: JComponent get() = editor.component
 
     private val top: JComponent get() = (root.layout as BorderLayout).getLayoutComponent(BorderLayout.NORTH) as JComponent

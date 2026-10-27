@@ -68,24 +68,30 @@ class OpeningTheTabTest : MarginTabTestCase() {
         sample()
         tab.pin()
         tab.openFileInFront(SAMPLE)
-        ProjectTab.closeEverywhere()
-        MarginFile.reinstate()
-        val heldBack = HeldBackEditorChecks.install(testRootDisposable)
+        var returnedWhileHeldBack = false
 
         // WHEN - the project opens the tab at startup
-        try {
-            ProjectTab.openOnStartup(project)
-            val returnedWhileHeldBack = heldBack.isHolding
+        bringBackAtStartupWhileTheIdeHoldsTheEditorChecksBack { heldBack -> returnedWhileHeldBack = heldBack.isHolding }
 
-            // THEN - opening returned at once, and the tab is back once the checks finish
-            assertTrue("opening the tab waited on the EDT until the held-back editor check gave up", returnedWhileHeldBack)
-        } finally {
-            heldBack.release()
-        }
-        tab.settle()
+        // THEN - opening returned at once, and the tab is back once the checks finish
+        assertTrue("opening the tab waited on the EDT until the held-back editor check gave up", returnedWhileHeldBack)
         assertTrue(tab.isPinned)
         assertEquals("Sample.kt", tab.editors.selectedFiles.single().name)
         assertEquals(listOf("Margin", "Sample.kt"), tab.openTabs())
+    }
+
+    fun testATabBroughtBackBehindTheFileDoesNotCountAsInFrontOnceItsEditorArrives() {
+        // GIVEN - the pinned tab sits behind Sample.kt
+        sample()
+        tab.pin()
+        tab.openFileInFront(SAMPLE)
+
+        // WHEN - it comes back at startup and its editor arrives after Sample.kt is in front again
+        bringBackAtStartupWhileTheIdeHoldsTheEditorChecksBack()
+
+        // THEN - the tab does not take itself for the one you are reading
+        assertEquals("Sample.kt", tab.editors.selectedFiles.single().name)
+        assertFalse("the tab behind the file counts itself in front, so it reads and holds threads as if you were reading it", tab.countsItselfInFront())
     }
 
     fun testAReloadedPluginBringsAnUnpinnedTabBackUnpinned() {
@@ -146,5 +152,18 @@ class OpeningTheTabTest : MarginTabTestCase() {
     private fun openForTheFirstTime() {
         PropertiesComponent.getInstance(project).unsetValue("marginalis.projectTab.introduced")
         tab.openOnStartup()
+    }
+
+    private fun bringBackAtStartupWhileTheIdeHoldsTheEditorChecksBack(whileHeldBack: (HeldBackEditorChecks) -> Unit = {}) {
+        ProjectTab.closeEverywhere()
+        MarginFile.reinstate()
+        val heldBack = HeldBackEditorChecks.install(testRootDisposable)
+        try {
+            ProjectTab.openOnStartup(project)
+            whileHeldBack(heldBack)
+        } finally {
+            heldBack.release()
+        }
+        tab.settle()
     }
 }
