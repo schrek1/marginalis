@@ -217,12 +217,13 @@ object Sandbox {
             val exited = if (asked) ideExited(exitTimeout) else !ideRunning()
             // An IDE that could not be asked has failed already, in what the scenario saw; it is only killed here.
             val hang = if (exited) null else recordExitHang(asked).takeIf { asked }
+            var pullFailure: String? = null
             when (launch) {
                 Launch.DOCKER -> container?.let { name ->
                     if (!exited) docker("kill", name)
-                    // After the exit: closing the project writes it once more (the Margin tab parks itself, the last
-                    // save), and the next start seeds the container from the host folder.
-                    pullProject(name)
+                    // After the exit: closing the project writes it once more (the editor tabs, the last save), and
+                    // the next start seeds the container from the host folder.
+                    pullFailure = pullProject(name)
                     if (release) {
                         docker("rm", "-f", name)
                         liveContainers.remove(name)
@@ -239,7 +240,8 @@ object Sandbox {
             ide = null
             cachedPort = null
             println("sandbox stopped${if (exited) "" else " (killed)"}")
-            check(hang == null) { hang!! }
+            val failures = listOfNotNull(hang, pullFailure)
+            check(failures.isEmpty()) { failures.joinToString("; ") }
         }
 
         // From a background call, not as the robot's own EDT script: the robot server's HTTP thread would wait for
@@ -394,18 +396,22 @@ object Sandbox {
         /**
          * Replaces the host folder's content with the stopped container's project. `docker cp` writes as the calling
          * user, so a Linux host can delete what the IDE (root in the container) wrote.
+         *
+         * @return why the copy failed, with what `docker cp` printed, or null once the host folder holds the project
          */
         @OptIn(ExperimentalPathApi::class)
-        private fun pullProject(name: String) {
+        private fun pullProject(name: String): String? {
             // Into the folder itself, emptied, never replaced: it is the container's bind-mount source, which
             // `docker cp` from the stopped container needs in place. A staging folder renamed into place failed now
             // and then on a Windows host: an on-access scanner opens freshly written files for a few milliseconds,
             // and a folder with an open file inside cannot be renamed.
             Files.createDirectories(project)
             project.forEachDirectoryEntry { it.deleteRecursively() }
-            val exit = docker("cp", "$name:$CONTAINER_PROJECT/.", project.toString())
-            hostProjectStale = exit != 0
-            if (hostProjectStale) println("the IDE's project could not be copied back to the host (docker cp exit $exit)")
+            val copy = dockerRun("cp", "$name:$CONTAINER_PROJECT/.", project.toString())
+            hostProjectStale = copy.exit != 0
+            if (!hostProjectStale) return null
+            return "the IDE's project could not be copied back to the host (docker cp exit ${copy.exit}: ${copy.output})"
+                .also { println("DIAG  $it") }
         }
 
         /** A thread dump in the IDE log and a shot of the frame, for a wait that timed out. */
@@ -573,12 +579,19 @@ object Sandbox {
         }
     }
 
-    private fun docker(vararg args: String, check: Boolean = false): Int {
+    private class DockerRun(val exit: Int, val output: String)
+
+    /** Runs a docker command; its output holds stdout and stderr together. */
+    private fun dockerRun(vararg args: String): DockerRun {
         val process = ProcessBuilder("docker", *args).redirectErrorStream(true).start()
         val output = process.inputStream.bufferedReader().readText()
-        val exit = process.waitFor()
-        check(!check || exit == 0) { "docker ${args.first()} exited with $exit: $output" }
-        return exit
+        return DockerRun(process.waitFor(), output.trim())
+    }
+
+    private fun docker(vararg args: String, check: Boolean = false): Int {
+        val run = dockerRun(*args)
+        check(!check || run.exit == 0) { "docker ${args.first()} exited with ${run.exit}: ${run.output}" }
+        return run.exit
     }
 
     /** What a docker command printed, or null when it failed. */
