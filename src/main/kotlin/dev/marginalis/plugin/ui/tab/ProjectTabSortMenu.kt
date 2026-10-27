@@ -15,7 +15,7 @@ internal class ProjectTabSortMenu(private val onChanged: () -> Unit) :
         templatePresentation.isPerformGroup = false
         ProjectTabOrder.entries.forEach { order ->
             add(object : ToggleAction(order.label), DumbAware {
-                override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+                override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
                 override fun isSelected(e: AnActionEvent): Boolean =
                     e.project?.let { ProjectTabSort.getInstance(it).order == order } ?: false
@@ -30,7 +30,7 @@ internal class ProjectTabSortMenu(private val onChanged: () -> Unit) :
         }
     }
 
-    override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+    override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
     override fun update(e: AnActionEvent) {
         val order = e.project?.let { ProjectTabSort.getInstance(it).order } ?: return

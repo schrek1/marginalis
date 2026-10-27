@@ -4,6 +4,7 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionGroup
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionToolbar
+import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.IdeActions
 import com.intellij.openapi.actionSystem.Presentation
@@ -378,6 +379,12 @@ class MarginTab(private val project: Project, private val disposable: Disposable
             ?.getChildren(event(action))?.toList()
         (children ?: listOf(action)).mapNotNull { child -> presentationOf(child).text?.takeIf { presentationOf(child).isVisible } }
     }
+
+    /** A toolbar action updating on the EDT waits for it, so a busy EDT stalls the whole toolbar. */
+    fun actionsUpdatingOnTheUiThread(): List<String> = toolbarActions()
+        .flatMap { action -> listOf(action) + (action as? ActionGroup)?.getChildren(event(action)).orEmpty() }
+        .filter { it !is Separator && it.actionUpdateThread == ActionUpdateThread.EDT }
+        .map { it.templatePresentation.text ?: it.javaClass.name }
 
     fun presence(): List<String> = presenceActions().mapNotNull { presentationOf(it).text }
 

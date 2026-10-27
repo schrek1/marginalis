@@ -44,6 +44,12 @@ class HeaderTest : MarginTabTestCase() {
         assertEquals(listOf(alpha), wake.json.getAsJsonArray("awaiting").map { it.asJsonObject.id })
     }
 
+    fun testEveryToolbarActionUpdatesOffTheUiThread() {
+        agent.ask("Which release name?")
+
+        assertEquals(emptyList<String>(), tab.actionsUpdatingOnTheUiThread())
+    }
+
     fun testTheHeaderShowsWhoListensAndWhoWorks() {
         assertEquals(emptyList<String>(), tab.presence())
 
