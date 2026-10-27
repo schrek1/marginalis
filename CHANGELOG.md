@@ -45,6 +45,8 @@ History before 0.1.19 lives in git tags.
   without project threads opens without it, and an agent's new project
   thread opens a closed tab behind the file you are reading. It no
   longer pins itself on a project's first open.
+- The reply composer's send menu reads "Submit & send round" again,
+  instead of losing the ampersand to an underlined letter.
 
 ## [0.2.7] - 2026-10-22
 
