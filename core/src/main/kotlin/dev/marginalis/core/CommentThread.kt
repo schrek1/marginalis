@@ -116,6 +116,9 @@ class CommentThread(
 
     fun markReadByUser(shown: List<Message> = messages): Boolean = shown.map { it.markReadByUser() }.any { it }
 
+    /** Unread as when it arrived: only the latest message from someone else, so the thread opens folded as before. */
+    fun markUnreadByUser(): Boolean = messages.lastOrNull { it.author !is Author.User }?.markUnreadByUser() ?: false
+
     val isRelayedRoot: Boolean
         get() = messages.firstOrNull()?.relayed != null
 

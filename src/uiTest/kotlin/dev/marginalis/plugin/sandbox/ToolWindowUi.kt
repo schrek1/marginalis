@@ -38,6 +38,32 @@ function threadOfNode(node) {
 function sectionTitle(node) { return String(node.getUserObject().getTitle()); }
 """
 
+    private const val THREAD_ROWS = """
+function threadPath(tree, id) {
+    var nodes = tree.getModel().getRoot().preorderEnumeration();
+    while (nodes.hasMoreElements()) {
+        var node = nodes.nextElement();
+        var thread = threadOfNode(node);
+        if (thread != null && String(thread.getId()) == id) return new javax.swing.tree.TreePath(node.getPath());
+    }
+    throw 'no row for thread ' + id + ' in the tree';
+}
+function openContextMenu(id) {
+    var tree = marginalisTree();
+    var path = threadPath(tree, id);
+    tree.scrollPathToVisible(path);
+    var bounds = tree.getPathBounds(path);
+    var handler = null;
+    var listeners = tree.getMouseListeners();
+    for (var i = 0; i < listeners.length; i++) if (listeners[i] instanceof com.intellij.ui.PopupHandler) handler = listeners[i];
+    if (handler == null) throw 'the tree has no context menu handler';
+    handler.invokePopup(tree, bounds.x + 10, bounds.y + bounds.height / 2);
+    var open = javax.swing.MenuSelectionManager.defaultManager().getSelectedPath();
+    if (open.length == 0 || !(open[0] instanceof javax.swing.JPopupMenu)) throw 'no context menu opened on thread ' + id;
+    return open[0];
+}
+"""
+
     private const val HEADER = """
 var window = com.intellij.openapi.wm.ToolWindowManager.getInstance(project).getToolWindow('Marginalis');
 // A restart can restore the tool window hidden; its header is built only once it shows.
@@ -444,6 +470,62 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
             String(true)
             """,
         )
+    }
+
+    /** Selects the threads' rows together, as Ctrl+clicks would; each thread's first row in tree order. */
+    fun selectThreads(vararg threadIds: String) {
+        js(
+            TREE + THREAD_ROWS + """
+            var tree = marginalisTree();
+            var ids = ${lit(threadIds.toList())};
+            var paths = [];
+            for (var i = 0; i < ids.length; i++) paths.push(threadPath(tree, ids[i]));
+            tree.setSelectionPaths(paths);
+            String(true)
+            """,
+        )
+    }
+
+    /** The entries of the context menu a right-click on the thread's row opens, keeping a selection that holds it. */
+    fun contextMenuOf(threadId: String): List<String> = SandboxUi.stringList(
+        js(
+            TREE + THREAD_ROWS + """
+            var popup = openContextMenu('$threadId');
+            var items = [];
+            var parts = popup.getComponents();
+            for (var i = 0; i < parts.length; i++) if (parts[i] instanceof javax.swing.JMenuItem) items.push(String(parts[i].getText()));
+            popup.setVisible(false);
+            String(JSON.stringify(items))
+            """,
+        ),
+    )
+
+    /** Right-clicks the thread's row and chooses `item` from its context menu, as a click on the entry would. */
+    fun chooseFromContextMenu(threadId: String, item: String) {
+        val token = js(
+            TREE + THREAD_ROWS + """
+            var popup = openContextMenu('$threadId');
+            var chosen = null;
+            var shown = [];
+            var parts = popup.getComponents();
+            for (var i = 0; i < parts.length; i++) {
+                if (!(parts[i] instanceof javax.swing.JMenuItem)) continue;
+                shown.push(String(parts[i].getText()));
+                if (String(parts[i].getText()) == ${lit(item)}) chosen = parts[i];
+            }
+            popup.setVisible(false);
+            if (chosen == null) throw 'no ' + ${lit(item)} + ' in the context menu; it shows [' + shown.join(', ') + ']';
+            var token = String(java.util.UUID.randomUUID());
+            com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater(
+                new java.lang.Runnable({ run: function () {
+                    var outcome = 'ok';
+                    try { chosen.doClick(0); } catch (error) { outcome = 'failed: ' + error; }
+                    java.lang.System.getProperties().put('marginalis.sandbox.action.' + token, outcome);
+                } }));
+            String(token)
+            """,
+        )
+        SandboxUi.awaitActionRan(item, token)
     }
 
     data class ShapeNode(val kind: String, val name: String?, val steps: List<Int>, val showsFile: Boolean?)
