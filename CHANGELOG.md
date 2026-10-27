@@ -7,6 +7,12 @@ History before 0.1.19 lives in git tags.
 
 ## [Unreleased]
 
+### Fixed
+
+- The 12-hour clock on messages speaks the IDE's language. On a system
+  set to another language, an English IDE now shows "6:14 PM" instead
+  of the system's word for afternoon.
+
 ## [0.2.7] - 2026-10-22
 
 Thanks to [@schrek1](https://github.com/schrek1) for starting the long-thread work in this release.
