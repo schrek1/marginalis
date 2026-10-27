@@ -89,8 +89,9 @@ class MarginalisRestService : RestService() {
     // server's origin-confirmation dialog, which would block headless calls.
     override fun isHostTrusted(request: FullHttpRequest, urlDecoder: QueryStringDecoder): Boolean = true
 
-    // Default is 30/min — an agent annotating a file in one turn bursts past that.
-    override fun getMaxRequestsPerMinute(): Int = 1000
+    // Default is 30/min — an agent annotating a file in one turn bursts past that. The limit counts per client
+    // address, so the platform tests, one client for the whole suite, lift it through the property.
+    override fun getMaxRequestsPerMinute(): Int = Integer.getInteger("marginalis.api.requestsPerMinute", 1000)
 
     override fun execute(
         urlDecoder: QueryStringDecoder,
