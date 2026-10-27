@@ -51,6 +51,10 @@ History before 0.1.19 lives in git tags.
   move. The thread shows 👍 until the agent says what it does with it:
   ⏳ while it works on the agreed change, or no sign at all when there
   is nothing left to do and the thread is yours to resolve.
+- A long thread stays folded as the conversation goes on: each new
+  message folds the read ones before the latest two again, so the
+  thread no longer grows round after round. While you are scrolled up
+  reading the middle, or have expanded the whole thread, nothing folds.
 
 ### Fixed
 

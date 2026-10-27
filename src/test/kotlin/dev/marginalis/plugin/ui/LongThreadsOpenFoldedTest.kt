@@ -86,7 +86,7 @@ class LongThreadsOpenFoldedTest : HttpContractTestCase() {
         assertEquals((1..7).toList(), opened(panel))
     }
 
-    fun testRepliesArrivingWhileTheThreadIsOpenFoldNothingAlreadyOpen() {
+    fun testRepliesArrivingWhileTheThreadIsOpenFoldWhatCameBeforeTheLastTwo() {
         user.read(thread)
         val panel = user.open(thread)
 
@@ -96,18 +96,44 @@ class LongThreadsOpenFoldedTest : HttpContractTestCase() {
         readElsewhere()
         panel.refresh()
 
-        assertEquals(listOf(6, 7, 8, 9), opened(panel))
+        assertEquals(listOf(8, 9), opened(panel))
+        assertEquals(listOf("Show 6 more messages"), stacks(panel))
     }
 
-    fun testRepliesArrivingWhileTheThreadIsOpenStayOpenOnceNewerOnesFollow() {
+    fun testEachReplyKeepsOnlyTheLastTwoOpen() {
         user.read(thread)
         val panel = user.open(thread)
 
-        (8..10).forEach { agent.reply(thread, body(it)) }
-        readElsewhere()
-        panel.refresh()
+        (8..10).forEach {
+            agent.reply(thread, body(it))
+            PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+            readElsewhere()
+        }
 
-        assertEquals(listOf(6, 7, 8, 9, 10), opened(panel))
+        assertEquals(listOf(9, 10), opened(panel))
+    }
+
+    fun testYourOwnReplyFoldsWhatCameBeforeTheMessageYouAnswer() {
+        user.read(thread)
+        val panel = user.open(thread)
+
+        user.type(panel, body(8))
+        user.submit(panel)
+
+        assertEquals(listOf(7, 8), opened(panel))
+    }
+
+    fun testRepliesKeepOpenAMessageYouOpened() {
+        user.read(thread)
+        val panel = user.open(thread)
+        user.clickLink(panel, "Show 4 more messages")
+        user.expand(panel, "Point 3.")
+
+        agent.reply(thread, body(8))
+        PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+        readElsewhere()
+
+        assertEquals(listOf(3, 7, 8), opened(panel))
     }
 
     fun testRepliesReadElsewhereBeforeThisPanelCatchesUpStillArriveOpen() {
@@ -119,7 +145,7 @@ class LongThreadsOpenFoldedTest : HttpContractTestCase() {
         readElsewhere()
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
 
-        assertEquals(listOf(6, 7, 8, 9, 10), opened(panel))
+        assertEquals(listOf(8, 9, 10), opened(panel))
     }
 
     fun testRepliesReadWhileAllAreExpandedStayOpenBackInTheDefaultView() {
@@ -128,6 +154,7 @@ class LongThreadsOpenFoldedTest : HttpContractTestCase() {
         user.press(panel, EXPAND_ALL)
 
         (8..10).forEach { agent.reply(thread, body(it)) }
+        PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
         panel.markRead()
         user.press(panel, BACK_TO_DEFAULT)
 
