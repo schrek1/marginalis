@@ -60,7 +60,8 @@ first contact, look before you consume:
    `unread` (for your identity), `last_author`, and `awaiting` (`agent`
    when the reply is yours, `user` when it is theirs — read from the
    last message that was not relayed; absent once closed, on an fyi the
-   user has read, or while that message is addressed to another agent).
+   user has read, while that message is addressed to another agent, or
+   once its agent answered an Agree with `comment_agent_state`).
    It composes with every other filter.
 3. Read deliberately — the bodies you are about to answer, scoped by
    `file=` or `awaiting=agent`. Those reads mark seen, as they should:
@@ -113,7 +114,8 @@ every open thread whose last message that was not relayed is yours to
 answer — the user's, unless it was addressed to someone else, or
 anything addressed to you. Without your identity (`author_id`, else
 `author_name`) the list is the anonymous "Agent"'s, not yours. Reading
-doesn't shrink it, only a reply (or a resolve) does. End the sweep with
+doesn't shrink it, only a reply (or a resolve, or — on an Agree —
+`comment_agent_state`) does. End the sweep with
 it empty.
 
 **2. Never edit a file that has open threads.**
@@ -137,7 +139,13 @@ user resolves a thread themselves while action seems pending, ask
 rather than assuming. Resolve immediately only when no action is needed
 — never an fyi, which is the user's to resolve. An Agree (`agrees:
 true`, addressed to you) is the same approval: land what was agreed,
-then resolve.
+then resolve. The user sees 👍 on it, not your move, so answer every
+Agree at once with `comment_agent_state`: `working` when you take the
+agreed change on (they see ⏳ until you reply or resolve), or
+`acknowledged` when nothing is left for you to do (no sign; the thread
+stays open for the user to resolve). Until you answer, the Agree
+awaits you; after it, the thread awaits nobody until the next message
+from either side.
 
 ## Ending a turn: wait for the next round
 
@@ -585,6 +593,7 @@ machine-readable `reason` (see Anchoring).
 | `POST comment_add_batch {items: [comment_add payloads], author_name?, author_id?, project?}` | many notes in one call; the envelope's identity and `project` are per-item defaults, `to` and `relayed` are per item only → `{results: [ …success shape… \| {error, reason?, open_projects?} ], created}` in request order, 200 unless the envelope itself is malformed; `created` leaves out items answered `existing: true` |
 | `POST comment_reply {thread_id, body, to?, relayed?, author_name?, author_id?}` | reply in-thread → `{message_id, thread_id, status}`; `to` (an `author_id`, or `user`) addresses the message — omit it to address everyone; `project` is ignored (the thread names it); a blank `body` is a 400; a relayed comment already in the thread adds nothing → `{message_id, thread_id, status, existing: true}`; one already relayed into another thread → 409 `{error, reason: "relayed_elsewhere", thread_id}`, the root of a thread the user deleted → 409 `reason: "deleted_relay"` |
 | `POST comment_resolve {thread_id, author_name?, author_id?}` | outcome landed / moot → `{thread_id, status}` |
+| `POST comment_agent_state {thread_id, state, author_name?, author_id?}` | answer the Agree that is the thread's last word: `state` is `working` (you take the agreed change on; the user sees ⏳) or `acknowledged` (nothing left to do; no sign) → `{thread_id, status, agent_state}`; either way the thread then awaits nobody until the next message or a resolve, both of which clear it; you may change it while the Agree is still the last word; any other `state` is a teaching 400; no Agree addressed to you as the last word → 409 `reason: "no_agreement"` |
 | `POST comment_reopen {thread_id}` | resurface a resolved or orphaned thread → `{thread_id, status}`; an orphaned line thread is pinned to whatever now sits on its old line, unverified — rescue orphans with `comment_reanchor` instead |
 | `POST comment_reanchor {thread_id, line, anchor_text?, file?}` | orphan rescue, line threads only (file-level → 400) → `{thread_id, line, status}`; the file is looked up in the thread's own project; `file`, when given, must be the thread's file (cross-file moves → 400); a live thread → 409 `reason: "not_orphaned"` |
 | `POST comment_reanchor_all {file, project?}` | rescue every orphan on one file, searching the whole file by content → `{file, results: [{thread_id, line?, status}], rescued}` |
@@ -633,13 +642,17 @@ from whoever spoke last, a thread of only relays awaits the user, and
 on an fyi the user has read, a new relay awaits the user until they read
 it. `agrees: true` marks a message the user posted with one click
 (body `Agreed.`, addressed to the agent whose message it answers):
-treat it as approval of that message. Only the user can agree.
+treat it as approval of that message. Only the user can agree. A
+thread's `agent_state` (`working` or `acknowledged`) is how that agent
+answered the Agree with `comment_agent_state`; it appears only while
+that Agree is still the last word that was not relayed.
 `awaiting` narrows to open threads whose last message that was not
 relayed is the other party's, as seen by your identity: `agent` — the
 user spoke last or someone addressed you, and you owe the reply (a
 message addressed to another agent is theirs); `user` — an agent spoke
 last unaddressed, anyone addressed `user`, or only relays were said,
-and the user owes one. An fyi is the
+and the user owes one. An Agree you have answered with
+`comment_agent_state` awaits nobody. An fyi is the
 exception: the user owes it only a read, and an agent's further word on
 it owes only a read again — until the user replies; from then on whose
 turn it is follows the rule above, though it stays the user's to
@@ -652,7 +665,8 @@ identity's), `last_author` (same shape as `author`; the last who spoke, so never
 (`agent` or `user`, as that filter reads it for you; absent when the
 thread is closed, when it is an fyi the user has already read, or when
 its last message that was not relayed is addressed to another agent —
-their turn, not yours) — and `marked_seen` is always 0.
+their turn, not yours — or is an Agree its agent has answered) — and
+`marked_seen` is always 0.
 `newly_seen` marks messages this very listing consumed for your
 identity; `seen_by` lists the identities that have read the message.
 Timestamps are ISO-8601 UTC; `line` in every response is 1-based and

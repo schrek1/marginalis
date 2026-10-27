@@ -10,7 +10,7 @@ data class ProjectTabTally(val open: Int, val turns: TurnTally, val newCount: In
 
         fun of(threads: List<CommentThread>): ProjectTabTally {
             val open = threads.filter { it.isProjectLevel && it.status is ThreadStatus.Open }
-            return ProjectTabTally(open = open.size, turns = TurnTally.of(open), newCount = open.sumOf { it.unreadByUserCount() })
+            return ProjectTabTally(open = open.size, turns = TurnTally.signalled(open), newCount = open.sumOf { it.unreadByUserCount() })
         }
     }
 }

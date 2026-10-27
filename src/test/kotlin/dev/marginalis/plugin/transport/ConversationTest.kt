@@ -46,6 +46,65 @@ class ConversationTest : HttpContractTestCase() {
         assertEquals("claude-review", agent.threads().single().messages().last().string("to"))
     }
 
+    fun testAnAgreeStaysTheAgentsToAnswerUntilItSaysWhetherItIsOnIt() {
+        sample()
+        val id = agent.addOnLine(5, "body" to "Shall I extract it?")
+        user.agree(id)
+
+        val response = agent.post("comment_agent_state", "thread_id" to id, "state" to "working")
+
+        assertEquals(setOf("thread_id", "status", "agent_state"), response.json.keySet())
+        assertEquals("working", response["agent_state"]!!.asString)
+        assertEquals(emptyList<String>(), agent.ids("awaiting" to "agent"))
+        assertEquals(emptyList<String>(), agent.ids("awaiting" to "user"))
+        assertEquals("working", agent.summaryOf(id).string("agent_state"))
+    }
+
+    fun testAnAcknowledgedAgreeLeavesTheThreadOpenForTheUser() {
+        sample()
+        val id = agent.addOnLine(5, "body" to "Shall I extract it?")
+        user.agree(id)
+
+        agent.post("comment_agent_state", "thread_id" to id, "state" to "acknowledged")
+
+        assertEquals("open", agent.summaryOf(id).string("status"))
+        assertEquals("acknowledged", agent.summaryOf(id).string("agent_state"))
+        assertEquals(emptyList<String>(), agent.ids("awaiting" to "agent"))
+    }
+
+    fun testTheNextWordClearsTheAgentState() {
+        sample()
+        val id = agent.addOnLine(5, "body" to "Shall I extract it?")
+        user.agree(id)
+        agent.post("comment_agent_state", "thread_id" to id, "state" to "working")
+
+        agent.reply(id, "Extracted.")
+
+        assertNull(agent.summaryOf(id)["agent_state"])
+        assertEquals(listOf(id), agent.ids("awaiting" to "user"))
+    }
+
+    fun testAnAgentStateAnswersOnlyAnAgreeAddressedToTheCaller() {
+        sample()
+        val id = agent.addOnLine(5, "body" to "Shall I extract it?")
+
+        assertRefused(agent.post("comment_agent_state", "thread_id" to id, "state" to "working"), 409, "agent_state answers an Agree only")
+        user.agree(id)
+        val byAnotherAgent = reviewer.post("comment_agent_state", "thread_id" to id, "state" to "working")
+        assertRefused(byAnotherAgent, 409, "claude-review")
+        assertEquals("no_agreement", byAnotherAgent["reason"]!!.asString)
+        assertNull(agent.summaryOf(id)["agent_state"])
+    }
+
+    fun testAnUnknownAgentStateIsATeaching400() {
+        sample()
+        val id = agent.addOnLine(5, "body" to "Shall I extract it?")
+        user.agree(id)
+
+        assertRefused(agent.post("comment_agent_state", "thread_id" to id, "state" to "done"), 400, "'working'")
+        assertRefused(agent.post("comment_agent_state", "thread_id" to id), 400, "'acknowledged'")
+    }
+
     fun testABlankReplyIsATeaching400() {
         sample()
         val id = agent.addOnLine(5)

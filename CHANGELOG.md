@@ -7,6 +7,13 @@ History before 0.1.19 lives in git tags.
 
 ## [Unreleased]
 
+### Changed
+
+- Agreeing with an agent no longer leaves the thread on the agent's
+  move. The thread shows 👍 until the agent says what it does with it:
+  ⏳ while it works on the agreed change, or no sign at all when there
+  is nothing left to do and the thread is yours to resolve.
+
 ## [0.2.7] - 2026-10-22
 
 Thanks to [@schrek1](https://github.com/schrek1) for starting the long-thread work in this release.

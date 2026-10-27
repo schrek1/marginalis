@@ -34,6 +34,7 @@ import com.intellij.ui.SimpleColoredComponent
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.treeStructure.Tree
 import com.intellij.util.ui.UIUtil
+import dev.marginalis.core.AgreementSignal
 import dev.marginalis.core.Turn
 import dev.marginalis.core.TurnSignal
 import dev.marginalis.plugin.ui.MarginalisIcons
@@ -150,7 +151,7 @@ class MarginToolWindow(private val project: Project, private val disposable: Dis
     fun rowText(row: Int): String {
         val cell = render(row)
         val words = UIUtil.findComponentOfType(cell, SimpleColoredComponent::class.java)!!
-        val leading = (words.icon as? RowIcon)?.let { icon -> turnOf(icon.getIcon(2))?.let { TurnSignal.glyph(it) + " " } } ?: ""
+        val leading = (words.icon as? RowIcon)?.let { icon -> glyphOf(icon.getIcon(2))?.let { "$it " } } ?: ""
         val counts = UIUtil.findComponentsOfType(cell, JLabel::class.java)
             .filter { it.isVisible && turnOf(it.icon) != null }
             .joinToString("") { " " + TurnSignal.glyph(turnOf(it.icon)!!) + it.text }
@@ -184,6 +185,9 @@ class MarginToolWindow(private val project: Project, private val disposable: Dis
     }
 
     private fun turnOf(icon: Icon?): Turn? = Turn.entries.firstOrNull { icon != null && icon === MarginalisIcons.turnSignal(it) }
+
+    private fun glyphOf(icon: Icon?): String? = turnOf(icon)?.let(TurnSignal::glyph)
+        ?: AgreementSignal.entries.firstOrNull { icon != null && icon === MarginalisIcons.agreementSignal(it) }?.glyph
 
     fun rowOf(text: String, under: String? = null): Int {
         settle()

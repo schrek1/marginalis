@@ -1,6 +1,9 @@
 package dev.marginalis.core
 
 object TurnSignal {
+    /** The turn a thread's glyph shows: an Agree the agent has not answered yet is approval, shown as 👍, not ✈. */
+    fun of(thread: CommentThread): Turn? = thread.turn()?.takeUnless { thread.awaitsAgreementAnswer }
+
     fun spoken(turn: Turn): String = when (turn) {
         Turn.USER_OWES -> "your move"
         Turn.AGENT_OWES -> "agent's move"
@@ -23,9 +26,11 @@ object TurnSignal {
 
 data class TurnTally(val user: Int, val agent: Int) {
     companion object {
-        fun of(threads: List<CommentThread>): TurnTally {
-            val turns = threads.mapNotNull { it.turn() }
-            return TurnTally(user = turns.count { it == Turn.USER_OWES }, agent = turns.count { it == Turn.AGENT_OWES })
-        }
+        fun of(threads: List<CommentThread>): TurnTally = tally(threads.mapNotNull { it.turn() })
+
+        fun signalled(threads: List<CommentThread>): TurnTally = tally(threads.mapNotNull(TurnSignal::of))
+
+        private fun tally(turns: List<Turn>): TurnTally =
+            TurnTally(user = turns.count { it == Turn.USER_OWES }, agent = turns.count { it == Turn.AGENT_OWES })
     }
 }

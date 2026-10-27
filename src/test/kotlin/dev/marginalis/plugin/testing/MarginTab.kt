@@ -33,6 +33,7 @@ import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextArea
 import com.intellij.util.IconUtil
 import com.intellij.util.ui.UIUtil
+import dev.marginalis.core.AgreementSignal
 import dev.marginalis.core.Turn
 import dev.marginalis.core.TurnSignal
 import dev.marginalis.plugin.ui.MarginalisIcons
@@ -452,7 +453,7 @@ class MarginTab(private val project: Project, private val disposable: Disposable
         val heading = heading(card)
         val layout = heading.layout as BorderLayout
         val mark = UIUtil.findComponentsOfType(heading, JLabel::class.java).first { it.icon != null }
-        val turn = turnOf(card, mark.icon)?.let { TurnSignal.glyph(it) + " " }.orEmpty()
+        val turn = glyphOf(card, mark.icon)?.let { "$it " }.orEmpty()
         val title = (layout.getLayoutComponent(BorderLayout.CENTER) as JLabel).text
         val trailing = UIUtil.findComponentsOfType(heading, JLabel::class.java)
             .filter { it.isVisible && it.text in TRAILING_MARKS }.joinToString("") { " " + it.text }
@@ -461,9 +462,10 @@ class MarginTab(private val project: Project, private val disposable: Disposable
         return "$turn$title$trailing$preview$expanded"
     }
 
-    private fun turnOf(card: ThreadCard, icon: Icon?): Turn? {
+    private fun glyphOf(card: ThreadCard, icon: Icon?): String? {
         val mark = MarginalisIcons.markOf(listOf(card.thread))
-        return Turn.entries.firstOrNull { icon === MarginalisIcons.withLeadingTurnSignal(mark, it) }
+        return Turn.entries.firstOrNull { icon === MarginalisIcons.withLeadingTurnSignal(mark, it) }?.let(TurnSignal::glyph)
+            ?: AgreementSignal.entries.firstOrNull { icon === MarginalisIcons.withLeadingTurnSignal(mark, null, it) }?.glyph
     }
 
     private fun heading(card: ThreadCard): JComponent = (card.layout as BorderLayout).getLayoutComponent(BorderLayout.NORTH) as JComponent

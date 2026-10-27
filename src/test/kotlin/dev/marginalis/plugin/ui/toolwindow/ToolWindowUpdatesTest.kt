@@ -40,6 +40,32 @@ class ToolWindowUpdatesTest : ToolWindowTestCase() {
         assertEquals("No margin threads yet", window.emptyText())
     }
 
+    fun testAnAgreedThreadShowsAThumbsUpThenWhatTheAgentDidWithIt() {
+        sample()
+        val id = agent.addOnLine(5, "body" to "Extract this loop?")
+        window.outline()
+
+        window.rebuiltBy { user.agree(id) }
+        assertEquals(listOf("Open  1", "src  1", "Sample.kt", "👍 L5  Extract this loop?"), window.rows())
+        assertTrue(window.spoken("Extract this loop?").startsWith("L5  Extract this loop?, agreed, with Claude"))
+
+        window.rebuiltBy { agent.post("comment_agent_state", "thread_id" to id, "state" to "working") }
+        assertEquals("⏳ L5  Extract this loop?", window.rows().last())
+
+        window.rebuiltBy { agent.post("comment_agent_state", "thread_id" to id, "state" to "acknowledged") }
+        assertEquals("L5  Extract this loop?", window.rows().last())
+    }
+
+    fun testAnAgreedThreadIsNotListedAsAwaitingTheAgent() {
+        sample()
+        val id = agent.addOnLine(5, "body" to "Extract this loop?")
+        user.agree(id)
+
+        window.filterBy("Awaiting Agent")
+
+        assertEquals("Nothing awaiting the agent", window.emptyText())
+    }
+
     fun testWhatTheUserDoesInTheEditorShowsInTheTree() {
         sample()
         window.outline()
