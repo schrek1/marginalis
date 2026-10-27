@@ -7,6 +7,11 @@ History before 0.1.19 lives in git tags.
 
 ## [Unreleased]
 
+### Fixed
+
+- A code block with lines wider than the thread scrolls sideways in its
+  own pane, so its end is no longer cut off at the panel's edge.
+
 ## [0.2.7] - 2026-10-22
 
 Thanks to [@schrek1](https://github.com/schrek1) for starting the long-thread work in this release.
