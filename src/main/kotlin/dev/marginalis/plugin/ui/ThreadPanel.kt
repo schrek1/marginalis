@@ -178,12 +178,7 @@ class ThreadPanel(
     }.apply {
         toolTipText = "Click to address everyone instead"
     }
-    private val cancelEditLink = ActionLink("Cancel") {
-        editingMessageId = null
-        replyArea.text = ""
-        setComposerExpanded(false)
-        refresh()
-    }
+    private val cancelEditLink = ActionLink("Cancel") { cancelEdit() }
 
     private val replyArea = EditorTextField("", project, CodeFenceFileTypes.of("markdown")).apply {
         setOneLineMode(false)
@@ -219,7 +214,7 @@ class ThreadPanel(
                     }
                     if (e.keyCode == KeyEvent.VK_ESCAPE) {
                         e.consume()
-                        closeAndRefocus()
+                        escape()
                     }
                 }
             })
@@ -288,10 +283,25 @@ class ThreadPanel(
         })
         // The composer handles its own Esc: its editor consumes key events.
         registerKeyboardAction(
-            { closeAndRefocus() },
+            { escape() },
             KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
             WHEN_ANCESTOR_OF_FOCUSED_COMPONENT,
         )
+        refresh()
+    }
+
+    /** Closes the innermost open thing: the reply box first, then the thread. A new comment is only its reply box. */
+    private fun escape() {
+        if (!composerExpanded || isDraft()) return closeAndRefocus()
+        if (editingMessageId != null) cancelEdit() else setComposerExpanded(false)
+        // The composer just left the hierarchy; the panel is the focus home for the next Esc.
+        requestFocusInWindow()
+    }
+
+    private fun cancelEdit() {
+        editingMessageId = null
+        replyArea.text = ""
+        setComposerExpanded(false)
         refresh()
     }
 

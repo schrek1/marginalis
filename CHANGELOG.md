@@ -64,6 +64,8 @@ History before 0.1.19 lives in git tags.
   The review rebuilds a file's view whenever its data refreshes, and that
   folded the thread you had just stepped to, leaving only its gutter icon;
   threads open in the review now open again with it.
+- Escape in a reply box now closes just the reply box: the thread stays
+  open with your draft kept, and a second Escape folds the thread.
 
 ## [0.2.7] - 2026-10-22
 

@@ -12,6 +12,7 @@ import dev.marginalis.plugin.ui.tab.MarginFile
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.testFramework.LightVirtualFile
+import java.awt.event.KeyEvent
 
 class CommentingInTheEditorTest : HttpContractTestCase() {
 
@@ -67,6 +68,16 @@ class CommentingInTheEditorTest : HttpContractTestCase() {
         assertEquals(emptyList<ThreadPanel>(), user.panels())
         assertEquals(emptyList<String>(), agent.ids())
         assertNull(user.gutterIcon(SAMPLE, 7))
+    }
+
+    fun testEscapeInANewCommentClosesIt() {
+        sample()
+        user.comment(SAMPLE, 7)
+
+        user.pressKeyInComposer(user.panel(), KeyEvent.VK_ESCAPE)
+
+        assertEquals(emptyList<ThreadPanel>(), user.panels())
+        assertEquals(emptyList<String>(), agent.ids())
     }
 
     // FixMe: Known issue - #57 closing an unsent new comment loses its text: commenting on the line again starts an empty draft
