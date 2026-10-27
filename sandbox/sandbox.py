@@ -338,17 +338,23 @@ def push_project() -> None:
 
 
 def pull_project() -> None:
-    """Replaces the host folder with the stopped container's project, so the next start (and reads after the stop)
-    see what the IDE wrote, its project close included. `docker cp` writes as the calling user, so a Linux host can
-    delete what the IDE (root in the container) wrote."""
-    pulled = RUNTIME / "project.pulled"
-    shutil.rmtree(pulled, ignore_errors=True)
-    copied = subprocess.run(["docker", "cp", f"{CONTAINER}:/work/runtime/project/.", str(pulled)], capture_output=True)
+    """Replaces the host folder's content with the stopped container's project, so the next start (and reads after the
+    stop) see what the IDE wrote, its project close included. `docker cp` writes as the calling user, so a Linux host
+    can delete what the IDE (root in the container) wrote."""
+    # Into the folder itself, emptied, never replaced: it is the container's bind-mount source, which `docker cp` from
+    # the stopped container needs in place. A staging folder renamed into place failed now and then on a Windows host:
+    # an on-access scanner opens freshly written files for a few milliseconds, and a folder with an open file inside
+    # cannot be renamed.
+    PROJECT.mkdir(parents=True, exist_ok=True)
+    for entry in PROJECT.iterdir():
+        if entry.is_dir() and not entry.is_symlink():
+            shutil.rmtree(entry)
+        else:
+            entry.unlink()
+    copied = subprocess.run(["docker", "cp", f"{CONTAINER}:/work/runtime/project/.", str(PROJECT)], capture_output=True)
     if copied.returncode != 0:
-        print(f"the IDE's project could not be copied back to the host: {copied.stderr.decode(errors='replace').strip()}")
-        return
-    shutil.rmtree(PROJECT, ignore_errors=True)
-    pulled.rename(PROJECT)
+        print("the IDE's project could not be copied back to the host, the host folder may be incomplete: "
+              f"{copied.stderr.decode(errors='replace').strip()}")
 
 
 # Run from a background call, not as the robot's own EDT script: the robot server's HTTP thread would wait for that

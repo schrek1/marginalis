@@ -19,6 +19,7 @@ import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.copyToRecursively
 import kotlin.io.path.deleteRecursively
 import kotlin.io.path.exists
+import kotlin.io.path.forEachDirectoryEntry
 import kotlin.io.path.readText
 
 /**
@@ -158,7 +159,7 @@ object Sandbox {
         @Volatile
         var lastRoundAt: String? = null
 
-        /** The last stop could not copy the IDE's project back, so the host folder may hold an older state. */
+        /** The last stop could not copy the IDE's project back, so the host folder may be incomplete. */
         private var hostProjectStale = false
 
         private val projectInIde: String get() = if (launch == Launch.DOCKER) "/work/runtime/project" else project.toString().replace('\\', '/')
@@ -175,11 +176,11 @@ object Sandbox {
             cachedPort = null
             if (launch == Launch.ATTACH) return awaitUp(process = null)
             Files.createDirectories(dir)
-            // The container seeds its project from the host folder: an older copy there would replace the IDE's newer
+            // The container seeds its project from the host folder: an incomplete copy there would replace the IDE's
             // state and the scenario would check the wrong thing, so it fails here instead.
             check(fresh || !hostProjectStale) {
                 "the last stop could not copy the IDE's project back to the host; a restart that keeps the project " +
-                    "would start from an older copy (see $logFile)"
+                    "would start from an incomplete copy (see $logFile)"
             }
             if (fresh || !project.exists()) freshProject()
             hostProjectStale = false
@@ -391,28 +392,20 @@ object Sandbox {
         }
 
         /**
-         * Replaces the host folder with the stopped container's project. `docker cp` writes as the calling user, so a
-         * Linux host can delete what the IDE (root in the container) wrote.
+         * Replaces the host folder's content with the stopped container's project. `docker cp` writes as the calling
+         * user, so a Linux host can delete what the IDE (root in the container) wrote.
          */
         @OptIn(ExperimentalPathApi::class)
         private fun pullProject(name: String) {
-            val pulled = dir.resolve("project.pulled")
-            if (pulled.exists()) pulled.deleteRecursively()
-            val exit = docker("cp", "$name:$CONTAINER_PROJECT/.", pulled.toString())
+            // Into the folder itself, emptied, never replaced: it is the container's bind-mount source, which
+            // `docker cp` from the stopped container needs in place. A staging folder renamed into place failed now
+            // and then on a Windows host: an on-access scanner opens freshly written files for a few milliseconds,
+            // and a folder with an open file inside cannot be renamed.
+            Files.createDirectories(project)
+            project.forEachDirectoryEntry { it.deleteRecursively() }
+            val exit = docker("cp", "$name:$CONTAINER_PROJECT/.", project.toString())
             hostProjectStale = exit != 0
-            if (hostProjectStale) {
-                println("the IDE's project could not be copied back to the host (docker cp exit $exit)")
-                return
-            }
-            if (project.exists()) project.deleteRecursively()
-            runCatching { Files.move(pulled, project) }.onFailure { failure ->
-                val state = dockerOutput("inspect", "-f", "{{.State.Status}}", name)?.trim()
-                error(
-                    "moving $pulled -> $project failed: ${failure::class.simpleName}: ${failure.message}; " +
-                        "after the delete project exists=${project.exists()}, its children=${project.toFile().list()?.size}; " +
-                        "container $name is $state",
-                )
-            }
+            if (hostProjectStale) println("the IDE's project could not be copied back to the host (docker cp exit $exit)")
         }
 
         /** A thread dump in the IDE log and a shot of the frame, for a wait that timed out. */
