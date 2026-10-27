@@ -83,6 +83,7 @@ object ThreadsCodec {
         addProperty("created_at", thread.createdAt.toString())
         addProperty("updated_at", thread.updatedAt.toString())
         thread.resolvedBy?.let { add("resolved_by", authorJson(it)) }
+        thread.agentState?.let { addProperty("agent_state", it.wireName) }
         add(
             "messages",
             JsonArray().apply {
@@ -138,6 +139,7 @@ object ThreadsCodec {
             runCatching { message(m.asJsonObject) }.getOrNull()?.let(thread::addMessage)
         }
         // Must follow the messages, which each count as a change while being added back.
+        thread.restoreAgentState(AgentState.parseLenient(json.get("agent_state")?.takeIf { it.isJsonPrimitive }?.asString))
         thread.restoreUpdatedAt(
             json.get("updated_at")?.takeIf { it.isJsonPrimitive }?.asString?.let { Instant.parse(it) }
                 ?: thread.messages.maxOfOrNull { it.createdAt }

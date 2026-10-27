@@ -357,6 +357,32 @@ class ThreadsCodecTest {
     }
 
     @Test
+    fun `the agent's answer to an Agree survives the trip, and a thread without one writes none`() {
+        val agent = Author.Agent("Claude", "claude-main")
+        val answered = CommentThread("a.py", 1, "x")
+        answered.addMessage(Message(agent, "Rename it?"))
+        answered.addMessage(Message.agreement(by = Author.User("Muhammad"), with = agent))
+        answered.answerAgreement(by = agent, state = AgentState.WORKING)
+        val unanswered = CommentThread("a.py", 2, "y").also { it.addMessage(Message(agent, "Hm?")) }
+
+        val encoded = ThreadsCodec.encode(listOf(answered, unanswered))
+        val decoded = ThreadsCodec.decode(encoded)
+
+        assertEquals(listOf(AgentState.WORKING, null), decoded.map { it.agentState })
+        assertEquals(1, Regex("\"agent_state\"").findAll(encoded).count())
+    }
+
+    @Test
+    fun `an unknown stored agent state loads as none, and the thread still loads`() {
+        val stored = """
+            {"threads": [{"id": "t1", "file": "a.py", "line": 1, "anchor_text": "x", "status": "OPEN",
+              "created_at": "2026-01-01T00:00:00Z", "agent_state": "pondering", "messages": []}]}
+        """.trimIndent()
+
+        assertEquals(null, ThreadsCodec.decode(stored).single().agentState)
+    }
+
+    @Test
     fun `what the user has read survives the trip`() {
         val agent = Author.Agent("Claude", "claude-main")
         val read = CommentThread("a.py", 1, "x", intent = Intent.FYI).also {

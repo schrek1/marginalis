@@ -26,6 +26,16 @@ class ProjectTabTallyTest {
         List(you) { project(this.agent) } + List(agent) { project(user) }
 
     @Test
+    fun `a project thread the user agreed with puts no agent's move in the tab title`() {
+        val agreed = project(agent).also { it.addMessage(Message.agreement(by = user, with = agent)) }
+
+        val tally = ProjectTabTally.of(listOf(agreed))
+
+        assertEquals(1, tally.open)
+        assertEquals(ProjectTabTally.NOTHING_WAITS, tally.title)
+    }
+
+    @Test
     fun `counts open, your move and agent's move over open project threads only`() {
         val tally = ProjectTabTally.of(
             listOf(

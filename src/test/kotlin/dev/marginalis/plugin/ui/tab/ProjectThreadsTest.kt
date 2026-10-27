@@ -170,7 +170,7 @@ class ProjectThreadsTest : MarginTabTestCase() {
         user.clickLink(tab.panel("Shall we call it Oak?"), "Agree")
 
         assertEquals("Agreed.", agent.threads().single { it.id == alpha }.messages().last().string("body"))
-        assertEquals(listOf("✈ Shall we call it Oak? ● [expanded]"), shown())
+        assertEquals(listOf("👍 Shall we call it Oak? ● [expanded]"), shown())
     }
 
     @DisplayOnly

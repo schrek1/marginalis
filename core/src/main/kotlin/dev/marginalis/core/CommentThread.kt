@@ -69,14 +69,38 @@ class CommentThread(
     val resolvedBy: Author?
         get() = (status as? ThreadStatus.Resolved)?.by
 
+    /** The agent's answer to the Agree that is the thread's last word; gone with the next word or a resolve. */
+    @Volatile
+    var agentState: AgentState? = null
+        private set
+
     fun addMessage(message: Message) {
         synchronized(messagesLock) { _messages.add(message) }
+        if (message.relayed == null) agentState = null
         touch()
     }
 
     fun resolve(by: Author) {
         status = ThreadStatus.Resolved(by)
+        agentState = null
         touch()
+    }
+
+    val awaitsAgreementAnswer: Boolean
+        get() = status is ThreadStatus.Open && lastSpoken?.agrees == true && agentState == null
+
+    fun canAnswerAgreement(agent: Author.Agent): Boolean =
+        status is ThreadStatus.Open && lastSpoken?.let { it.agrees && it.to == Addressee.Agent(agent.receiptKey) } == true
+
+    fun answerAgreement(by: Author.Agent, state: AgentState) {
+        check(canAnswerAgreement(by)) { "only the agent agreed with answers an Agree, and only while it is the last word" }
+        agentState = state
+        touch()
+    }
+
+    /** Rehydration only. */
+    fun restoreAgentState(state: AgentState?) {
+        agentState = state
     }
 
     fun reopen() {
@@ -161,6 +185,7 @@ class CommentThread(
             status !is ThreadStatus.Open -> null
             isReadFyi -> null
             last == null && messages.isNotEmpty() -> Turn.USER_OWES
+            last?.agrees == true && agentState != null -> null
             last?.awaits == Turn.USER_OWES -> Turn.USER_OWES
             else -> Turn.AGENT_OWES
         }

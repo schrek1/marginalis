@@ -42,6 +42,7 @@ import com.intellij.ui.treeStructure.Tree
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import com.intellij.util.ui.components.BorderLayoutPanel
+import dev.marginalis.core.AgreementSignal
 import dev.marginalis.core.Author
 import dev.marginalis.core.CommentThread
 import dev.marginalis.core.Faces
@@ -209,7 +210,7 @@ internal enum class TreeFilter(
     ALL("All", "No margin threads yet", { true }),
     BLOCKERS("Blockers Only", "No blockers", { it.severity == Severity.BLOCKER }),
     AWAITING_USER("Awaiting You", "Nothing awaiting you", { it.turn() == Turn.USER_OWES }),
-    AWAITING_AGENT("Awaiting Agent", "Nothing awaiting the agent", { it.turn() == Turn.AGENT_OWES }),
+    AWAITING_AGENT("Awaiting Agent", "Nothing awaiting the agent", { TurnSignal.of(it) == Turn.AGENT_OWES }),
     FINDINGS("Findings", "No findings", { it.intent == Intent.FINDING }),
     GUIDANCE("Guidance", "No guidance", { it.intent == Intent.GUIDANCE }),
     QUESTIONS("Questions", "No questions", { it.intent == Intent.QUESTION }),
@@ -994,7 +995,7 @@ private class MarginalisTreeRenderer : TreeCellRenderer {
         is NodeData.ThreadNode -> {
             yourMove.isVisible = false
             agentsMove.isVisible = false
-            TurnSignal.of(data.thread)?.let(TurnSignal::spoken)
+            TurnSignal.of(data.thread)?.let(TurnSignal::spoken) ?: AgreementSignal.of(data.thread)?.spoken
         }
         else -> {
             yourMove.isVisible = false
@@ -1068,7 +1069,11 @@ private class RowWords : ColoredTreeCellRenderer() {
             }
             is NodeData.ThreadNode -> {
                 val thread = data.thread
-                icon = MarginalisIcons.withLeadingTurnSignal(MarginalisIcons.markOf(listOf(thread)), TurnSignal.of(thread))
+                icon = MarginalisIcons.withLeadingTurnSignal(
+                    MarginalisIcons.markOf(listOf(thread)),
+                    TurnSignal.of(thread),
+                    AgreementSignal.of(thread),
+                )
                 if (data.walkthroughPrefix != null) {
                     append("${data.walkthroughPrefix}  ", SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
                 }

@@ -47,6 +47,10 @@ History before 0.1.19 lives in git tags.
   Project node. The Guided Layout menu in the tool window header
   switches to the folder tree as before, or to one node per file, and
   each project remembers its choice.
+- Agreeing with an agent no longer leaves the thread on the agent's
+  move. The thread shows 👍 until the agent says what it does with it:
+  ⏳ while it works on the agreed change, or no sign at all when there
+  is nothing left to do and the thread is yours to resolve.
 
 ### Fixed
 
