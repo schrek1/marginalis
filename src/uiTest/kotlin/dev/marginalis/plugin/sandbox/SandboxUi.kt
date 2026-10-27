@@ -157,8 +157,23 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
                 .firstOrNull { panel -> js("String(threadOf(component).getId())", panel) == threadId }
         }
 
+    /**
+     * Opens the file in front and returns once its editor exists. The blocking open would hold the EDT until then, and
+     * with a write pending at that moment the editor never comes (MARG-133's lock cycle): the robot call timed out.
+     */
     fun openInEditor(file: String) {
-        js(EDITORS + "com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).openFile(projectFile('$file'), true); String(true)")
+        js(EDITORS + "com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).requestOpenFile(projectFile('$file')); String(true)")
+        awaitUntil("$file in front with its editor", Duration.ofSeconds(60)) {
+            js(
+                EDITORS +
+                    """
+                    var target = projectFile('$file');
+                    var manager = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project);
+                    var selected = manager.getSelectedFiles();
+                    String(selected.length > 0 && selected[0].equals(target) && manager.getAllEditors(target).length > 0)
+                    """,
+            ) == "true"
+        }
     }
 
     fun closeAllEditors() {

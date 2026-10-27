@@ -200,6 +200,8 @@ than the property, it opens a fork issue (or updates the open one) with both lin
    (layout, a re-render, the tree, a badge, a selection) reads it with `readUntil` and the check's own condition,
    so a slow machine is waited for and a timeout still fails the check on the value last read. A fixed sleep stays
    only where the check must see that something did not happen.
+   A robot call the IDE does not answer within its timeout records the same diagnostics and names them in the
+   failure.
 
 ### Rules for the steps
 
@@ -209,6 +211,9 @@ than the property, it opens a fork issue (or updates the open one) with both lin
   model reads and caret moves there. Wrap just that call: `read(function () { ... })` for a read,
   `asUser(function () { ... })` for a caret move. Never wrap a whole script: opening an editor under a lock waits on
   background reads the lock holds back, and the IDE hangs.
+- **Opening an editor never blocks the EDT.** `SandboxUi.openInEditor` asks with `requestOpenFile` and waits for
+  the editor; the blocking `openFile` in a robot script holds the EDT until the editor exists, which a write pending
+  at that moment holds back, and the robot call times out (MARG-226).
 - **Actions run as their own EDT event.** `SandboxUi.pressPanelAction` and `ToolWindowUi.pressToolWindowAction`
   schedule the action with `invokeLater`, so it gets a click's locks; later robot calls queue behind it and see its
   outcome.
