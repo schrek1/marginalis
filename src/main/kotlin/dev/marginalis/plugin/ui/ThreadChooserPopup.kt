@@ -31,7 +31,7 @@ object ThreadChooserPopup {
                     }
                 },
             )
-            .setItemChosenCallback { thread -> ThreadInlayManager.open(project, editor, thread) }
+            .setItemChosenCallback { thread -> ThreadInlayManager.toggle(project, editor, thread) }
             .createPopup()
             .showInBestPositionFor(editor)
     }
