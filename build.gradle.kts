@@ -11,7 +11,7 @@ plugins {
     // Kotlin 2.3.x: first line with official Gradle 9 support (we run Gradle 9.1
     // because the shared JDK is Java 25, which needs Gradle 9.1+).
     id("org.jetbrains.kotlin.jvm") version "2.3.21"
-    id("org.jetbrains.intellij.platform") version "2.18.1"
+    id("org.jetbrains.intellij.platform") version "2.19.0"
     // CHANGELOG.md -> Marketplace change notes (see pluginConfiguration).
     id("org.jetbrains.changelog") version "2.2.1"
     id("org.jetbrains.kotlinx.kover") version "0.9.11"
@@ -333,7 +333,7 @@ tasks.test {
     systemProperty("marginalis.rootProjectName", rootProject.name)
     // settings.gradle.kts drops an IDE index without Java; one built again without it would fail the code-fence tests
     // far from the cause.
-    val ideIndexes = layout.projectDirectory.dir(".intellijPlatform/layoutIndex")
+    val ideIndexes = layout.projectDirectory.dir(".intellijPlatform/ides/layoutIndex")
     doFirst {
         val withoutJava = ideIndexes.asFile.listFiles { file -> file.extension == "json" }.orEmpty()
             .filter { index -> "\"id\":\"com.intellij.java\"" !in index.readText() }

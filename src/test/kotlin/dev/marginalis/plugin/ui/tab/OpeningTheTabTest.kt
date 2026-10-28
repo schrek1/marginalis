@@ -3,6 +3,7 @@ package dev.marginalis.plugin.ui.tab
 import com.intellij.ide.util.PropertiesComponent
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.vfs.VirtualFileManager
+import dev.marginalis.plugin.testing.HeldBackEditorChecks
 
 class OpeningTheTabTest : MarginTabTestCase() {
 
@@ -39,7 +40,7 @@ class OpeningTheTabTest : MarginTabTestCase() {
         val thread = user.thread(agent.ask("Which release name?"))
         tab.close()
         tab.openFileInFront(SAMPLE)
-        // Opening the tab runs queued EDT events while its editor is built; a reveal can be one of them.
+        // A reveal already queued when the tab opens behind the file is the user's later choice.
         ApplicationManager.getApplication().invokeLater { ProjectTab.reveal(project, thread) }
 
         ProjectTab.showBehindSelection(project)
@@ -60,6 +61,37 @@ class OpeningTheTabTest : MarginTabTestCase() {
         assertFalse(tab.isInFront)
         assertEquals("Sample.kt", tab.editors.selectedFiles.single().name)
         assertEquals(listOf("Margin", "Sample.kt"), tab.openTabs())
+    }
+
+    fun testAtStartupTheTabOpensWithoutWaitingForTheEditorChecksTheIdeHoldsBack() {
+        // GIVEN - the pinned tab sits behind Sample.kt, and the IDE holds back its editor checks, as a write pending at startup does
+        sample()
+        tab.pin()
+        tab.openFileInFront(SAMPLE)
+        var returnedWhileHeldBack = false
+
+        // WHEN - the project opens the tab at startup
+        bringBackAtStartupWhileTheIdeHoldsTheEditorChecksBack { heldBack -> returnedWhileHeldBack = heldBack.isHolding }
+
+        // THEN - opening returned at once, and the tab is back once the checks finish
+        assertTrue("opening the tab waited on the EDT until the held-back editor check gave up", returnedWhileHeldBack)
+        assertTrue(tab.isPinned)
+        assertEquals("Sample.kt", tab.editors.selectedFiles.single().name)
+        assertEquals(listOf("Margin", "Sample.kt"), tab.openTabs())
+    }
+
+    fun testATabBroughtBackBehindTheFileDoesNotCountAsInFrontOnceItsEditorArrives() {
+        // GIVEN - the pinned tab sits behind Sample.kt
+        sample()
+        tab.pin()
+        tab.openFileInFront(SAMPLE)
+
+        // WHEN - it comes back at startup and its editor arrives after Sample.kt is in front again
+        bringBackAtStartupWhileTheIdeHoldsTheEditorChecksBack()
+
+        // THEN - the tab does not take itself for the one you are reading
+        assertEquals("Sample.kt", tab.editors.selectedFiles.single().name)
+        assertFalse("the tab behind the file counts itself in front, so it reads and holds threads as if you were reading it", tab.countsItselfInFront())
     }
 
     fun testAReloadedPluginBringsAnUnpinnedTabBackUnpinned() {
@@ -120,5 +152,18 @@ class OpeningTheTabTest : MarginTabTestCase() {
     private fun openForTheFirstTime() {
         PropertiesComponent.getInstance(project).unsetValue("marginalis.projectTab.introduced")
         tab.openOnStartup()
+    }
+
+    private fun bringBackAtStartupWhileTheIdeHoldsTheEditorChecksBack(whileHeldBack: (HeldBackEditorChecks) -> Unit = {}) {
+        ProjectTab.closeEverywhere()
+        MarginFile.reinstate()
+        val heldBack = HeldBackEditorChecks.install(testRootDisposable)
+        try {
+            ProjectTab.openOnStartup(project)
+            whileHeldBack(heldBack)
+        } finally {
+            heldBack.release()
+        }
+        tab.settle()
     }
 }

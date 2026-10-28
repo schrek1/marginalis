@@ -28,6 +28,9 @@ class MarkThreadUnreadTest : SandboxScenario("mark_thread_unread") {
         ids["B"] = Agent.agentAddsLineThread(FILE, 5, "B · the CI job moved to the new runner", fields = mapOf("intent" to "fyi"))
         ids["P"] = Agent.agentStartsProjectThread("P · release notes for the next version")
         ids.values.forEach(SandboxUi::userReads)
+        // A project thread is read in the Margin tab: the tab shows P once, then the file is in front again.
+        SandboxUi.bringMarginTabToFront()
+        SandboxUi.openInEditor(FILE)
         val signals = signalsUntil(mapOf("A" to "none", "B" to "none", "P" to "none"))
         check("seed: no thread shows ✉ once read", signals.values.all { it == "none" }, signals)
     }
@@ -82,8 +85,12 @@ class MarkThreadUnreadTest : SandboxScenario("mark_thread_unread") {
     @Order(6)
     fun aProjectThreadMarkedUnreadShowsAsNewInTheMarginTab() = case("a_project_thread_marked_unread_shows_as_new_in_the_margin_tab") {
         ToolWindowUi.chooseFromContextMenu(id("P"), "Mark as Unread")
-        SandboxUi.openMarginTab(id("P"))
-        val card = readUntil("P's Margin tab card", read = { marginCard(id("P")) }) { it == "you dot" }
+        // Opening P itself would read it again; bringing the tab to the front only puts it on screen.
+        SandboxUi.bringMarginTabToFront()
+        readUntil("P's Margin tab card", read = { marginCard(id("P")) }) { it == "you dot" }
+        // Long enough for the tab in front to read what it shows, which it must not for P.
+        Thread.sleep(2_000)
+        val card = marginCard(id("P"))
         shot("3-p-marked-unread-in-margin-tab")
         check("Margin tab: P's card shows ✉ and the unread dot", card == "you dot", card)
     }
