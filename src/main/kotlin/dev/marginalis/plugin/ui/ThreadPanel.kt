@@ -1,5 +1,6 @@
 package dev.marginalis.plugin.ui
 
+import com.intellij.DynamicBundle
 import com.intellij.icons.AllIcons
 import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.actionSystem.ActionManager
@@ -884,7 +885,7 @@ class ThreadPanel(
 
     private fun messageTimeFormatter(): DateTimeFormatter =
         when (MarginalisSettings.getInstance().timeFormat) {
-            TimeFormat.TWELVE_HOUR -> DateTimeFormatter.ofPattern("h:mm a")
+            TimeFormat.TWELVE_HOUR -> DateTimeFormatter.ofPattern("h:mm a", DynamicBundle.getLocale())
             TimeFormat.TWENTY_FOUR_HOUR -> DateTimeFormatter.ofPattern("HH:mm")
             TimeFormat.AUTO -> DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
         }.withZone(ZoneId.systemDefault())
