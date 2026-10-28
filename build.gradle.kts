@@ -183,7 +183,11 @@ intellijPlatform {
             org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel.SCHEDULED_FOR_REMOVAL_API_USAGES,
         )
         ides {
-            recommended()
+            // recommended() with released builds only: its default channels add EAP and RC, whose failures would
+            // block stable before the IDE is out. A new IntelliJ joins the set once JetBrains lists it as released.
+            select {
+                channels = listOf(org.jetbrains.intellij.platform.gradle.models.ProductRelease.Channel.RELEASE)
+            }
             // The unified distribution: a headless verification needs no licence.
             create(org.jetbrains.intellij.platform.gradle.IntelliJPlatformType.IntellijIdea, latestIde)
         }
