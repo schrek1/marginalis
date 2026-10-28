@@ -74,6 +74,9 @@ History before 0.1.19 lives in git tags.
   threads open in the review now open again with it.
 - Escape in a reply box now closes just the reply box: the thread stays
   open with your draft kept, and a second Escape folds the thread.
+- Opening a project no longer freezes the IDE for up to 30 seconds
+  while the Margin tab comes back. The tab now appears right away and
+  finishes loading in the background.
 
 ## [0.2.7] - 2026-10-22
 

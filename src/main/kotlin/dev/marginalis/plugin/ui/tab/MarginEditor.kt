@@ -1,6 +1,7 @@
 package dev.marginalis.plugin.ui.tab
 
 import com.intellij.openapi.fileEditor.FileEditor
+import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.FileEditorState
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
@@ -21,6 +22,8 @@ class MarginEditor(private val project: Project, private val file: MarginFile) :
     fun applyPrefs() = content.applyPrefs()
 
     override fun selectNotify() {
+        // The platform also notifies an editor that arrives after its tab went behind another file.
+        if (file !in FileEditorManager.getInstance(project).selectedFiles) return
         content.onShown(inFront = true)
         ProjectTabState.getInstance(project).takeRequest()?.let(::handle)
     }

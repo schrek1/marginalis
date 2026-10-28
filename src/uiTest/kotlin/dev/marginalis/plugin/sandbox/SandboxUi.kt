@@ -780,6 +780,25 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
         """
 
     /** Waits until the editor in front has not changed for `quiet`, at most `limit`. */
+    /** Selects the open Margin tab as clicking its editor tab does, without opening a thread in it. */
+    fun bringMarginTabToFront() {
+        settleEditorSelection()
+        js(
+            MARGIN +
+                """
+                var tab = marginFile();
+                if (tab == null) throw 'the Margin tab is not open';
+                com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater(function () {
+                    com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).openFile(tab, true);
+                });
+                String(true)
+                """,
+        )
+        awaitUntil("the Margin tab in front") {
+            obj(js(MARGIN + EDITOR_STATE)).get("selected").asString == "Margin"
+        }
+    }
+
     fun settleEditorSelection(quiet: Duration = Duration.ofMillis(500), limit: Duration = Duration.ofSeconds(5)) {
         fun selected() = js(
             """
