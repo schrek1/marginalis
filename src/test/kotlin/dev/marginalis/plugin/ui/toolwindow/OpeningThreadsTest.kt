@@ -3,7 +3,7 @@ package dev.marginalis.plugin.ui.toolwindow
 import com.intellij.openapi.fileEditor.FileEditorManager
 import dev.marginalis.plugin.testing.DisplayOnly
 import dev.marginalis.plugin.testing.NeedsADisplay
-import dev.marginalis.plugin.ui.FileLevelThreads
+import dev.marginalis.core.Opened
 import dev.marginalis.plugin.ui.tab.MarginFile
 import java.awt.event.KeyEvent
 import org.junit.runner.RunWith
@@ -117,21 +117,22 @@ class OpeningThreadsTest : ToolWindowTestCase() {
         assertEquals("✉ L23  second", window.selected())
     }
 
-    fun testShowingAFileInTheToolWindowSelectsItsFirstRow() {
+    fun testRevealingAFileInTheToolWindowSelectsItsFirstRowOrSaysItHasNoThreads() {
         val steps = interleaved()
         sample()
         agent.addOnLine(5, "body" to "loose")
         window.outline()
 
-        FileLevelThreads.showInToolWindow(project, "acme/backend/shop-orders/src/main/java/com/acme/orders/OrderService.java")
+        MarginalisToolWindow.reveal(project, ThreadInFront.Found(Opened.File("acme/backend/shop-orders/src/main/java/com/acme/orders/OrderService.java")), focus = false)
         assertEquals("OrderService.java  steps 2–3 ✉2", window.selected())
         assertEquals("Guided SHOP-77  17", window.selectedPath().first())
 
-        FileLevelThreads.showInToolWindow(project, SAMPLE)
+        MarginalisToolWindow.reveal(project, ThreadInFront.Found(Opened.File(SAMPLE)), focus = false)
         assertEquals(listOf("Open  18", "src  1", "Sample.kt ✉1"), window.selectedPath())
 
-        FileLevelThreads.showInToolWindow(project, "src/NoThreads.kt")
+        MarginalisToolWindow.reveal(project, ThreadInFront.Found(Opened.File("src/NoThreads.kt")), focus = false)
         assertEquals("Sample.kt ✉1", window.selected())
+        assertEquals(listOf("No margin threads in NoThreads.kt."), window.window.balloons)
         assertEquals(18, steps.size)
     }
 }

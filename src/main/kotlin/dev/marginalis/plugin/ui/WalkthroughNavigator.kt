@@ -15,7 +15,6 @@ import dev.marginalis.core.Message
 import dev.marginalis.core.WalkPosition
 import dev.marginalis.core.Walkthrough
 import dev.marginalis.plugin.store.MarginalisStore
-import dev.marginalis.plugin.ui.diff.ReviewDiffMarkers
 import dev.marginalis.plugin.ui.diff.ReviewDiffSteps
 import dev.marginalis.plugin.ui.tab.ProjectTab
 
@@ -50,9 +49,9 @@ object WalkthroughNavigator {
     fun navigateWithin(editor: Editor, project: Project, thread: CommentThread, revealing: Message? = null): Boolean {
         val path = thread.file ?: return false
         if (editor.isDisposed || !editor.shows(project, path)) return false
-        val diffLine = editor.getUserData(ThreadInlayManager.THREAD_LINE)
-        if (diffLine != null) {
-            val line = diffLine(thread) ?: return false
+        val shown = editor.getUserData(ThreadInlayManager.SHOWN_THREADS)
+        if (shown != null) {
+            val line = shown.lineOf(thread) ?: return false
             recordingHistory(project) {
                 editor.caretModel.moveToLogicalPosition(LogicalPosition(line, 0))
                 editor.scrollingModel.scrollToCaret(ScrollType.CENTER)
@@ -87,9 +86,9 @@ object WalkthroughNavigator {
         }, null, null)
     }
 
-    // A review diff's editor holds a revision's copy of the file, so only its tag names the file it shows.
+    // A diff's editor may hold a revision's copy of the file, so only its tag names the file it shows.
     private fun Editor.shows(project: Project, path: String): Boolean {
-        getUserData(ReviewDiffMarkers.PROJECT_PATH)?.let { return it == path }
+        getUserData(ThreadInlayManager.SHOWN_THREADS)?.let { return it.file == path }
         val file = FileDocumentManager.getInstance().getFile(document) ?: return false
         return file == project.guessProjectDir()?.findFileByRelativePath(path)
     }

@@ -3,17 +3,20 @@ package dev.marginalis.plugin.ui
 import com.intellij.DynamicBundle
 import com.intellij.icons.AllIcons
 import com.intellij.ide.BrowserUtil
+import com.intellij.ide.SelectInContext
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionToolbar
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CustomShortcutSet
+import com.intellij.openapi.actionSystem.DataSink
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.actionSystem.IdeActions
 import com.intellij.openapi.actionSystem.KeyboardShortcut
 import com.intellij.openapi.actionSystem.Separator
 import com.intellij.openapi.actionSystem.ToggleAction
+import com.intellij.openapi.actionSystem.UiDataProvider
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationActivationListener
 import com.intellij.openapi.application.ApplicationManager
@@ -53,6 +56,7 @@ import dev.marginalis.core.LeavingAStep
 import dev.marginalis.core.LiveThread
 import dev.marginalis.core.Mark
 import dev.marginalis.core.Message
+import dev.marginalis.core.Opened
 import dev.marginalis.core.OpeningLine
 import dev.marginalis.core.People
 import dev.marginalis.core.Reference
@@ -67,6 +71,7 @@ import dev.marginalis.plugin.settings.MarginalisSettings
 import dev.marginalis.plugin.settings.TimeFormat
 import dev.marginalis.plugin.store.Authors
 import dev.marginalis.plugin.store.MarginalisStore
+import dev.marginalis.plugin.ui.toolwindow.MarginalisToolWindow
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Dimension
@@ -112,9 +117,14 @@ class ThreadPanel(
     private val mayMarkRead: (clickedInto: Boolean) -> Boolean = { true },
     private val newTags: (CommentThread) -> Set<String> = { emptySet() },
     private val onDraftPresenceChanged: () -> Unit = {},
-) : JPanel(BorderLayout()) {
+) : JPanel(BorderLayout()), UiDataProvider {
 
     val threadId: String get() = thread.id
+
+    override fun uiDataSnapshot(sink: DataSink) {
+        sink[MarginalisDataKeys.THREAD] = thread
+        sink.lazy(SelectInContext.DATA_KEY) { ThreadSelectInContext(project, thread) }
+    }
 
     private val messagesBox = Box.createVerticalBox()
     private val messageComponents = mutableMapOf<String, JComponent>()
@@ -568,7 +578,8 @@ class ThreadPanel(
                 e.presentation.isEnabledAndVisible = !isDraft()
             }
 
-            override fun actionPerformed(e: AnActionEvent) = FileLevelThreads.revealInToolWindow(project, thread)
+            override fun actionPerformed(e: AnActionEvent) =
+                MarginalisToolWindow.reveal(project, Opened.MarginThread(thread.id), focus = true)
         }
 
     private fun copyReference(id: String) {
