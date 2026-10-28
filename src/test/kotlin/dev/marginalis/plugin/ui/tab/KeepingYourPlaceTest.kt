@@ -3,6 +3,8 @@ package dev.marginalis.plugin.ui.tab
 import com.intellij.testFramework.PlatformTestUtil
 import com.intellij.ui.EditorTextField
 import dev.marginalis.plugin.testing.Agent
+import io.kotest.assertions.withClue
+import io.kotest.matchers.types.shouldBeSameInstanceAs
 
 class KeepingYourPlaceTest : TabInFrontTestCase() {
 
@@ -422,7 +424,7 @@ class KeepingYourPlaceTest : TabInFrontTestCase() {
 
         user.fold(tab.panel("Whiskey"), "Whiskey question")
 
-        assertSame(user.foldToggle(tab.panel("Whiskey"), "Whiskey question"), user.lastFocusedInWindowOf(tab.panel("Whiskey")))
+        assertYourFocusIsOnTheToggleOf("Whiskey", "Whiskey question")
     }
 
     fun testOpeningAMessageKeepsYourFocusOnItsToggle() {
@@ -432,7 +434,7 @@ class KeepingYourPlaceTest : TabInFrontTestCase() {
 
         user.expand(tab.panel("Whiskey"), "Whiskey question")
 
-        assertSame(user.foldToggle(tab.panel("Whiskey"), "Whiskey question"), user.lastFocusedInWindowOf(tab.panel("Whiskey")))
+        assertYourFocusIsOnTheToggleOf("Whiskey", "Whiskey question")
     }
 
     fun testOpeningAnUnreadMessageKeepsYourFocusOnItsToggle() {
@@ -446,7 +448,15 @@ class KeepingYourPlaceTest : TabInFrontTestCase() {
         user.expand(tab.panel("Whiskey"), "Whiskey details")
 
         assertTrue(user.thread(id).messages.last().readByUser)
-        assertSame(user.foldToggle(tab.panel("Whiskey"), "Whiskey details"), user.lastFocusedInWindowOf(tab.panel("Whiskey")))
+        assertYourFocusIsOnTheToggleOf("Whiskey", "Whiskey details")
+    }
+
+    private fun assertYourFocusIsOnTheToggleOf(thread: String, message: String) {
+        // Looking a panel up runs pending events, and the tab's resize timer may rebuild its toggles: read both from one look.
+        val panel = tab.panel(thread)
+        withClue("focus stays on the fold toggle $thread shows for '$message'") {
+            user.lastFocusedInWindowOf(panel) shouldBeSameInstanceAs user.foldToggle(panel, message)
+        }
     }
 
     fun testTheThreadYouReadGrowsDownwardsPushingTheNextOneDown() {
