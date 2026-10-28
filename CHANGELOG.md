@@ -74,6 +74,8 @@ History before 0.1.19 lives in git tags.
   threads open in the review now open again with it.
 - Escape in a reply box now closes just the reply box: the thread stays
   open with your draft kept, and a second Escape folds the thread.
+- Updating Marginalis without restarting the IDE no longer logs an
+  error while the tool window repaints during the update.
 - The 12-hour clock on messages speaks the IDE's language. On a system
   set to another language, an English IDE now shows "6:14 PM" instead
   of the system's word for afternoon.

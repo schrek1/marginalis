@@ -149,6 +149,12 @@ class MarginTab(private val project: Project, private val disposable: Disposable
         return restored
     }
 
+    fun splitOffWithout(path: String) {
+        val file = project.guessProjectDir()!!.findFileByRelativePath(path)!!
+        editors.windows.single().split(SwingConstants.VERTICAL, true, file, false)!!
+        settle()
+    }
+
     fun focusTheHalfShowing(shown: VirtualFile) {
         editors.windows.single { half -> half.fileList.any { it === shown } }.setAsCurrentWindow(true)
         settle()

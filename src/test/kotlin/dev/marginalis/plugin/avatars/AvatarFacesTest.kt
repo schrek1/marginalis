@@ -4,12 +4,14 @@ import com.intellij.ui.ColorUtil
 import com.intellij.ui.scale.JBUIScale
 import com.intellij.util.ui.UIUtil
 import dev.marginalis.core.AvatarGeometry
+import dev.marginalis.core.Face
 import dev.marginalis.core.FaceKey
 import dev.marginalis.plugin.settings.MarginalisSettings
 import dev.marginalis.plugin.testing.FakeGitHub
 import dev.marginalis.plugin.testing.Pixels
 import dev.marginalis.plugin.testing.Relays
 import dev.marginalis.plugin.ui.AuthorColors
+import dev.marginalis.plugin.ui.AvatarIcon
 import dev.marginalis.plugin.ui.toolwindow.ToolWindowTestCase
 import java.awt.Color
 import javax.swing.Icon
@@ -104,6 +106,16 @@ class AvatarFacesTest : ToolWindowTestCase() {
         assertTrue(initialsIn(stack, claude, slot = 0))
         assertTrue(initialsIn(stack, AuthorColors.USER, slot = 1))
         assertTrue(initialsIn(stack, review, slot = 2))
+    }
+
+    fun testAFacePaintedWhileThePluginUnloadsIsDrawnAsItsInitials() {
+        val claudeMain = Face(FaceKey.Agent("claude-main"), "Claude", login = null, avatarUrl = null, picture = null, agent = true)
+
+        // While the plugin's class loader unloads, the platform hands out no avatar store.
+        val unloading = AvatarIcon(claudeMain, UIUtil::getPanelBackground, images = null)
+
+        assertTrue(drawnAsInitials(unloading, claude))
+        assertTrue(badgeShows(unloading, claude))
     }
 
     fun testAThreadOnlyTheAgentSpokeInShowsOneFace() {
