@@ -13,7 +13,8 @@
   clicked thread alone.
 - A thread of only your own words offers no read mark (platform test).
 - A thread marked unread while its panel stays open is not read again by being on screen; opening it again or
-  clicking into it reads it (platform test: the sandbox IDE is never the active app, so panels there read nothing).
+  clicking into it reads it (platform test). The sandbox brings the Margin tab to the front without opening P,
+  so P stays unread there while the tab shows it.
 
 ## Automated
 

@@ -77,6 +77,9 @@ History before 0.1.19 lives in git tags.
 - The 12-hour clock on messages speaks the IDE's language. On a system
   set to another language, an English IDE now shows "6:14 PM" instead
   of the system's word for afternoon.
+- Opening a project no longer freezes the IDE for up to 30 seconds
+  while the Margin tab comes back. The tab now appears right away and
+  finishes loading in the background.
 
 ## [0.2.7] - 2026-10-22
 
