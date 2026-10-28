@@ -41,6 +41,7 @@ import dev.marginalis.plugin.ui.MarginalisIcons
 import dev.marginalis.plugin.ui.ParticipantStackIcon
 import dev.marginalis.plugin.ui.ProjectLiveAction
 import dev.marginalis.plugin.ui.toolwindow.MarginalisToolWindowFactory
+import dev.marginalis.plugin.ui.toolwindow.SelectOpenedThreadAction
 import java.awt.Component
 import java.awt.DefaultKeyboardFocusManager
 import java.awt.KeyboardFocusManager
@@ -492,8 +493,16 @@ class MarginToolWindow(private val project: Project, private val disposable: Dis
         tree.dispatchEvent(MouseEvent(tree, id, System.currentTimeMillis(), modifiers, at.x, at.y, at.x, at.y, clickCount, false, MouseEvent.BUTTON1))
     }
 
+    fun isSelectOpenedThreadEnabled(): Boolean {
+        val action = ActionManager.getInstance().getAction(SelectOpenedThreadAction.ID)
+        val event = event(action)
+        action.update(event)
+        return event.presentation.isEnabled
+    }
+
+    /** Runs the registered action as Find Action or its shortcut does: the tool window header no longer has it. */
     fun selectOpenedThread(context: DataContext = SimpleDataContext.getProjectContext(project)) {
-        val action = action("Select Opened Thread")
+        val action = ActionManager.getInstance().getAction(SelectOpenedThreadAction.ID)
         val event = TestActionEvent.createTestEvent(action, context)
         action.update(event)
         check(event.presentation.isEnabled) { "Select Opened Thread is greyed out" }

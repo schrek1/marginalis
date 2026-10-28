@@ -106,6 +106,25 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
         SandboxUi.awaitActionRan(names.first(), token)
     }
 
+    /** The tool window header's buttons, by the text each shows; read once the header has its Filter button. */
+    fun headerButtons(): List<String> = readUntil(
+        "the tool window header built",
+        read = {
+            SandboxUi.stringList(
+                js(
+                    FIND + HEADER + """
+                    var texts = [];
+                    find(root, function (c) {
+                        if (c instanceof com.intellij.openapi.actionSystem.impl.ActionButton) texts.push(String(c.getPresentation().getText()));
+                        return false;
+                    });
+                    JSON.stringify(texts)
+                    """,
+                ),
+            )
+        },
+    ) { "Filter" in it }
+
     /** Whether the header button `name` is enabled, as its action's own update reports it to the user. */
     fun isToolWindowActionEnabled(name: String): Boolean {
         var enabled = false

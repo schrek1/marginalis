@@ -62,6 +62,15 @@ History before 0.1.19 lives in git tags.
   thread no longer grows round after round. While you are scrolled up
   reading the middle, or have expanded the whole thread, nothing folds.
 
+### Removed
+
+- The Marginalis tool window header no longer has *Select Opened Thread*.
+  It guessed the thread from the caret, so with a walkthrough step open
+  and the caret a line away it picked the file in Open instead of the
+  step. To find the thread you are reading, press *Select in Marginalis*
+  (⊕) in its own header: it always lands on that thread, a step in its
+  Guided section.
+
 ### Fixed
 
 - The Margin tab shows only when there is something in it. A project
