@@ -146,7 +146,7 @@ object Sandbox {
 
         var robotPort: Int = fixedRobotPort ?: claimablePorts.first
             private set
-        var robot = Robot(robotPort)
+        var robot = Robot(robotPort, diagnose = ::recordDiagnostics)
             private set
         val project: Path = dir.resolve("project")
         val logFile: Path = dir.resolve("run.log")
@@ -319,7 +319,7 @@ object Sandbox {
                 }
                 container = name
                 robotPort = port
-                robot = Robot(port)
+                robot = Robot(port, diagnose = ::recordDiagnostics)
                 return name
             }
             error("no robot port free for a sandbox in ${fixedRobotPort ?: claimablePorts}")
