@@ -72,6 +72,11 @@
                 description="Start a margin thread about this file as a whole — no line, nothing to drift">
             <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="marginalis.addComment"/>
         </action>
+        <action id="marginalis.selectOpenedThread"
+                class="dev.marginalis.plugin.ui.toolwindow.SelectOpenedThreadAction"
+                text="Select Opened Thread"
+                icon="AllIcons.General.Locate"
+                description="Select the thread on the caret's line in the Marginalis tool window, else the file"/>
     </actions>
 
     <applicationListeners>
@@ -103,6 +108,7 @@
                     factoryClass="dev.marginalis.plugin.ui.toolwindow.MarginalisToolWindowFactory"/>
         <!-- Review diffs show a revision's copy of the file; this brings the gutter icons there too. -->
         <diff.DiffExtension implementation="dev.marginalis.plugin.ui.diff.ReviewDiffMarkers"/>
+        <selectInTarget implementation="dev.marginalis.plugin.ui.toolwindow.MarginalisSelectInTarget"/>
         <!-- At-a-glance: the turn signal badges the file's own icon — editor tabs and the Project view alike. -->
         <fileIconPatcher implementation="dev.marginalis.plugin.ui.TurnSignalIconPatcher"/>
         <!-- The project tab: project-level threads in an editor tab of their own. -->

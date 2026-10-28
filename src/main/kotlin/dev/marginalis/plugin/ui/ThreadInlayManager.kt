@@ -22,8 +22,7 @@ object ThreadInlayManager {
     private val OPEN_INLAYS = Key.create<MutableMap<String, Pair<Inlay<*>, ThreadPanel>>>("marginalis.open.inlays")
     private val STORE_SUBSCRIPTION = Key.create<Disposable>("marginalis.store.subscription")
 
-    /** Set on editors that show a thread's file at other line numbers than the file itself, such as a review diff; null means the thread isn't shown there, so no panel opens. */
-    val THREAD_LINE = Key.create<(CommentThread) -> Int?>("marginalis.thread.line")
+    val SHOWN_THREADS = Key.create<ShownThreads>("marginalis.shown.threads")
 
     fun toggle(project: Project, editor: Editor, thread: CommentThread) {
         val open = openInlays(editor)
@@ -108,8 +107,8 @@ object ThreadInlayManager {
     }
 
     private fun lineOf(project: Project, editor: Editor, thread: CommentThread): Int? {
-        val threadLine = editor.getUserData(THREAD_LINE)
-        return if (threadLine != null) threadLine(thread) else MarginalisStore.getInstance(project).syncLine(thread) ?: 0
+        val shown = editor.getUserData(SHOWN_THREADS)
+        return if (shown != null) shown.lineOf(thread) else MarginalisStore.getInstance(project).syncLine(thread) ?: 0
     }
 
     private fun close(editor: Editor, threadId: String) {
@@ -126,7 +125,7 @@ object ThreadInlayManager {
             editor.getUserData(OPEN_INLAYS)?.values?.forEach { (inlay, _) -> Disposer.dispose(inlay) }
             editor.putUserData(OPEN_INLAYS, null)
             editor.getUserData(STORE_SUBSCRIPTION)?.let(Disposer::dispose)
-            editor.putUserData(THREAD_LINE, null)
+            editor.putUserData(SHOWN_THREADS, null)
         }
     }
 
@@ -152,5 +151,13 @@ object ThreadInlayManager {
         }
         editor.putUserData(STORE_SUBSCRIPTION, subscription)
         EditorUtil.disposeWithEditor(editor, subscription)
+    }
+}
+
+class ShownThreads private constructor(val file: String, val lineOf: (CommentThread) -> Int?) {
+    companion object {
+        fun at(file: String, lineOf: (CommentThread) -> Int?) = ShownThreads(file, lineOf)
+
+        fun none(file: String) = ShownThreads(file) { null }
     }
 }

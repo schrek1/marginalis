@@ -7,7 +7,8 @@
 
 - With a review diff in front, *Select Opened Thread* in the tool window header is enabled, not greyed out.
 - It selects the thread on the caret's line in the review's text, or the diff's file when that line has none.
-- With the caret in a thread's reply box it selects that thread, in an editor, a diff or the Margin tab.
+- With the caret in a thread's reply box it goes by the editor's caret, as upstream decides; the thread's own
+  *Select in Marginalis* selects that thread.
 
 ## Automated
 
@@ -19,7 +20,6 @@ A review diff of `review_target.py` whose copy moves every line down by three, a
 - Select Opened Thread is enabled with a review diff in front
 - on the line of a thread in the review's text it selects that thread
 - on a line without a thread it selects the file
-- with the caret in a thread's reply box it selects that thread, not the caret line's file
 
 ## Manual
 

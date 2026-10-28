@@ -4,6 +4,7 @@ import com.intellij.icons.AllIcons
 import com.intellij.ide.ActivityTracker
 import com.intellij.ide.CommonActionsManager
 import com.intellij.ide.OccurenceNavigator
+import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
@@ -14,24 +15,16 @@ import com.intellij.openapi.actionSystem.ToggleAction
 import com.intellij.openapi.actionSystem.UiDataProvider
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.editor.Editor
-import com.intellij.openapi.editor.EditorFactory
-import com.intellij.openapi.fileEditor.FileDocumentManager
-import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.text.StringUtil
-import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
-import com.intellij.openapi.wm.WindowManager
 import com.intellij.pom.Navigatable
 import com.intellij.ui.ColoredTreeCellRenderer
-import com.intellij.ui.ComponentUtil
 import com.intellij.ui.PopupHandler
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.JBLabel
@@ -48,6 +41,7 @@ import dev.marginalis.core.CommentThread
 import dev.marginalis.core.Faces
 import dev.marginalis.core.GuidedLayout
 import dev.marginalis.core.Intent
+import dev.marginalis.core.Opened
 import dev.marginalis.core.PathTrie
 import dev.marginalis.core.Severity
 import dev.marginalis.core.StepRuns
@@ -70,22 +64,20 @@ import dev.marginalis.plugin.ui.ProjectLiveAction
 import dev.marginalis.plugin.ui.RELAYED_STAYS_DELETED
 import dev.marginalis.plugin.ui.StopAgentsGroup
 import dev.marginalis.plugin.ui.SubmitRoundAction
-import dev.marginalis.plugin.ui.ThreadInlayManager
-import dev.marginalis.plugin.ui.ThreadPanel
 import dev.marginalis.plugin.ui.WalkthroughNavigator
-import dev.marginalis.plugin.ui.diff.ReviewDiffMarkers
 import dev.marginalis.plugin.ui.tab.ProjectTab
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Component
-import java.awt.KeyboardFocusManager
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
+import javax.swing.JComponent
 import javax.swing.JMenuItem
 import javax.swing.JPanel
 import javax.swing.JPopupMenu
 import javax.swing.JTree
-import javax.swing.SwingUtilities
+import javax.swing.event.TreeExpansionEvent
+import javax.swing.event.TreeExpansionListener
 import javax.swing.tree.DefaultMutableTreeNode
 import javax.swing.tree.DefaultTreeModel
 import javax.swing.tree.TreeCellRenderer
@@ -111,6 +103,7 @@ class MarginalisToolWindowFactory : ToolWindowFactory, DumbAware {
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         val panel = MarginalisToolWindowPanel(project)
         val content = ContentFactory.getInstance().createContent(panel, "", false)
+        content.preferredFocusableComponent = panel.preferredFocus
         Disposer.register(content, panel)
         toolWindow.contentManager.addContent(content)
         val common = CommonActionsManager.getInstance()
@@ -121,10 +114,10 @@ class MarginalisToolWindowFactory : ToolWindowFactory, DumbAware {
                 common.createPrevOccurenceAction(panel),
                 common.createNextOccurenceAction(panel),
                 LastStepAction(panel),
-                ExpandSectionAction(panel),
-                CollapseSectionAction(panel),
+                ExpandLevelAction(panel),
+                CollapseLevelAction(panel),
                 FilterMenuAction(panel),
-                SelectOpenedThreadAction(panel),
+                ActionManager.getInstance().getAction(SelectOpenedThreadAction.ID),
                 GuidedLayoutMenuAction(panel),
                 AgentPresenceGroup(),
                 SubmitRoundAction(),
@@ -178,28 +171,28 @@ private class LastStepAction(private val panel: MarginalisToolWindowPanel) :
     override fun actionPerformed(e: AnActionEvent) = panel.goLast()
 }
 
-private class ExpandSectionAction(private val panel: MarginalisToolWindowPanel) :
+private class ExpandLevelAction(private val panel: MarginalisToolWindowPanel) :
     AnAction("Expand", "Expand the selected folder; each press one level further out, then every section", AllIcons.Actions.Expandall) {
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
 
     override fun update(e: AnActionEvent) {
-        e.presentation.isEnabled = panel.hasSections()
-        e.presentation.text = panel.expandText()
+        e.presentation.isEnabled = panel.canExpand()
+        e.presentation.text = "Expand ${panel.nextExpandLevel()}"
     }
 
-    override fun actionPerformed(e: AnActionEvent) = panel.expandStep()
+    override fun actionPerformed(e: AnActionEvent) = panel.expandNextLevel()
 }
 
-private class CollapseSectionAction(private val panel: MarginalisToolWindowPanel) :
+private class CollapseLevelAction(private val panel: MarginalisToolWindowPanel) :
     AnAction("Collapse", "Collapse the selected folder; each press one level further out, then every section", AllIcons.Actions.Collapseall) {
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
 
     override fun update(e: AnActionEvent) {
-        e.presentation.isEnabled = panel.hasSections()
-        e.presentation.text = panel.collapseText()
+        e.presentation.isEnabled = panel.canCollapse()
+        e.presentation.text = "Collapse ${panel.nextCollapseLevel()}"
     }
 
-    override fun actionPerformed(e: AnActionEvent) = panel.collapseStep()
+    override fun actionPerformed(e: AnActionEvent) = panel.collapseNextLevel()
 }
 
 internal enum class TreeFilter(
@@ -233,58 +226,6 @@ private class FilterMenuAction(private val panel: MarginalisToolWindowPanel) :
                 }
             })
         }
-    }
-}
-
-private class SelectOpenedThreadAction(private val panel: MarginalisToolWindowPanel) :
-    AnAction("Select Opened Thread", "Select the thread on the caret's line, else the open file", AllIcons.General.Locate),
-    DumbAware {
-    override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
-
-    override fun update(e: AnActionEvent) {
-        e.presentation.isEnabled = e.project?.let { focusedThread(it) ?: editorInFront(it) } != null
-    }
-
-    override fun actionPerformed(e: AnActionEvent) {
-        val project = e.project ?: return
-        focusedThread(project)?.let { return panel.reveal(it) }
-        val editor = editorInFront(project) ?: return
-        val file = projectPathOf(project, editor) ?: return
-        val caretLine = editor.caretModel.logicalPosition.line
-        val store = MarginalisStore.getInstance(project)
-        store.syncLines()
-        val lineOf = editor.getUserData(ThreadInlayManager.THREAD_LINE) ?: { thread: CommentThread -> thread.line }
-        val onLine = store.threads.all().filter { it.file == file && lineOf(it) == caretLine }
-        val thread = onLine.firstOrNull { it.status is ThreadStatus.Open } ?: onLine.firstOrNull()
-        if (thread != null) panel.reveal(thread) else panel.selectFile(file)
-    }
-
-    // Typing a reply is reading that thread, wherever the code's caret is: an editor, a diff or the Margin tab.
-    private fun focusedThread(project: Project): CommentThread? {
-        // With the IDE in the background there is no focus owner, only the frame's last one.
-        val focused = KeyboardFocusManager.getCurrentKeyboardFocusManager().focusOwner
-            ?: WindowManager.getInstance().getFrame(project)?.mostRecentFocusOwner
-            ?: return null
-        val threadPanel = ComponentUtil.getParentOfType(ThreadPanel::class.java, focused) ?: return null
-        return MarginalisStore.getInstance(project).threads.byId(threadPanel.threadId)
-    }
-
-    // A diff in an editor tab is no text editor to the file editor manager, so look for its side showing a project file.
-    private fun editorInFront(project: Project): Editor? {
-        val manager = FileEditorManager.getInstance(project)
-        manager.selectedTextEditor?.let { return it }
-        val front = manager.selectedEditor?.component ?: return null
-        val sides = EditorFactory.getInstance().allEditors.filter { editor ->
-            SwingUtilities.isDescendingFrom(editor.component, front) && projectPathOf(project, editor) != null
-        }
-        return sides.firstOrNull { it.contentComponent.hasFocus() } ?: sides.firstOrNull()
-    }
-
-    // A review diff's editor holds a revision's copy of the file, so only its tag names the file it shows.
-    private fun projectPathOf(project: Project, editor: Editor): String? {
-        editor.getUserData(ReviewDiffMarkers.PROJECT_PATH)?.let { return it }
-        val vFile = FileDocumentManager.getInstance().getFile(editor.document) ?: return null
-        return project.guessProjectDir()?.let { VfsUtilCore.getRelativePath(vFile, it) }
     }
 }
 
@@ -380,16 +321,20 @@ private sealed class NodeData {
 
     /** [steps]: set for a run of consecutive project-level walkthrough steps in a step-number list, which may recur. */
     class ProjectNode(val count: Int, val steps: IntRange? = null) : NodeData() {
-        override val keyAcrossRebuilds get() = "project" + (steps?.let { "@${it.first}" } ?: "")
+        override val keyAcrossRebuilds get() = Opened.ProjectThreads.keyAcrossRebuilds + steps.keySuffix
     }
 
-    class DirNode(val name: String, val count: Int) : NodeData() {
-        override val keyAcrossRebuilds get() = "dir:$name"
+    class DirNode(val name: String, val path: String, val count: Int) : NodeData() {
+        override val keyAcrossRebuilds get() = keyOf(path)
+
+        val keysOfItsFolders get() = path.split('/').runningReduce { parent, child -> "$parent/$child" }.map(::keyOf)
+
+        private fun keyOf(path: String) = "dir:$path"
     }
 
     /** [steps]: set for a run of consecutive walkthrough steps in a step-number list, where the file may recur. */
-    class FileNode(val name: String, val threads: List<CommentThread>, val steps: IntRange? = null) : NodeData() {
-        override val keyAcrossRebuilds get() = "file:$name" + (steps?.let { "@${it.first}" } ?: "")
+    class FileNode(val name: String, val path: String, val threads: List<CommentThread>, val steps: IntRange? = null) : NodeData() {
+        override val keyAcrossRebuilds get() = Opened.File(path).keyAcrossRebuilds + steps.keySuffix
     }
 
     /** [showFile]: the row names its file, for a list that has no file nodes above it. */
@@ -398,15 +343,37 @@ private sealed class NodeData {
         val walkthroughPrefix: String? = null,
         val showFile: Boolean = false,
     ) : NodeData() {
-        override val keyAcrossRebuilds get() = "thread:${thread.id}"
+        override val keyAcrossRebuilds get() = Opened.MarginThread(thread.id).keyAcrossRebuilds
     }
+
+    fun lists(target: Opened): Boolean = when (target) {
+        is Opened.MarginThread -> this is ThreadNode && thread.id == target.id
+        is Opened.File -> this is FileNode && path == target.path
+        Opened.ProjectThreads -> this is ProjectNode
+    }
+}
+
+private val IntRange?.keySuffix: String get() = this?.let { "@${it.first}" } ?: ""
+
+private val Opened.keyAcrossRebuilds: String
+    get() = when (this) {
+        is Opened.MarginThread -> "thread:$id"
+        is Opened.File -> "file:$path"
+        Opened.ProjectThreads -> "project"
+    }
+
+internal sealed class Revealed(val why: String?) {
+    data object Selected : Revealed(null)
+    data object FilterReset : Revealed("Showing all threads: your filter was hiding this one.")
+    class NotListed(why: String) : Revealed(why)
 }
 
 internal class MarginalisToolWindowPanel(private val project: Project) :
     JPanel(BorderLayout()), UiDataProvider, OccurenceNavigator, Disposable {
 
-    private val tree = Tree()
+    private val tree = Tree(DefaultTreeModel(DefaultMutableTreeNode()))
     private val renderer = MarginalisTreeRenderer()
+    private val expandedByBranch = mutableMapOf<Pair<String, String>, Boolean>()
 
     /** Must be declared before init: init calls rebuild(), which reads it. */
     var filter: TreeFilter = TreeFilter.ALL
@@ -427,6 +394,11 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
         tree.showsRootHandles = true
         tree.cellRenderer = renderer
         tree.emptyText.text = "No margin threads yet"
+        tree.addTreeExpansionListener(object : TreeExpansionListener {
+            override fun treeExpanded(event: TreeExpansionEvent) = remember(event.path, expanded = true)
+
+            override fun treeCollapsed(event: TreeExpansionEvent) = remember(event.path, expanded = false)
+        })
         tree.addMouseListener(object : MouseAdapter() {
             override fun mouseClicked(e: MouseEvent) {
                 if (e.clickCount == 2) selectedThread()?.let { navigateTo(it) }
@@ -467,33 +439,49 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
         }
     }
 
-    fun selectFile(file: String) {
-        val root = tree.model.root as? DefaultMutableTreeNode ?: return
-        val node = root.preorderEnumeration().asSequence()
-            .filterIsInstance<DefaultMutableTreeNode>()
-            .firstOrNull { candidate ->
-                (candidate.userObject as? NodeData.FileNode)?.threads?.any { it.file == file } == true
-            } ?: return
-        val path = TreePath(node.path)
-        tree.selectionPath = path
-        tree.scrollPathToVisible(path)
+    val preferredFocus: JComponent get() = tree
+
+    fun reveal(target: Opened): Revealed {
+        if (!target.isListedIn(MarginalisStore.getInstance(project).threads.all())) return Revealed.NotListed(notListed(target))
+        var revealed: Revealed = Revealed.Selected
+        val node = nodeOf(target)
+            ?: run {
+                rebuild()
+                nodeOf(target)
+            }
+            ?: run {
+                if (filter == TreeFilter.ALL) return Revealed.NotListed(notListed(target))
+                filter = TreeFilter.ALL
+                revealed = Revealed.FilterReset
+                nodeOf(target)
+            }
+            ?: return Revealed.NotListed(notListed(target))
+        tree.expandPath(TreePath(node.path).parentPath)
+        show(node)
+        return revealed
     }
 
-    /** Selects [thread] where the tree lists it: a walkthrough step in its Guided section, any other in its own. */
-    fun reveal(thread: CommentThread) {
-        if (!filter.matches(thread)) filter = TreeFilter.ALL
-        val root = tree.model.root as? DefaultMutableTreeNode ?: return
-        val threadKey = NodeData.ThreadNode(thread).keyAcrossRebuilds
-        val node = root.children().asSequence().filterIsInstance<DefaultMutableTreeNode>()
-            .sortedBy { section -> if ((section.userObject as NodeData.Section).walksByStepNumber == (thread.order != null)) 0 else 1 }
+    private fun nodeOf(target: Opened): DefaultMutableTreeNode? =
+        sections(treeRoot)
+            .sortedByDescending { (it.userObject as NodeData.Section).walksByStepNumber }
             .firstNotNullOfOrNull { section ->
                 section.preorderEnumeration().asSequence().filterIsInstance<DefaultMutableTreeNode>()
-                    .firstOrNull { it.keyAcrossRebuilds == threadKey }
-            } ?: return
+                    .firstOrNull { (it.userObject as? NodeData)?.lists(target) == true }
+            }
+
+    private fun notListed(target: Opened): String = when (target) {
+        is Opened.File -> "No margin threads in ${target.path.substringAfterLast('/')}."
+        is Opened.MarginThread -> "That thread is no longer in the margin."
+        Opened.ProjectThreads -> "No project threads yet."
+    }
+
+    private fun sections(root: DefaultMutableTreeNode): Sequence<DefaultMutableTreeNode> =
+        root.children().asSequence().filterIsInstance<DefaultMutableTreeNode>()
+
+    private fun show(node: DefaultMutableTreeNode) {
         val path = TreePath(node.path)
         tree.selectionPath = path
         tree.scrollPathToVisible(path)
-        tree.requestFocusInWindow()
     }
 
     private fun selectedThread(): CommentThread? {
@@ -640,9 +628,7 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
     }
 
     private fun goTo(node: DefaultMutableTreeNode) {
-        val path = TreePath(node.path)
-        tree.selectionPath = path
-        tree.scrollPathToVisible(path)
+        show(node)
         (node.userObject as? NodeData.ThreadNode)?.thread?.let { navigateTo(it) }
     }
 
@@ -681,120 +667,123 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
     }
 
     // Any thread change rebuilds the tree, and opening a step is one (it marks the step read); step navigation
-    // walks from the selection, and folders the user folded must stay folded, so both are carried over by key.
+    // walks from the selection, so it is carried over by key.
     fun rebuild() {
         val selection = (tree.lastSelectedPathComponent as? DefaultMutableTreeNode)?.let(::keyPath)
-        val wasExpanded = branchStates()
+        val selectionInView = tree.selectionPath?.let(::isInView) == true
         val store = MarginalisStore.getInstance(project)
         store.syncLines()
-        val threads = store.threads.all().filter(filter.matches)
+        val allThreads = store.threads.all()
         tree.emptyText.text = filter.empty
         renderer.faces = Authors.faces
 
+        val root = treeOf(allThreads.filter(filter.matches))
+        forgetFoldsMissingFrom(if (filter == TreeFilter.ALL) root else treeOf(allThreads))
+        tree.model = DefaultTreeModel(root)
+        restoreFolds(root)
+        selection?.let { restoreSelection(it, keepInView = selectionInView) }
+    }
+
+    private fun treeOf(threads: List<CommentThread>): DefaultMutableTreeNode {
         val root = DefaultMutableTreeNode()
         addGuidedSection(root, threads)
         addTreeSection(root, "Open", threads.filter { it.status is ThreadStatus.Open })
         addTreeSection(root, "Orphaned", threads.filter { it.status is ThreadStatus.Orphaned })
         addTreeSection(root, "Resolved", threads.filter { it.status is ThreadStatus.Resolved })
-
-        tree.model = DefaultTreeModel(root)
-        restoreExpansion(root, wasExpanded)
-        selection?.let(::restoreSelection)
+        return root
     }
+
+    private fun isInView(path: TreePath): Boolean =
+        tree.getPathBounds(path)?.let { tree.visibleRect.intersects(it) } == true
 
     private val DefaultMutableTreeNode.keyAcrossRebuilds get() = (userObject as NodeData).keyAcrossRebuilds
 
     private fun keyPath(node: DefaultMutableTreeNode): List<String> =
         node.path.drop(1).map { (it as DefaultMutableTreeNode).keyAcrossRebuilds }
 
-    /** Expanded or not, per branch node of the current tree; empty before the first build (the stock model). */
-    private fun branchStates(): Map<List<String>, Boolean> {
-        val root = tree.model.root as? DefaultMutableTreeNode ?: return emptyMap()
-        return root.preorderEnumeration().asSequence().filterIsInstance<DefaultMutableTreeNode>().drop(1)
-            .filter { !it.isLeaf && it.userObject is NodeData }
-            .associate { keyPath(it) to tree.isExpanded(TreePath(it.path)) }
+    private val DefaultMutableTreeNode.branchKey get() = (path[1] as DefaultMutableTreeNode).keyAcrossRebuilds to keyAcrossRebuilds
+
+    private fun DefaultMutableTreeNode.branches(): List<DefaultMutableTreeNode> =
+        preorderEnumeration().asSequence().filterIsInstance<DefaultMutableTreeNode>().filter { !it.isLeaf }.toList()
+
+    private val treeRoot: DefaultMutableTreeNode get() = tree.model.root as DefaultMutableTreeNode
+
+    private fun isExpanded(node: DefaultMutableTreeNode): Boolean = tree.isExpanded(TreePath(node.path))
+
+    private fun remember(path: TreePath, expanded: Boolean) {
+        val node = path.lastPathComponent as DefaultMutableTreeNode
+        if (node.userObject is NodeData) expandedByBranch[node.branchKey] = expanded
     }
 
-    /** A branch seen before keeps its state; a new one opens unless it is under Resolved. */
-    private fun restoreExpansion(root: DefaultMutableTreeNode, wasExpanded: Map<List<String>, Boolean>) {
-        val branches = root.preorderEnumeration().asSequence().filterIsInstance<DefaultMutableTreeNode>().drop(1)
-            .filter { !it.isLeaf }
-            .toList()
-        val (open, folded) = branches.partition { node ->
-            val section = (node.path[1] as DefaultMutableTreeNode).userObject as NodeData.Section
-            wasExpanded[keyPath(node)] ?: (section.title != "Resolved")
+    private fun forgetFoldsMissingFrom(everyThread: DefaultMutableTreeNode) {
+        expandedByBranch.keys.retainAll(sections(everyThread).flatMap { it.branches() }.flatMap(::foldKeysWorthKeeping).toSet())
+    }
+
+    private fun foldKeysWorthKeeping(branch: DefaultMutableTreeNode): List<Pair<String, String>> {
+        val section = branch.branchKey.first
+        val folder = branch.userObject as? NodeData.DirNode ?: return listOf(branch.branchKey)
+        return folder.keysOfItsFolders.map { section to it }
+    }
+
+    private fun restoreFolds(root: DefaultMutableTreeNode) {
+        val (open, folded) = sections(root).flatMap { it.branches() }.partition { node ->
+            expandedByBranch[node.branchKey] ?: !isUnderResolved(node)
         }
         open.forEach { tree.expandPath(TreePath(it.path)) }
-        // Deepest first: expanding a child opened its parents, and a folded parent keeps its children's state.
-        folded.sortedByDescending { it.level }.forEach { tree.collapsePath(TreePath(it.path)) }
+        collapseDeepestFirst(folded)
     }
 
-    private fun sections(): List<DefaultMutableTreeNode> =
-        (tree.model.root as? DefaultMutableTreeNode)?.children()?.asSequence()
-            ?.filterIsInstance<DefaultMutableTreeNode>()?.toList().orEmpty()
+    private fun isUnderResolved(node: DefaultMutableTreeNode): Boolean =
+        ((node.path[1] as DefaultMutableTreeNode).userObject as NodeData.Section).title == "Resolved"
 
-    /** The folders and the section around the selection, innermost first; files are not a level of their own. */
-    private fun levelsAroundSelection(): List<DefaultMutableTreeNode> {
+    // JTree expands every parent of a path it expands or collapses.
+    private fun collapseDeepestFirst(branches: List<DefaultMutableTreeNode>) =
+        branches.sortedByDescending { it.level }.forEach { tree.collapsePath(TreePath(it.path)) }
+
+    private fun levelsOutFromSelection(): List<DefaultMutableTreeNode> {
         val selected = tree.lastSelectedPathComponent as? DefaultMutableTreeNode ?: return emptyList()
         return selected.path.reversed().filterIsInstance<DefaultMutableTreeNode>().filter {
             it.userObject is NodeData.DirNode || it.userObject is NodeData.ProjectNode || it.userObject is NodeData.Section
         }
     }
 
-    private fun isFullyExpanded(node: DefaultMutableTreeNode): Boolean =
-        node.preorderEnumeration().asSequence().filterIsInstance<DefaultMutableTreeNode>()
-            .all { it.isLeaf || tree.isExpanded(TreePath(it.path)) }
+    private fun isFullyExpanded(node: DefaultMutableTreeNode): Boolean = node.branches().all(::isExpanded)
 
-    // Each press works one level further out from the selection, then on every section (a null target).
-    private fun collapseTarget(): DefaultMutableTreeNode? =
-        levelsAroundSelection().firstOrNull { tree.isExpanded(TreePath(it.path)) }
+    private fun collapseTarget(): DefaultMutableTreeNode? = levelsOutFromSelection().firstOrNull(::isExpanded)
 
-    private fun expandTarget(): DefaultMutableTreeNode? = levelsAroundSelection().firstOrNull { !isFullyExpanded(it) }
+    private fun expandTarget(): DefaultMutableTreeNode? = levelsOutFromSelection().firstOrNull { !isFullyExpanded(it) }
 
-    fun collapseText(): String = "Collapse ${scopeOf(collapseTarget())}"
+    fun nextCollapseLevel(): String = levelName(collapseTarget())
 
-    fun expandText(): String = "Expand ${scopeOf(expandTarget())}"
+    fun nextExpandLevel(): String = levelName(expandTarget())
 
-    private fun scopeOf(target: DefaultMutableTreeNode?): String = when (target?.userObject) {
+    private fun levelName(target: DefaultMutableTreeNode?): String = when (target?.userObject) {
         null -> "All Sections"
         is NodeData.Section -> "Section"
+        is NodeData.ProjectNode -> "Project"
         else -> "Folder"
     }
 
-    fun hasSections(): Boolean = sections().isNotEmpty()
+    fun canCollapse(): Boolean = collapseTarget() != null || sections(treeRoot).any(::isExpanded)
 
-    fun collapseStep() {
+    fun canExpand(): Boolean = expandTarget() != null || sections(treeRoot).any { !isFullyExpanded(it) }
+
+    fun collapseNextLevel() {
         val target = collapseTarget()
-        if (target == null) {
-            sections().forEach(::collapseRecursively)
-            return
-        }
-        collapseRecursively(target)
-        // The next press starts from here, one level further out.
-        tree.selectionPath = TreePath(target.path)
+        if (target == null) sections(treeRoot).forEach(::collapseRecursively) else collapseRecursively(target)
     }
 
-    fun expandStep() {
+    fun expandNextLevel() {
         val target = expandTarget()
-        if (target == null) {
-            sections().forEach(::expandRecursively)
-            return
-        }
-        expandRecursively(target)
+        if (target == null) sections(treeRoot).forEach(::expandRecursively) else expandRecursively(target)
     }
 
-    // Like IntelliJ's Collapse All: reopening the node shows one level, not the folders as they were left.
-    private fun collapseRecursively(node: DefaultMutableTreeNode) {
-        node.preorderEnumeration().asSequence().filterIsInstance<DefaultMutableTreeNode>()
-            .filter { !it.isLeaf }
-            .sortedByDescending { it.level }
-            .forEach { tree.collapsePath(TreePath(it.path)) }
-    }
+    private fun collapseRecursively(node: DefaultMutableTreeNode) = collapseDeepestFirst(node.branches())
 
-    private fun restoreSelection(keyPath: List<String>) {
+    private fun restoreSelection(keyPath: List<String>, keepInView: Boolean) {
         val root = tree.model.root as DefaultMutableTreeNode
         val node = nodeAt(root, keyPath) ?: sameThreadInSameSection(root, keyPath) ?: return
-        tree.selectionPath = TreePath(node.path)
+        if (keepInView) show(node) else tree.selectionPath = TreePath(node.path)
     }
 
     private fun nodeAt(root: DefaultMutableTreeNode, keyPath: List<String>): DefaultMutableTreeNode? =
@@ -854,7 +843,7 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
             val stepRange = run.first().order!!..run.last().order!!
             val file = run.first().file
             val runNode = DefaultMutableTreeNode(
-                if (file == null) NodeData.ProjectNode(run.size, stepRange) else NodeData.FileNode(file, run, stepRange),
+                if (file == null) NodeData.ProjectNode(run.size, stepRange) else NodeData.FileNode(file, file, run, stepRange),
             )
             run.forEach { step -> runNode.add(DefaultMutableTreeNode(NodeData.ThreadNode(step, prefixFor(step)))) }
             section.add(runNode)
@@ -864,7 +853,7 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
     private fun addFileList(section: DefaultMutableTreeNode, steps: List<CommentThread>, prefixFor: (CommentThread) -> String) {
         val byFile = steps.groupBy { it.file!! }.entries.sortedBy { (_, fileSteps) -> fileSteps.minOf { it.order!! } }
         for ((path, fileSteps) in byFile) {
-            val fileNode = DefaultMutableTreeNode(NodeData.FileNode(path, fileSteps))
+            val fileNode = DefaultMutableTreeNode(NodeData.FileNode(path, path, fileSteps))
             for (step in fileSteps.sortedWith(Walkthrough.byStepNumber)) {
                 fileNode.add(DefaultMutableTreeNode(NodeData.ThreadNode(step, prefixFor(step))))
             }
@@ -902,6 +891,7 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
         trie: PathTrie,
         parent: DefaultMutableTreeNode,
         prefixFor: ((CommentThread) -> String)? = null,
+        folder: String = "",
     ) {
         val dirEntries =
             if (prefixFor != null) trie.dirs.entries.sortedBy { it.value.minOrder() }
@@ -914,9 +904,10 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
                 display = "$display/$nextName"
                 node = next
             }
-            val dirTreeNode = DefaultMutableTreeNode(NodeData.DirNode(display, node.threadCount()))
+            val path = folder + display
+            val dirTreeNode = DefaultMutableTreeNode(NodeData.DirNode(display, path, node.threadCount()))
             parent.add(dirTreeNode)
-            emitTrie(node, dirTreeNode, prefixFor)
+            emitTrie(node, dirTreeNode, prefixFor, folder = "$path/")
         }
         val fileEntries =
             if (prefixFor != null) {
@@ -925,7 +916,7 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
                 trie.files.entries.toList()
             }
         for ((fileName, fileThreads) in fileEntries) {
-            val fileNode = DefaultMutableTreeNode(NodeData.FileNode(fileName, fileThreads))
+            val fileNode = DefaultMutableTreeNode(NodeData.FileNode(fileName, folder + fileName, fileThreads))
             val ordered =
                 if (prefixFor != null) fileThreads.sortedWith(Walkthrough.byStepNumber)
                 else fileThreads.sortedWith(ThreadOrder.byAnchor)
