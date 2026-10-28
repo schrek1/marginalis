@@ -101,6 +101,9 @@ History before 0.1.19 lives in git tags.
 - Opening a project no longer freezes the IDE for up to 30 seconds
   while the Margin tab comes back. The tab now appears right away and
   finishes loading in the background.
+- A thread's header stays readable in a narrow panel, such as one side of a
+  review diff: the status text ends in "…" instead of running under the
+  step buttons, and the buttons that don't fit move behind › at the end.
 - Thread previews keep the names you wrote. A thread that mentions
   `legacy_helper` no longer reads "legacyhelper" in the tool window, the
   notification or the Margin tab; only the Markdown markers around words
