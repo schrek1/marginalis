@@ -52,4 +52,19 @@ class PluginErrorsTest {
         // THEN - nothing is reported
         errors.shouldBeEmpty()
     }
+
+    @Test
+    fun `only the errors written since a moment are reported when one is given`() {
+        // GIVEN - a plugin error from an earlier run and one written after the moment
+        val log = """
+            2026-10-28 06:40:00,000 [   1000]  ERROR - #dev.marginalis.plugin.ui.AvatarIcon - from an earlier run
+            2026-10-28 06:48:56,900 [  14819]  ERROR - #dev.marginalis.plugin.ui.AvatarIcon - during the update
+        """.trimIndent().lines()
+
+        // WHEN - the log is read since the update started
+        val errors = PluginErrors.inLog(log, since = "2026-10-28 06:48:55,000")
+
+        // THEN - only the later entry is reported
+        errors shouldContainExactly listOf(log[1])
+    }
 }
