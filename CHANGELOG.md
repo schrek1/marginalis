@@ -86,6 +86,10 @@ History before 0.1.19 lives in git tags.
 - Opening a project no longer freezes the IDE for up to 30 seconds
   while the Margin tab comes back. The tab now appears right away and
   finishes loading in the background.
+- Thread previews keep the names you wrote. A thread that mentions
+  `legacy_helper` no longer reads "legacyhelper" in the tool window, the
+  notification or the Margin tab; only the Markdown markers around words
+  go.
 
 ## [0.2.7] - 2026-10-22
 
