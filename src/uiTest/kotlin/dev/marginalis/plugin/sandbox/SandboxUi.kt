@@ -548,17 +548,20 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
         }
 
     /** Edits the file's document as typing does: one undoable command, through the editor's document. */
+    // From a background call: the robot's own EDT script is a raw Swing event, which TransactionGuard holds write-unsafe.
+    // Its report is only logged as a rule, but an IDE whose logger still is the bootstrap DefaultLogger throws it.
     private fun editDocument(file: String, change: String) {
-        js(
-            EDITORS + """
-            var document = textEditorOf('$file').getDocument();
+        Sandbox.robot.callJs(
+            PRELUDE + EDITORS + """
             com.intellij.openapi.application.ApplicationManager.getApplication().invokeAndWait(new java.lang.Runnable({ run: function () {
+                var document = textEditorOf('$file').getDocument();
                 com.intellij.openapi.command.WriteCommandAction.runWriteCommandAction(project, new java.lang.Runnable({ run: function () {
                     $change
                 } }));
-            } }));
+            } }), com.intellij.openapi.application.ModalityState.nonModal());
             String(true)
             """,
+            edt = false,
         )
     }
 
