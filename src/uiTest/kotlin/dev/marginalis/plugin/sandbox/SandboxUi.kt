@@ -729,6 +729,147 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
         )
     }
 
+    // --- long threads -------------------------------------------------------------------------------------------
+
+    private const val MESSAGES = """
+function folded(c) { return c.getClass().getName() == 'dev.marginalis.plugin.ui.FoldedMessageRow'; }
+function paneText(pane) { var doc = pane.getDocument(); return String(doc.getText(0, doc.getLength())).trim(); }
+function messagePane(root, opening) {
+    return find(root, function (c) {
+        return c instanceof javax.swing.JEditorPane && !c.isEditable() && paneText(c).indexOf(opening) == 0;
+    });
+}
+"""
+
+    /** The opening lines of the thread's folded messages, top to bottom (a stacked run shows none). */
+    fun foldedLines(threadId: String): List<String> = stringList(
+        js(
+            FIND + MESSAGES + """
+            var lines = [];
+            find(component, function (c) {
+                if (folded(c) && c.isVisible()) lines.push(String(c.getOpeningLine()));
+                return false;
+            });
+            String(JSON.stringify(lines))
+            """,
+            threadPanel(threadId),
+        ),
+    )
+
+    /** The links that reveal a stacked run of folded messages, e.g. "Show 4 more messages". */
+    fun stackLinks(threadId: String): List<String> = stringList(
+        js(
+            FIND + """
+            var links = [];
+            find(component, function (c) {
+                if (c instanceof com.intellij.ui.components.ActionLink && c.isVisible() && /more messages?$/.test(String(c.getText())))
+                    links.push(String(c.getText()));
+                return false;
+            });
+            String(JSON.stringify(links))
+            """,
+            threadPanel(threadId),
+        ),
+    )
+
+    /** Clicks the arrow beside the message that starts with [opening]: folds it when open, opens it when folded. */
+    fun toggleMessage(threadId: String, opening: String) {
+        js(
+            FIND + MESSAGES + """
+            function textAround(toggle) {
+                for (var c = toggle.getParent(); c != null; c = c.getParent()) {
+                    if (folded(c)) return String(c.getOpeningLine());
+                    var pane = find(c, function (p) { return p instanceof javax.swing.JEditorPane && !p.isEditable(); });
+                    if (pane != null) return paneText(pane);
+                }
+                return '';
+            }
+            var toggle = find(component, function (c) {
+                var name = c.getAccessibleContext() == null ? '' : String(c.getAccessibleContext().getAccessibleName());
+                return c instanceof com.intellij.ui.components.ActionLink && c.isVisible()
+                    && (name == 'Fold Message' || name == 'Expand Message') && textAround(c).indexOf(${lit(opening)}) == 0;
+            });
+            if (toggle == null) throw 'no fold arrow beside ' + ${lit(opening)};
+            toggle.doClick();
+            String(true)
+            """,
+            threadPanel(threadId),
+        )
+    }
+
+    /** Scrolls the file's editor so the thread's open message that starts with [opening] sits near the top of the view. */
+    fun scrollEditorToMessage(file: String, threadId: String, opening: String) {
+        js(
+            EDITORS + FIND + MESSAGES + """
+            var editor = textEditorOf('$file');
+            var pane = messagePane(component, ${lit(opening)});
+            if (pane == null) throw 'no open message starts with ' + ${lit(opening)};
+            var scrolling = editor.getScrollingModel();
+            scrolling.disableAnimation();
+            scrolling.scrollVertically(javax.swing.SwingUtilities.convertPoint(pane, 0, 0, editor.getContentComponent()).y - 40);
+            scrolling.enableAnimation();
+            String(true)
+            """,
+            threadPanel(threadId),
+        )
+    }
+
+    /** Scrolls the file's editor so the bottom of the thread's panel sits at the bottom of the view. */
+    fun scrollEditorToThreadEnd(file: String, threadId: String) {
+        js(
+            EDITORS + """
+            var editor = textEditorOf('$file');
+            var scrolling = editor.getScrollingModel();
+            var bottom = javax.swing.SwingUtilities.convertPoint(component, 0, component.getHeight(), editor.getContentComponent()).y;
+            scrolling.disableAnimation();
+            scrolling.scrollVertically(Math.max(0, bottom - scrolling.getVisibleArea().height));
+            scrolling.enableAnimation();
+            String(true)
+            """,
+            threadPanel(threadId),
+        )
+    }
+
+    data class ThreadInView(val messageTop: Int, val panelBottom: Int, val viewHeight: Int)
+
+    /**
+     * Where the thread's open message that starts with [opening] and the panel's bottom edge sit, in pixels from the top
+     * of the file's editor view.
+     */
+    fun threadInView(file: String, threadId: String, opening: String): ThreadInView {
+        val view = obj(
+            js(
+                EDITORS + FIND + MESSAGES + """
+                var editor = textEditorOf('$file');
+                var content = editor.getContentComponent();
+                var visible = editor.getScrollingModel().getVisibleArea();
+                var pane = messagePane(component, ${lit(opening)});
+                if (pane == null) throw 'no open message starts with ' + ${lit(opening)};
+                String(JSON.stringify({
+                    messageTop: javax.swing.SwingUtilities.convertPoint(pane, 0, 0, content).y - visible.y,
+                    panelBottom: javax.swing.SwingUtilities.convertPoint(component, 0, component.getHeight(), content).y - visible.y,
+                    viewHeight: visible.height
+                }))
+                """,
+                threadPanel(threadId),
+            ),
+        )
+        return ThreadInView(view.get("messageTop").asInt, view.get("panelBottom").asInt, view.get("viewHeight").asInt)
+    }
+
+    /** Sets Settings → Marginalis → how long threads open, by its stored name (e.g. `FOLD_NOTHING`). */
+    fun chooseLongThreadFolding(stored: String) {
+        js(
+            """
+            var settings = com.intellij.openapi.application.ApplicationManager.getApplication()
+                .getService(pluginLoader.loadClass('dev.marginalis.plugin.settings.MarginalisSettings'));
+            var choice = pluginLoader.loadClass('dev.marginalis.core.LongThreadFolding').getField(${lit(stored)}).get(null);
+            settings.setLongThreadFolding(choice);
+            String(true)
+            """,
+        )
+    }
+
     data class WordBox(val top: Double, val bottom: Double, val paneTop: Double)
 
     data class WordBoxes(val boxes: Map<String, WordBox>, val html: String?) {

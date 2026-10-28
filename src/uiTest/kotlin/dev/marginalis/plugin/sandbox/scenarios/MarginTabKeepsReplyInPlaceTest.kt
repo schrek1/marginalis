@@ -30,6 +30,8 @@ class MarginTabKeepsReplyInPlaceTest : SandboxScenario("margin_tab_keeps_reply_i
     @Test
     @Order(1)
     fun threeTallThreads() = case("three_tall_threads") {
+        // Each new message must make the thread above taller; folding the read ones before it would shrink it instead.
+        SandboxUi.chooseLongThreadFolding("FOLD_NOTHING")
         val created = listOf("one" to 30, "two" to 12, "three" to 30).map { (name, paragraphs) ->
             Agent.agentStartsProjectThread(tallBody("Thread $name", paragraphs))
         }
