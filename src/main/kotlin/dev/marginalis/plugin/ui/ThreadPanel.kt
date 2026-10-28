@@ -15,6 +15,7 @@ import com.intellij.openapi.actionSystem.IdeActions
 import com.intellij.openapi.actionSystem.KeyboardShortcut
 import com.intellij.openapi.actionSystem.Separator
 import com.intellij.openapi.actionSystem.ToggleAction
+import com.intellij.openapi.actionSystem.toolbarLayout.ToolbarLayoutStrategy
 import com.intellij.openapi.actionSystem.UiDataProvider
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationActivationListener
@@ -120,7 +121,7 @@ class ThreadPanel(
     private val messagesBox = Box.createVerticalBox()
     private val messageComponents = mutableMapOf<String, JComponent>()
     private val foldToggles = mutableMapOf<String, JComponent>()
-    private val statusLabel = JBLabel()
+    private val statusLabel = ThreadStatusLabel()
     private val liveLabel = JBLabel().apply {
         font = JBUI.Fonts.smallFont()
         border = JBUI.Borders.emptyRight(6)
@@ -314,7 +315,6 @@ class ThreadPanel(
     private fun panelWidth(): Int = hostWidth()
 
     private fun buildHeader(): JComponent {
-        val header = JPanel(BorderLayout()).apply { isOpaque = false }
         statusLabel.font = JBUI.Fonts.smallFont()
         statusLabel.foreground = UIUtil.getContextHelpForeground()
 
@@ -345,10 +345,12 @@ class ThreadPanel(
             add(buildHeaderToolbar())
         }
 
-        header.add(left, BorderLayout.WEST)
-        header.add(right, BorderLayout.EAST)
-        header.border = JBUI.Borders.emptyBottom(6)
-        return header
+        return JPanel(ThreadHeaderLayout(left, right)).apply {
+            isOpaque = false
+            add(left)
+            add(right)
+            border = JBUI.Borders.emptyBottom(6)
+        }
     }
 
     private fun toggleResolved() {
@@ -407,6 +409,7 @@ class ThreadPanel(
         val toolbar = ActionManager.getInstance().createActionToolbar("MarginalisThreadPanel", group, true)
         headerToolbar = toolbar
         toolbar.targetComponent = this
+        toolbar.layoutStrategy = ToolbarLayoutStrategy.AUTOLAYOUT_STRATEGY
         toolbar.component.isOpaque = false
         return toolbar.component
     }

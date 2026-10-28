@@ -7,6 +7,12 @@ History before 0.1.19 lives in git tags.
 
 ## [Unreleased]
 
+### Fixed
+
+- A thread's header stays readable in a narrow panel, such as one side of a
+  review diff: the status text ends in "…" instead of running under the
+  step buttons, and the buttons that don't fit move behind › at the end.
+
 ## [0.2.7] - 2026-10-22
 
 Thanks to [@schrek1](https://github.com/schrek1) for starting the long-thread work in this release.
