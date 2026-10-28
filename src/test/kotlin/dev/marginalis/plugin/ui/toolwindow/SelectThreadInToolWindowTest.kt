@@ -1,5 +1,11 @@
 package dev.marginalis.plugin.ui.toolwindow
 
+import com.intellij.openapi.editor.LogicalPosition
+import io.kotest.matchers.collections.shouldNotContain
+import io.kotest.matchers.nulls.shouldNotBeNull
+import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldStartWith
+
 class SelectThreadInToolWindowTest : ToolWindowTestCase() {
 
     private lateinit var steps: Map<Int, String>
@@ -40,20 +46,23 @@ class SelectThreadInToolWindowTest : ToolWindowTestCase() {
         assertTrue(window.selectedPath().toString(), window.selectedPath().first().startsWith("Resolved"))
     }
 
-    fun testSelectOpenedThreadSelectsTheThreadOnTheCaretsLine() {
-        user.openFile(SAMPLE, line = 5)
+    fun testSelectInMarginalisSelectsTheOpenStepWhereverTheEditorsCaretIs() {
+        // GIVEN - step 27 is open in its editor, and the caret has moved to the file's last line
+        val panel = user.open(steps.getValue(27))
+        val editor = user.editor()
+        editor.caretModel.moveToLogicalPosition(LogicalPosition(editor.document.lineCount - 1, 0))
 
-        window.press("Select Opened Thread")
+        // WHEN - the step's own Select in Marginalis is pressed
+        user.press(panel, "Select in Marginalis")
+        window.settle()
 
-        assertTrue(window.selected(), window.selected()!!.endsWith("A thread outside the walkthrough"))
+        // THEN - the step is selected in its Guided section, not the file under the caret
+        window.selected().shouldNotBeNull() shouldContain "(27/33)"
+        window.selectedPath().first() shouldStartWith "Guided SHOP-42"
     }
 
-    fun testSelectOpenedThreadOnALineWithoutAThreadSelectsTheFile() {
-        user.openFile(SAMPLE, line = 2)
-
-        window.press("Select Opened Thread")
-
-        assertTrue(window.selected(), window.selected()!!.startsWith("Sample.kt"))
+    fun testTheTitleBarHasNoSelectOpenedThreadButton() {
+        window.toolbar() shouldNotContain "Select Opened Thread"
     }
 
     private fun selectInMarginalis(threadId: String) {

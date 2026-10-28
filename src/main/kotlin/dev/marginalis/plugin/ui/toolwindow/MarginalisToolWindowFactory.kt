@@ -4,7 +4,6 @@ import com.intellij.icons.AllIcons
 import com.intellij.ide.ActivityTracker
 import com.intellij.ide.CommonActionsManager
 import com.intellij.ide.OccurenceNavigator
-import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
@@ -117,7 +116,6 @@ class MarginalisToolWindowFactory : ToolWindowFactory, DumbAware {
                 ExpandLevelAction(panel),
                 CollapseLevelAction(panel),
                 FilterMenuAction(panel),
-                ActionManager.getInstance().getAction(SelectOpenedThreadAction.ID),
                 GuidedLayoutMenuAction(panel),
                 AgentPresenceGroup(),
                 SubmitRoundAction(),

@@ -145,7 +145,7 @@ class ReviewDiffWalkthroughTest : SandboxScenario("review_diff_walkthrough") {
         check("$case: the step's thread opens there", opened, safe { ReviewDiffUi.threadIdsOpenInFileTab(file) })
     }
 
-    /** The review: also the setup of [SelectOpenedThreadInReviewDiffTest]. */
+    /** The review: also the setup of [SelectThreadInToolWindowTest] and [SelectInMarginalisTest]. */
     internal companion object {
         const val TARGET = "src/review_target.py"
         const val GREETING = "src/greeting.py"

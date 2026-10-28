@@ -20,6 +20,8 @@ import dev.marginalis.plugin.testing.NeedsADisplay
 import dev.marginalis.plugin.testing.ReviewDiff
 import dev.marginalis.plugin.testing.ReviewDiffs
 import dev.marginalis.plugin.ui.MarginalisDataKeys
+import io.kotest.matchers.collections.shouldNotContain
+import io.kotest.matchers.nulls.shouldNotBeNull
 import org.junit.runner.RunWith
 
 @RunWith(NeedsADisplay::class)
@@ -29,8 +31,9 @@ class SelectOpenedThreadTest : ToolWindowTestCase() {
         user.editor().caretModel.moveToLogicalPosition(LogicalPosition(line - 1, 0))
     }
 
-    fun testTheTitleBarActionIsTheRegisteredOneSoFindActionAndTheKeymapReachIt() {
-        assertSame(ActionManager.getInstance().getAction(SelectOpenedThreadAction.ID), window.action("Select Opened Thread"))
+    fun testTheTitleBarLeavesItOutWhileFindActionAndTheKeymapStillReachIt() {
+        window.toolbar() shouldNotContain "Select Opened Thread"
+        ActionManager.getInstance().getAction(SelectOpenedThreadAction.ID).shouldNotBeNull()
     }
 
     fun testItSelectsTheThreadOnTheCaretsLine() {
@@ -258,7 +261,7 @@ class SelectOpenedThreadTest : ToolWindowTestCase() {
         agent.addOnLine(5, "body" to "first")
         FileEditorManager.getInstance(project).let { editors -> editors.openFiles.forEach(editors::closeFile) }
 
-        assertFalse(window.isEnabled("Select Opened Thread"))
+        assertFalse(window.isSelectOpenedThreadEnabled())
     }
 
     fun testWithTheMarginTabInFrontItSelectsTheProjectNodeEvenAfterTypingInAReplyBox() {

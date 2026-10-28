@@ -275,6 +275,16 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
         return SelectIn(offered = true, file = file)
     }
 
+    /** Moves the keyboard focus into the file's open editor, as a click in its text would. */
+    fun focusEditor(file: String) {
+        js(
+            EDITORS + """
+            com.intellij.openapi.wm.IdeFocusManager.getInstance(project).requestFocus(textEditorOf('$file').getContentComponent(), true);
+            String(true)
+            """,
+        )
+    }
+
     /** Puts the caret of the file's open editor on a 1-based line, as a click there would. */
     fun moveCaret(file: String, line: Int) {
         js(

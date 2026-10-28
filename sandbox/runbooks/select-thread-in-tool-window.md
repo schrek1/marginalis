@@ -1,6 +1,6 @@
 # Find a thread in the tool window in one click
 
-- **Key:** MARG-11 (schrek1/marginalis#11)
+- **Key:** MARG-11 (schrek1/marginalis#11), MARG-171 (schrek1/marginalis#171)
 - **Scenario:** `SelectThreadInToolWindowTest`
 
 ## Protects
@@ -8,8 +8,9 @@
 - *Select in Marginalis* in a thread's header opens the tool window and selects that thread: a walkthrough step in
   its Guided section, any other thread in the section that lists it, a resolved one inside the folded Resolved
   section.
-- *Select Opened Thread* in the tool window header selects the thread on the caret's line, or the file when that
-  line has none.
+- It selects its own thread wherever the editor's caret is, and the same from a review diff and from the Margin tab.
+- The tool window header has no *Select Opened Thread*: it guessed the thread from the caret and could land on the
+  file's row in Open instead of the step. The action stays in Find Action and can take a shortcut.
 
 ## Automated
 
@@ -18,7 +19,11 @@
 - Select in Marginalis selects step 27, in its Guided section
 - a thread outside any walkthrough is selected in Open
 - a resolved thread is selected inside the folded Resolved section
-- Select Opened Thread selects the thread on the caret's line; on a line without a thread it selects the file
+- the tool window header has no Select Opened Thread
+- a step on line 1, with the caret on line 2 and the focus in the editor: Select in Marginalis selects its step, not
+  the file under the caret, in its Guided section
+- Select in Marginalis in a review diff selects its step, in its Guided section
+- Select in Marginalis in the Margin tab selects its project thread
 
 ## Manual
 
@@ -29,4 +34,5 @@
 
 ## On main
 
-Neither button exists: all four cases fail.
+Before MARG-11 neither button exists. Before MARG-171 the header still shows *Select Opened Thread*, and that case
+fails.
