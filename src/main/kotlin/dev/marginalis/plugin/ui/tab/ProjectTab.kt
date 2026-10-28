@@ -106,12 +106,11 @@ object ProjectTab {
     }
 
     // requestOpenFile returns void up to 2026.2 and a CompletableFuture from 2026.3, so a call compiled against the
-    // 2025.2 floor names a method 2026.3 no longer has. Looked up by name, it resolves on both.
-    private val requestOpenFile = FileEditorManager::class.java.getMethod("requestOpenFile", VirtualFile::class.java)
-
+    // 2025.2 floor names a method 2026.3 no longer has. Looked up by name, it resolves on both. ReflectionGuard's
+    // production exceptions name this function and when it goes.
     private fun requestOpen(editors: FileEditorManager, file: VirtualFile) {
         try {
-            requestOpenFile.invoke(editors, file)
+            FileEditorManager::class.java.getMethod("requestOpenFile", VirtualFile::class.java).invoke(editors, file)
         } catch (failure: InvocationTargetException) {
             throw failure.targetException
         }
