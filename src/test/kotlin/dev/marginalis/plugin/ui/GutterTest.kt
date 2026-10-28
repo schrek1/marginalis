@@ -44,19 +44,18 @@ class GutterTest : HttpContractTestCase() {
 
         val tooltip = tooltipAt(5)
 
-        assertTrue(tooltip, tooltip.contains("Bold code &lt;itag word"))
+        assertTrue(tooltip, tooltip.contains("Bold code &lt;i&gt;tag word"))
         assertFalse(tooltip, tooltip.contains("**"))
         assertTrue(tooltip, tooltip.contains("...<br/>"))
         assertFalse(tooltip, tooltip.contains("word ".repeat(30)))
     }
 
-    // FixMe: Known issue - #62 one-line message previews (gutter tooltip, chooser, tool window, Margin tab cards, notifications) drop every _ * # > and backtick
-    fun testTheTooltipPreviewDropsUnderscoresAndAngleBracketsFromPlainText() {
+    fun testTheTooltipPreviewKeepsUnderscoresAndAngleBracketsInPlainText() {
         sample()
         agent.addOnLine(5, "body" to "Rename max_retry_count; keep List<String> when a > b")
         settle()
 
-        assertTrue(tooltipAt(5), tooltipAt(5).contains("Rename maxretrycount; keep List&lt;String when a b"))
+        assertTrue(tooltipAt(5), tooltipAt(5).contains("Rename max_retry_count; keep List&lt;String&gt; when a &gt; b"))
     }
 
     fun testAThreadTheUserStartedNamesTheUserInTheTooltip() {

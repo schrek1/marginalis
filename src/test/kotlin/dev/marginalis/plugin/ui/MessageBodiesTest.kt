@@ -373,6 +373,30 @@ class MessageBodiesTest : HttpContractTestCase() {
         assertTrue(user.gutterIcon(SAMPLE, 5)!!.tooltipText.contains("Pick a | b, then wait ~5 minutes."))
     }
 
+    fun testAOneLinePreviewKeepsTheUnderscoresOfACodeSpan() {
+        agent.addOnLine(5, "body" to "`legacy_helper` has no callers left.")
+
+        val tooltip = user.gutterIcon(SAMPLE, 5)!!.tooltipText
+
+        assertTrue(tooltip, tooltip.contains("legacy_helper has no callers left."))
+    }
+
+    fun testAOneLinePreviewKeepsMarkdownCharactersInsideACodeSpanOrInOrdinaryProse() {
+        agent.addOnLine(5, "body" to "Free `*ptr` once, as #12 says: a > b.")
+
+        val tooltip = user.gutterIcon(SAMPLE, 5)!!.tooltipText
+
+        assertTrue(tooltip, tooltip.contains("Free *ptr once, as #12 says: a &gt; b."))
+    }
+
+    fun testAOneLinePreviewDropsTheMarkersOfEmphasisHeadingsAndQuotes() {
+        agent.addOnLine(5, "body" to "## Plan\n\n> Keep _this_ and __that__, *here* and **there**.")
+
+        val tooltip = user.gutterIcon(SAMPLE, 5)!!.tooltipText
+
+        assertTrue(tooltip, tooltip.contains("Plan Keep this and that, here and there."))
+    }
+
     fun testATableRightAfterALineOfTextStaysRawPipesUnlikeOnGitHub() {
         val body = rendered("Totals:\n| Name | Age |\n|------|-----|\n| Ann  | 3   |")
 

@@ -7,6 +7,13 @@ History before 0.1.19 lives in git tags.
 
 ## [Unreleased]
 
+### Fixed
+
+- Thread previews keep the names you wrote. A thread that mentions
+  `legacy_helper` no longer reads "legacyhelper" in the tool window, the
+  notification or the Margin tab; only the Markdown markers around words
+  go.
+
 ## [0.2.7] - 2026-10-22
 
 Thanks to [@schrek1](https://github.com/schrek1) for starting the long-thread work in this release.

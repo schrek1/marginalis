@@ -122,15 +122,26 @@ object MarkdownRenderer {
         }
         flattened.append(proseWithoutGfmSyntax(body.substring(consumedUpTo)))
         return flattened.toString()
-            .replace(Regex("[`*_#>]"), "")
             .replace(Regex("\\s+"), " ")
             .trim()
     }
+
+    private val PREVIEW_MARKERS = setOf(
+        MarkdownTokenTypes.EMPH,
+        MarkdownTokenTypes.BACKTICK,
+        MarkdownTokenTypes.ATX_HEADER,
+        MarkdownTokenTypes.BLOCK_QUOTE,
+        MarkdownTokenTypes.LIST_BULLET,
+        MarkdownTokenTypes.HORIZONTAL_RULE,
+    )
 
     private fun proseWithoutGfmSyntax(markdown: String): String =
         withoutGfmSyntax(MarkdownParser(Flavour()).buildMarkdownTreeFromString(markdown), markdown)
 
     private fun withoutGfmSyntax(node: ASTNode, markdown: String): String = when (node.type) {
+        in PREVIEW_MARKERS -> ""
+        // The parser still splits a code span's text into emphasis tokens; they are the code's own characters.
+        MarkdownElementTypes.CODE_SPAN -> markdown.substring(node.startOffset, node.endOffset).trim('`')
         GFMElementTypes.TABLE -> node.children
             .filter { it.type == GFMElementTypes.HEADER || it.type == GFMElementTypes.ROW }
             .flatMap { row -> row.children.filter { it.type == GFMTokenTypes.CELL } }
