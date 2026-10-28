@@ -10,8 +10,12 @@ object PluginErrors {
     private val ENTRY = Regex("""^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d+ \[ *\d+] +(\w+) - (.*)$""")
     private const val PLUGIN_PACKAGE = "dev.marginalis"
 
-    /** Each entry as its header line, followed by the first line under it that names the plugin. */
-    fun inLog(lines: List<String>): List<String> {
+    /**
+     * Each entry as its header line, followed by the first line under it that names the plugin.
+     *
+     * @param since a timestamp in the log's own format; entries written before it are left out
+     */
+    fun inLog(lines: List<String>, since: String? = null): List<String> {
         val entries = mutableListOf<List<String>>()
         for (line in lines) {
             when {
@@ -20,6 +24,7 @@ object PluginErrors {
             }
         }
         return entries
+            .filter { entry -> since == null || entry.first().take(since.length) >= since }
             .filter { entry -> ENTRY.matchEntire(entry.first())!!.groupValues[1] in setOf("ERROR", "SEVERE") }
             .filter { entry -> entry.any { PLUGIN_PACKAGE in it } }
             .map { entry ->

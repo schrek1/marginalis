@@ -441,10 +441,11 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
     }
 
     /** Waits until the action [performLater] queued under `token` has run; an action that threw fails the step. */
-    fun awaitActionRan(name: String, token: String) {
+    fun awaitActionRan(name: String, token: String, timeout: Duration = Duration.ofSeconds(30)) {
         val key = "'marginalis.sandbox.action.$token'"
-        val outcome = awaitValue("the $name action ran", Duration.ofSeconds(30)) {
-            js("var outcome = java.lang.System.getProperties().remove($key); String(outcome == null ? '' : outcome)")
+        // Without the prelude: it looks the plugin up, and a plugin update runs while no Marginalis is loaded.
+        val outcome = awaitValue("the $name action ran", timeout) {
+            Sandbox.robot.callJs("var outcome = java.lang.System.getProperties().remove($key); String(outcome == null ? '' : outcome)", edt = true)
                 .takeIf { it.isNotEmpty() }
         }
         check(outcome == "ok") { "the $name action $outcome" }
@@ -919,6 +920,109 @@ function messagePane(root, opening) {
 
     fun screenshotFrame(target: Path) {
         Sandbox.robot.screenshot(target, awaitValue("the IDE frame on screen") { Sandbox.robot.findAll("//div[@class='IdeFrameImpl']").singleOrNull() })
+    }
+
+    // --- the plugin itself --------------------------------------------------------------------------------------
+
+    /** The Marginalis version the IDE has loaded, or `none`. */
+    fun pluginVersion(): String = Sandbox.robot.callJs(
+        """
+        var plugin = com.intellij.ide.plugins.PluginManagerCore.getPlugin(com.intellij.openapi.extensions.PluginId.getId('dev.marginalis.plugin'));
+        String(plugin == null ? 'none' : plugin.getVersion())
+        """,
+        edt = true,
+    )
+
+    /** The IDE's clock in its log's timestamp format, to read the log entries written after this moment. */
+    fun ideLogClock(): String = Sandbox.robot.callJs(
+        "String(new java.text.SimpleDateFormat('yyyy-MM-dd HH:mm:ss,SSS').format(new java.util.Date()))",
+        edt = false,
+    )
+
+    /** Keeps a weak reference to the loaded Marginalis's class loader, for [pluginLoaderReleased] after an update. */
+    fun rememberPluginLoader() {
+        Sandbox.robot.callJs(
+            """
+            var plugin = com.intellij.ide.plugins.PluginManagerCore.getPlugin(com.intellij.openapi.extensions.PluginId.getId('dev.marginalis.plugin'));
+            java.lang.System.getProperties().put('marginalis.sandbox.loader', new java.lang.ref.WeakReference(plugin.getPluginClassLoader()));
+            String(true)
+            """,
+            edt = false,
+        )
+    }
+
+    /** Whether the class loader [rememberPluginLoader] saw is gone after a garbage collection. */
+    fun pluginLoaderReleased(): Boolean = Sandbox.robot.callJs(
+        """
+        java.lang.System.gc();
+        String(java.lang.System.getProperties().get('marginalis.sandbox.loader').get() == null)
+        """,
+        edt = false,
+    ) == "true"
+
+    /**
+     * What keeps an unloaded Marginalis in memory: a heap dump of the IDE, read by the platform's own analysis (the one
+     * behind "Save Memory Snapshot" on its "didn't unload fully" balloon), which names the paths to the class loader.
+     */
+    fun pluginLeakAnalysis(): String {
+        val key = "'marginalis.sandbox.leak.${java.util.UUID.randomUUID()}'"
+        Sandbox.robot.callJs(
+            """
+            new java.lang.Thread(new java.lang.Runnable({ run: function () {
+                var outcome;
+                try {
+                    var dump = '/tmp/marginalis-unload-' + java.lang.System.currentTimeMillis() + '.hprof';
+                    com.intellij.util.MemoryDumpHelper.captureMemoryDump(dump);
+                    outcome = com.intellij.ide.plugins.DynamicPluginsLegacyImpl.INSTANCE['analyzeSnapshot${'$'}intellij_platform_ide_impl'](
+                        dump, com.intellij.openapi.extensions.PluginId.getId('dev.marginalis.plugin'));
+                } catch (error) { outcome = 'the analysis failed: ' + error; }
+                java.lang.System.getProperties().put($key, String(outcome));
+            } }), 'marginalis-sandbox-leak-analysis').start();
+            String(true)
+            """,
+            edt = false,
+        )
+        return awaitValue("the heap dump's analysis", Duration.ofMinutes(5)) {
+            Sandbox.robot.callJs("var outcome = java.lang.System.getProperties().remove($key); String(outcome == null ? '' : outcome)", edt = false)
+                .takeIf { it.isNotEmpty() }
+        }
+    }
+
+    /**
+     * Installs the plugin zip at `zipInIde` into the running IDE with the two steps Update takes
+     * (`PluginDownloader.installDynamically`), under the IDE frame as Update runs under its dialog: the loaded version
+     * unloads as an update, then the new one installs and loads. Fails at the step that would have asked for a restart.
+     */
+    fun installPluginUpdate(zipInIde: String) {
+        // Without the prelude, and holding no plugin object in the queued closure: anything of the loaded version the
+        // script keeps alive would keep its class loader, and the unload would then ask for a restart.
+        val token = Sandbox.robot.callJs(
+            """
+            var token = String(java.util.UUID.randomUUID());
+            var zip = ${lit(zipInIde)};
+            com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater(new java.lang.Runnable({ run: function () {
+                var plugins = com.intellij.ide.plugins;
+                var outcome = 'ok';
+                try {
+                    var file = java.nio.file.Paths.get(zip);
+                    // Update passes its Settings dialog as the parent of its progress; the frame stands in for it.
+                    var parent = com.intellij.openapi.wm.WindowManager.getInstance()
+                        .getFrame(com.intellij.openapi.project.ProjectManager.getInstance().getOpenProjects()[0]).getRootPane();
+                    var next = plugins.PluginDescriptorLoader.loadDescriptorFromArtifact(
+                        file, com.intellij.openapi.application.ApplicationInfo.getInstance().getBuild());
+                    if (!plugins.PluginInstaller.unloadDynamicPlugin(parent, plugins.PluginManagerCore.getPlugin(next.getPluginId()), true)) {
+                        outcome = 'failed: the loaded version did not unload without a restart';
+                    } else if (!plugins.PluginInstaller.installAndLoadDynamicPlugin(file, parent, next)) {
+                        outcome = 'failed: the new version did not load without a restart';
+                    }
+                } catch (error) { outcome = 'failed: ' + error; }
+                java.lang.System.getProperties().put('marginalis.sandbox.action.' + token, outcome);
+            } }));
+            String(token)
+            """,
+            edt = true,
+        )
+        awaitActionRan("plugin update", token, Duration.ofSeconds(120))
     }
 
     // --- Margin (project) tab -----------------------------------------------------------------------------------

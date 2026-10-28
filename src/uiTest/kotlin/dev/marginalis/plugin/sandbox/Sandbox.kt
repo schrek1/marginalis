@@ -45,6 +45,7 @@ object Sandbox {
     private const val CONTAINER_ROBOT_PORT = 8082
     private const val CONTAINER_REST_PORT = 63342
     private const val CONTAINER_PROJECT = "/work/runtime/project"
+    private const val CONTAINER_IDE_LOG = "/work/runtime/ide/log_runIdeForUiTests/idea.log"
 
     // Below 8100 the manual sandboxes of sandbox.py run (8082 by default); the claim stops at the first port docker can
     // create and start.
@@ -124,6 +125,15 @@ object Sandbox {
 
     /** Hands what the harness wrote into [project] to the running IDE's copy; `.idea` stays the IDE's. */
     fun pushProject() = sandbox.pushProject()
+
+    /** The Marginalis folder sandboxes start from (`./gradlew sandboxPrebuilt`); null when the container builds the checkout. */
+    val prebuiltPlugin: Path? get() = prebuilt?.resolve("plugins")?.resolve("marginalis")
+
+    /** Puts a file of this machine where the sandbox IDE reads it; returns its path there. */
+    fun fileForIde(file: Path): String = sandbox.fileForIde(file)
+
+    /** The running Docker sandbox IDE's own `idea.log`; its volume keeps earlier runs' entries above this run's. */
+    fun ideLogLines(): List<String> = sandbox.ideLogLines()
 
     /** Records what the calling thread's sandbox is doing: a thread dump in its IDE log and a shot of its frame. */
     fun recordDiagnostics(what: String): String = current.get()?.recordDiagnostics(what) ?: "no sandbox on this thread to diagnose"
@@ -412,6 +422,18 @@ object Sandbox {
             if (!hostProjectStale) return null
             return "the IDE's project could not be copied back to the host (docker cp exit ${copy.exit}: ${copy.output})"
                 .also { println("DIAG  $it") }
+        }
+
+        fun ideLogLines(): List<String> {
+            check(launch == Launch.DOCKER && containerRunning()) { "the IDE's own log is read from a running Docker sandbox" }
+            return checkNotNull(dockerOutput("exec", container!!, "cat", CONTAINER_IDE_LOG)) { "$CONTAINER_IDE_LOG could not be read" }.lines()
+        }
+
+        fun fileForIde(file: Path): String {
+            if (launch != Launch.DOCKER) return file.toString().replace('\\', '/')
+            val inContainer = "/tmp/${file.fileName}"
+            docker("cp", file.toString(), "${container!!}:$inContainer", check = true)
+            return inContainer
         }
 
         /** A thread dump in the IDE log and a shot of the frame, for a wait that timed out. */
