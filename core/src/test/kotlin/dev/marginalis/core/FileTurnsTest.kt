@@ -16,6 +16,16 @@ class FileTurnsTest {
             .also { it.addMessage(Message(lastWord, "…")) }
 
     @Test
+    fun `an Agree the agent has not answered yet puts no agent's move on its file`() {
+        val turns = FileTurns()
+        val agreed = thread("a.py", agent).also { it.addMessage(Message.agreement(by = user, with = agent)) }
+
+        turns.track("a.py", listOf(agreed))
+
+        assertNull(turns.of("a.py"))
+    }
+
+    @Test
     fun `nothing tracked means an empty snapshot`() {
         val turns = FileTurns()
         assertTrue(turns.isEmpty())

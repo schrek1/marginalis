@@ -60,6 +60,13 @@ class Message(
         return true
     }
 
+    /** The user's own words are always read; only someone else's message can be unread again. */
+    fun markUnreadByUser(): Boolean {
+        if (!readByUser || author is Author.User) return false
+        readByUser = false
+        return true
+    }
+
     fun continues(previous: Message?): Boolean =
         previous != null && author is Author.Agent && author == previous.author && to == null && previous.to == null &&
             relayed == null && previous.relayed == null

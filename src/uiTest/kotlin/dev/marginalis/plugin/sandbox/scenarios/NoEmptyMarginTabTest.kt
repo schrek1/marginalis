@@ -17,7 +17,7 @@ import kotlin.io.path.writeText
  * The Margin tab shows only with something in it (MARG-48): a fresh project opens without it, the agent's first
  * project thread brings it, and an empty tab does not come back after a restart. With "Show the Margin tab when a
  * project opens" off, the default (MARG-192), even a project with an open project thread opens without it, until the
- * agent starts the next one.
+ * agent starts the next one. With it on, a tab open when the IDE closes comes back after a restart, pinned if it was.
  *
  * The scenario's first start is the fresh project the base class opens.
  */
@@ -51,7 +51,6 @@ class NoEmptyMarginTabTest : SandboxScenario("no_empty_margin_tab") {
         Agent.resolveThread(thread)
         awaitOrFail("the resolved thread on disk") { persistedStatus(thread) == "RESOLVED" }
         check("the resolved thread leaves the Margin tab open and empty (precondition)", marginTab().open, marginTab())
-        SandboxUi.saveProjectState()
         Sandbox.restart(fresh = false)
         settleAfterStart(threads = 1)
         settle()
@@ -82,6 +81,31 @@ class NoEmptyMarginTabTest : SandboxScenario("no_empty_margin_tab") {
         check("that Margin tab is not pinned", !tab.pinned, tab)
     }
 
+    // No save before these restarts: the tab comes back only if what the IDE writes while it closes survives the stop.
+    @Test
+    @Order(5)
+    fun openTabComesBackAfterRestart() = case("open_tab_comes_back_after_restart") {
+        check("the Margin tab is open and not pinned (precondition)", marginTab() == MarginTab(open = true, pinned = false), marginTab())
+        showTabOnProjectOpen()
+        Sandbox.restart(fresh = false)
+        val tab = marginTabUntilOpen()
+        shot("6-open-tab-after-restart")
+        check("with the setting on, a Margin tab open at shutdown comes back after a restart", tab.open, tab)
+        check("a tab that was not pinned comes back unpinned", !tab.pinned, tab)
+    }
+
+    @Test
+    @Order(6)
+    fun pinnedTabComesBackPinned() = case("pinned_tab_comes_back_pinned") {
+        pinMarginTab()
+        check("the Margin tab is pinned (precondition)", marginTab().pinned, marginTab())
+        Sandbox.restart(fresh = false)
+        val tab = marginTabUntilOpen()
+        shot("7-pinned-tab-after-restart")
+        check("with the setting on, a pinned Margin tab comes back after a restart", tab.open, tab)
+        check("it comes back pinned", tab.pinned, tab)
+    }
+
     private data class MarginTab(val open: Boolean, val pinned: Boolean)
 
     private fun marginTab(): MarginTab {
@@ -109,6 +133,32 @@ class NoEmptyMarginTabTest : SandboxScenario("no_empty_margin_tab") {
             SandboxUi.js("String(com.intellij.ide.util.PropertiesComponent.getInstance(project).getBoolean('marginalis.projectTab.introduced'))") == "true"
         }
         awaitOrFail("$threads persisted threads in the store") { SandboxUi.js("String(store.getThreads().all().size())").toInt() >= threads }
+    }
+
+    // The container's app config lasts until the scenario ends, over its restarts.
+    private fun showTabOnProjectOpen() {
+        SandboxUi.js(
+            """
+            var settings = com.intellij.openapi.application.ApplicationManager.getApplication()
+                .getService(pluginLoader.loadClass('dev.marginalis.plugin.settings.MarginalisSettings'));
+            settings.getState().setShowTabOnProjectOpen(true);
+            String(true)
+            """,
+        )
+    }
+
+    private fun pinMarginTab() {
+        SandboxUi.js(
+            SandboxUi.MARGIN +
+                """
+            var tab = marginFile();
+            var windows = com.intellij.openapi.fileEditor.ex.FileEditorManagerEx.getInstanceEx(project).getWindows();
+            for (var i = 0; i < windows.length; i++) {
+                if (windows[i].isFileOpen(tab)) windows[i].setFilePinned(tab, true);
+            }
+            String(true)
+            """,
+        )
     }
 
     private fun marginTabUntilOpen(): MarginTab = readUntil("the Margin tab open", read = { marginTab() }) { it.open }

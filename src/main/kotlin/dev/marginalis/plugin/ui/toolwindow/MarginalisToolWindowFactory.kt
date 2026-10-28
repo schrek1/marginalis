@@ -42,6 +42,8 @@ import com.intellij.ui.treeStructure.Tree
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import com.intellij.util.ui.components.BorderLayoutPanel
+import dev.marginalis.core.AgreementSignal
+import dev.marginalis.core.Author
 import dev.marginalis.core.CommentThread
 import dev.marginalis.core.Faces
 import dev.marginalis.core.GuidedLayout
@@ -208,7 +210,7 @@ internal enum class TreeFilter(
     ALL("All", "No margin threads yet", { true }),
     BLOCKERS("Blockers Only", "No blockers", { it.severity == Severity.BLOCKER }),
     AWAITING_USER("Awaiting You", "Nothing awaiting you", { it.turn() == Turn.USER_OWES }),
-    AWAITING_AGENT("Awaiting Agent", "Nothing awaiting the agent", { it.turn() == Turn.AGENT_OWES }),
+    AWAITING_AGENT("Awaiting Agent", "Nothing awaiting the agent", { TurnSignal.of(it) == Turn.AGENT_OWES }),
     FINDINGS("Findings", "No findings", { it.intent == Intent.FINDING }),
     GUIDANCE("Guidance", "No guidance", { it.intent == Intent.GUIDANCE }),
     QUESTIONS("Questions", "No questions", { it.intent == Intent.QUESTION }),
@@ -433,9 +435,11 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
         tree.addMouseListener(object : PopupHandler() {
             override fun invokePopup(comp: java.awt.Component, x: Int, y: Int) {
                 val path = tree.getPathForLocation(x, y) ?: return
-                tree.selectionPath = path
+                if (!tree.isPathSelected(path)) tree.selectionPath = path
                 val node = path.lastPathComponent as? DefaultMutableTreeNode ?: return
-                buildContextMenu(node)?.show(comp, x, y)
+                val selectedThreads = selectedThreads()
+                val menu = if (selectedThreads.size > 1) severalThreadsMenu(selectedThreads) else buildContextMenu(node)
+                menu?.show(comp, x, y)
             }
         })
         add(JBScrollPane(tree), BorderLayout.CENTER)
@@ -497,6 +501,11 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
         return (node.userObject as? NodeData.ThreadNode)?.thread
     }
 
+    private fun selectedThreads(): List<CommentThread> =
+        tree.selectionPaths.orEmpty()
+            .mapNotNull { ((it.lastPathComponent as? DefaultMutableTreeNode)?.userObject as? NodeData.ThreadNode)?.thread }
+            .distinctBy { it.id }
+
     private fun threadsUnder(node: DefaultMutableTreeNode): List<CommentThread> =
         node.preorderEnumeration().asSequence()
             .filterIsInstance<DefaultMutableTreeNode>()
@@ -511,6 +520,7 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
             is NodeData.ThreadNode -> {
                 val thread = data.thread
                 menu.add(JMenuItem("Navigate").apply { addActionListener { navigateTo(thread) } })
+                readMarkItem(listOf(thread))?.let(menu::add)
                 if (thread.status is ThreadStatus.Resolved) {
                     menu.add(JMenuItem("Reopen").apply {
                         addActionListener {
@@ -537,19 +547,41 @@ internal class MarginalisToolWindowPanel(private val project: Project) :
                         })
                     }
                 }
-                val open = threads.filter { it.status !is ThreadStatus.Resolved }
-                if (open.isNotEmpty()) {
-                    menu.add(JMenuItem("Resolve ${open.size} Open Thread(s)…").apply {
-                        addActionListener { resolveThreads(open) }
-                    })
-                }
-                menu.add(JMenuItem("Delete ${threads.size} Thread(s)…").apply {
-                    addActionListener { deleteThreads(threads) }
-                })
+                addResolveAndDeleteAll(menu, threads)
             }
             else -> return null
         }
         return menu
+    }
+
+    private fun severalThreadsMenu(threads: List<CommentThread>): JPopupMenu {
+        val menu = JPopupMenu()
+        readMarkItem(threads)?.let(menu::add)
+        addResolveAndDeleteAll(menu, threads)
+        return menu
+    }
+
+    private fun addResolveAndDeleteAll(menu: JPopupMenu, threads: List<CommentThread>) {
+        val open = threads.filter { it.status !is ThreadStatus.Resolved }
+        if (open.isNotEmpty()) {
+            menu.add(JMenuItem("Resolve ${open.size} Open Thread(s)…").apply { addActionListener { resolveThreads(open) } })
+        }
+        menu.add(JMenuItem("Delete ${threads.size} Thread(s)…").apply { addActionListener { deleteThreads(threads) } })
+    }
+
+    /** Mark as Read while anything in the selection is new, as in a mail client; null when nobody else wrote in it. */
+    private fun readMarkItem(threads: List<CommentThread>): JMenuItem? {
+        if (threads.all { thread -> thread.messages.all { it.author is Author.User } }) return null
+        val store = MarginalisStore.getInstance(project)
+        val markRead = threads.any { it.unreadByUserCount() > 0 }
+        return JMenuItem(if (markRead) "Mark as Read" else "Mark as Unread").apply {
+            addActionListener {
+                for (thread in threads) {
+                    val changed = if (markRead) thread.markReadByUser() else thread.markUnreadByUser()
+                    if (changed) store.threads.notifyChanged(thread)
+                }
+            }
+        }
     }
 
     private fun resolveThreads(threads: List<CommentThread>) {
@@ -963,7 +995,7 @@ private class MarginalisTreeRenderer : TreeCellRenderer {
         is NodeData.ThreadNode -> {
             yourMove.isVisible = false
             agentsMove.isVisible = false
-            TurnSignal.of(data.thread)?.let(TurnSignal::spoken)
+            TurnSignal.of(data.thread)?.let(TurnSignal::spoken) ?: AgreementSignal.of(data.thread)?.spoken
         }
         else -> {
             yourMove.isVisible = false
@@ -1037,7 +1069,11 @@ private class RowWords : ColoredTreeCellRenderer() {
             }
             is NodeData.ThreadNode -> {
                 val thread = data.thread
-                icon = MarginalisIcons.withLeadingTurnSignal(MarginalisIcons.markOf(listOf(thread)), TurnSignal.of(thread))
+                icon = MarginalisIcons.withLeadingTurnSignal(
+                    MarginalisIcons.markOf(listOf(thread)),
+                    TurnSignal.of(thread),
+                    AgreementSignal.of(thread),
+                )
                 if (data.walkthroughPrefix != null) {
                     append("${data.walkthroughPrefix}  ", SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
                 }

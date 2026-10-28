@@ -55,7 +55,7 @@ abstract class SandboxScenario(private val scenario: String) {
         report("INFO  $scenario ends at ${LocalTime.now().withNano(0)}")
         try {
             case("ide_shutdown") {
-                check("the IDE exited when asked", stopFailure == null, stopFailure?.message)
+                check("the IDE exited when asked and its project came back to the host", stopFailure == null, stopFailure?.message)
                 // Read after the stop: errors the plugin raises while the IDE shuts down count too.
                 val errors = PluginErrors.inLog(if (Files.exists(ideLog)) Files.readAllLines(ideLog) else emptyList())
                 check("the IDE logged no error from the plugin", errors.isEmpty(), errors.firstOrNull()?.let { "${errors.size} entries in $ideLog, first: $it" })

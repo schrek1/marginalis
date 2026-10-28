@@ -1,9 +1,12 @@
 package dev.marginalis.plugin.ui
 
+import com.intellij.DynamicBundle
 import com.intellij.openapi.editor.markup.HighlighterLayer
 import dev.marginalis.plugin.settings.TimeFormat
 import java.awt.event.InputEvent
 import java.awt.event.KeyEvent
+import java.text.DateFormatSymbols
+import java.util.Locale
 import javax.swing.JLabel
 import com.intellij.testFramework.PlatformTestUtil
 import com.intellij.util.ui.UIUtil
@@ -720,7 +723,7 @@ class ThreadPanelTest : HttpContractTestCase() {
         try {
             settings.state.timeFormat = TimeFormat.TWELVE_HOUR.stored
             val twelve = bylines(user.open(id)).single()
-            assertTrue(twelve, twelve.matches(Regex("Claude · \\d{1,2}:\\d{2}\\s?[AaPp]\\.?[Mm]\\.?")))
+            assertTrue(twelve, twelve.matches(Regex("Claude · \\d{1,2}:\\d{2} ${idesDayPeriods()}")))
 
             settings.state.timeFormat = TimeFormat.TWENTY_FOUR_HOUR.stored
             val twentyFour = bylines(user.open(id)).single()
@@ -729,6 +732,29 @@ class ThreadPanelTest : HttpContractTestCase() {
             settings.state.timeFormat = before
         }
     }
+
+    fun testTheTwelveHourClockSpeaksTheIdesLanguageWhateverTheJvmLocale() {
+        sample()
+        val id = agent.addOnLine(5)
+        val settings = MarginalisSettings.getInstance()
+        val before = settings.state.timeFormat
+        val jvmLocale = Locale.getDefault()
+        val dayPeriods = idesDayPeriods()
+        try {
+            settings.state.timeFormat = TimeFormat.TWELVE_HOUR.stored
+            Locale.setDefault(Locale.forLanguageTag("cs-CZ"))
+
+            val twelve = bylines(user.open(id)).single()
+
+            assertTrue(twelve, twelve.matches(Regex("Claude · \\d{1,2}:\\d{2} $dayPeriods")))
+        } finally {
+            Locale.setDefault(jvmLocale)
+            settings.state.timeFormat = before
+        }
+    }
+
+    private fun idesDayPeriods(): String =
+        DateFormatSymbols.getInstance(DynamicBundle.getLocale()).amPmStrings.joinToString("|", "(", ")") { Regex.escape(it) }
 
     fun testAgreeingWithAPanelThatFellBehindAgreesWithNothing() {
         sample()

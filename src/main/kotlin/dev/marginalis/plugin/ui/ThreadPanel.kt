@@ -1,5 +1,6 @@
 package dev.marginalis.plugin.ui
 
+import com.intellij.DynamicBundle
 import com.intellij.icons.AllIcons
 import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.actionSystem.ActionManager
@@ -225,6 +226,10 @@ class ThreadPanel(
     private var level = ThreadFolding.Level.DEFAULT
     private val keptOpen = mutableSetOf<String>()
     private val readWhileOpen = mutableSetOf<String>()
+    private val seenRead = thread.messages.filter { it.readByUser }.mapTo(mutableSetOf()) { it.id }
+
+    /** Marked unread elsewhere while shown here: only clicking into the thread, or opening it again, reads it. */
+    private val keptUnread = mutableSetOf<String>()
     private var foldedBy: FoldingPrefs? = null
     private var messagesRendered: Set<String>? = null
     private val openedHere = mutableSetOf<String>()
@@ -734,13 +739,31 @@ class ThreadPanel(
     }
 
     fun markReadIfSeen() {
+        keepWhatWasMarkedUnread()
         if (!mayMarkRead(false) || !isShowing || visibleRect.isEmpty || !ApplicationManager.getApplication().isActive) return
-        if (thread.markReadByUser(openMessages)) MarginalisStore.getInstance(project).threads.notifyChanged(thread)
+        readHere(openMessages.filterNot { it.id in keptUnread })
     }
 
     fun markRead() {
         if (!mayMarkRead(true) || isDraft() || !ApplicationManager.getApplication().isActive) return
-        if (thread.markReadByUser(openMessages)) MarginalisStore.getInstance(project).threads.notifyChanged(thread)
+        keptUnread.clear()
+        readHere(openMessages)
+    }
+
+    private fun readHere(shown: List<Message>) {
+        shown.mapTo(seenRead) { it.id }
+        if (thread.markReadByUser(shown)) MarginalisStore.getInstance(project).threads.notifyChanged(thread)
+    }
+
+    private fun keepWhatWasMarkedUnread() {
+        for (message in thread.messages) {
+            if (message.readByUser) {
+                seenRead += message.id
+                keptUnread -= message.id
+            } else if (message.id in seenRead) {
+                keptUnread += message.id
+            }
+        }
     }
 
     private fun markReadIfSeenLater() {
@@ -862,7 +885,7 @@ class ThreadPanel(
 
     private fun messageTimeFormatter(): DateTimeFormatter =
         when (MarginalisSettings.getInstance().timeFormat) {
-            TimeFormat.TWELVE_HOUR -> DateTimeFormatter.ofPattern("h:mm a")
+            TimeFormat.TWELVE_HOUR -> DateTimeFormatter.ofPattern("h:mm a", DynamicBundle.getLocale())
             TimeFormat.TWENTY_FOUR_HOUR -> DateTimeFormatter.ofPattern("HH:mm")
             TimeFormat.AUTO -> DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
         }.withZone(ZoneId.systemDefault())
@@ -978,7 +1001,7 @@ class ThreadPanel(
         val agreeable = thread.agreeable()
         agreeableId = agreeable?.id
         agreeLink.isVisible = agreeable != null && !isDraft()
-        agreeLink.toolTipText = agreeable?.let { "Agree with ${it.author.displayName}: replies \"Agreed.\" and passes the turn" }
+        agreeLink.toolTipText = agreeable?.let { "Agree with ${it.author.displayName}: replies \"Agreed.\"; the agent then says whether it takes it on" }
         refreshAgentNames()
         addressTo(addressee)
         replyArea.setPlaceholder(
@@ -991,6 +1014,7 @@ class ThreadPanel(
         )
 
         val messageWithFocusedToggle = messageWithFocusedToggle()
+        takeInArrivals()
         messagesBox.removeAll()
         messageComponents.clear()
         foldToggles.clear()
@@ -1000,7 +1024,6 @@ class ThreadPanel(
         var previous: Message? = null
         var previousOpen: Message? = null
         var githubBlock: JPanel? = null
-        keepArrivalsOpen()
         val foldingPrefs = MarginalisSettings.getInstance().foldingPrefs
         releaseKeptOpenOnNewFoldingPrefs(foldingPrefs)
         val rows = ThreadFolding.rows(
@@ -1153,13 +1176,24 @@ class ThreadPanel(
         maximumSize = Dimension(Int.MAX_VALUE, preferredSize.height)
     }
 
-    private fun keepArrivalsOpen() {
+    private fun takeInArrivals() {
         messagesRendered?.let { rendered ->
-            val arrivals = thread.messages.filterNot { it.id in rendered }.map { it.id }
-            keptOpen += arrivals
+            val arrivals = thread.messages.filterNot { it.id in rendered }.mapTo(mutableSetOf()) { it.id }
+            if (arrivals.isEmpty()) return@let
+            val stillOpen = ThreadFolding.keptOpenAfter(arrivals, keptOpen, thread.messages, level, readingAboveTheEnd())
+            keptOpen.retainAll(stillOpen)
+            keptOpen += stillOpen
             readWhileOpen += arrivals
         }
         messagesRendered = thread.messages.mapTo(mutableSetOf()) { it.id }
+    }
+
+    /** Laid out as before the arrivals: refresh() calls this before it rebuilds the rows. */
+    private fun readingAboveTheEnd(): Boolean {
+        val seen = visibleRect
+        val lastRow = messagesBox.components.lastOrNull()
+        if (!isShowing || seen.isEmpty || lastRow == null) return false
+        return seen.maxY <= SwingUtilities.convertPoint(messagesBox, 0, lastRow.y, this).y
     }
 
     private fun releaseKeptOpenOnNewFoldingPrefs(prefs: FoldingPrefs) {

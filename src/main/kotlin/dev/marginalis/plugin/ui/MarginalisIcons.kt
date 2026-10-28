@@ -6,6 +6,7 @@ import com.intellij.ui.LayeredIcon
 import com.intellij.ui.RowIcon
 import com.intellij.util.ui.EmptyIcon
 import dev.marginalis.core.AggregateState
+import dev.marginalis.core.AgreementSignal
 import dev.marginalis.core.CommentThread
 import dev.marginalis.core.Mark
 import dev.marginalis.core.MarkSubject
@@ -30,9 +31,10 @@ object MarginalisIcons {
 
     private val turnSignals = mapOf(Turn.USER_OWES to load("turnYou"), Turn.AGENT_OWES to load("turnAgent"))
     private val turnBadges = mapOf(Turn.USER_OWES to load("turnYouBadge"), Turn.AGENT_OWES to load("turnAgentBadge"))
+    private val agreementSignals = mapOf(AgreementSignal.AGREED to load("turnAgreed"), AgreementSignal.AGENT_ON_IT to load("turnWorking"))
     private val turnSignalGap = EmptyIcon.create(3, 16)
     private val noTurnSignal = EmptyIcon.create(16)
-    private val markWithTurn = ConcurrentHashMap<Pair<Icon, Turn?>, Icon>()
+    private val markWithTurn = ConcurrentHashMap<Triple<Icon, Turn?, AgreementSignal?>, Icon>()
 
     val Brand = load("marginalisToolWindow")
     private val toolWindowBadged = mapOf(
@@ -56,9 +58,12 @@ object MarginalisIcons {
 
     fun turnSignal(turn: Turn): Icon = turnSignals.getValue(turn)
 
-    fun withLeadingTurnSignal(mark: Icon, turn: Turn?): Icon =
-        markWithTurn.computeIfAbsent(mark to turn) {
-            RowIcon(mark, turnSignalGap, turn?.let(turnSignals::getValue) ?: noTurnSignal)
+    fun agreementSignal(signal: AgreementSignal): Icon = agreementSignals.getValue(signal)
+
+    fun withLeadingTurnSignal(mark: Icon, turn: Turn?, agreement: AgreementSignal? = null): Icon =
+        markWithTurn.computeIfAbsent(Triple(mark, turn, agreement)) {
+            val signal = turn?.let(turnSignals::getValue) ?: agreement?.let(agreementSignals::getValue) ?: noTurnSignal
+            RowIcon(mark, turnSignalGap, signal)
         }
 
     fun withTurnBadge(fileIcon: Icon, turn: Turn): Icon = badged(fileIcon, turnBadges.getValue(turn))

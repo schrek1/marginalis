@@ -19,6 +19,10 @@ History before 0.1.19 lives in git tags.
   the code reads clean behind you, or keep it open, so every step you
   passed stays in view. Set it under *When stepping to another step* in
   Settings → Tools → Marginalis. Folding stays the default.
+- Mark a thread unread from its context menu in the tool window, so it
+  waits for you like a new message until you open it again. On a thread
+  with something new, the same entry marks it read, and with several
+  threads selected it acts on all of them.
 
 ### Changed
 
@@ -43,6 +47,14 @@ History before 0.1.19 lives in git tags.
   Project node. The Guided Layout menu in the tool window header
   switches to the folder tree as before, or to one node per file, and
   each project remembers its choice.
+- Agreeing with an agent no longer leaves the thread on the agent's
+  move. The thread shows 👍 until the agent says what it does with it:
+  ⏳ while it works on the agreed change, or no sign at all when there
+  is nothing left to do and the thread is yours to resolve.
+- A long thread stays folded as the conversation goes on: each new
+  message folds the read ones before the latest two again, so the
+  thread no longer grows round after round. While you are scrolled up
+  reading the middle, or have expanded the whole thread, nothing folds.
 
 ### Fixed
 
@@ -66,6 +78,14 @@ History before 0.1.19 lives in git tags.
   threads open in the review now open again with it.
 - Escape in a reply box now closes just the reply box: the thread stays
   open with your draft kept, and a second Escape folds the thread.
+- Updating Marginalis without restarting the IDE no longer logs an
+  error while the tool window repaints during the update.
+- The 12-hour clock on messages speaks the IDE's language. On a system
+  set to another language, an English IDE now shows "6:14 PM" instead
+  of the system's word for afternoon.
+- Opening a project no longer freezes the IDE for up to 30 seconds
+  while the Margin tab comes back. The tab now appears right away and
+  finishes loading in the background.
 
 ## [0.2.7] - 2026-10-22
 

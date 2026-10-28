@@ -35,7 +35,7 @@ internal object AvatarGeometries {
 class AvatarIcon(
     private val face: Face,
     private val surface: () -> Color,
-    private val images: AvatarImages = AvatarImages.getInstance(),
+    private val images: AvatarImages? = AvatarImages.getInstance(),
 ) : Icon {
 
     override fun getIconWidth(): Int = AvatarGeometries.current().size
@@ -64,7 +64,7 @@ class AvatarIcon(
 
     private fun paintTile(g: Graphics2D, geometry: AvatarGeometry, colour: Color, background: Color) {
         val tileShape = with(geometry) { RoundRectangle2D.Double(tileOrigin, tileOrigin, tile, tile, 2 * radius, 2 * radius) }
-        val picture = images.image(face, geometry.tilePixels(g.transform.scaleX))
+        val picture = images?.image(face, geometry.tilePixels(g.transform.scaleX))
         if (picture != null) {
             g.paint = TexturePaint(picture, with(geometry) { Rectangle2D.Double(tileOrigin, tileOrigin, tile, tile) })
             g.fill(tileShape)

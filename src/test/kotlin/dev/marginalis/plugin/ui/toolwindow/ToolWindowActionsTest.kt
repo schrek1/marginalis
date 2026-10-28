@@ -203,7 +203,7 @@ class ToolWindowActionsTest : ToolWindowTestCase() {
         sample()
         val id = agent.addOnLine(14, "body" to "Look here")
 
-        assertEquals(listOf("Navigate", "Resolve", "Delete…"), window.contextMenu("Look here"))
+        assertEquals(listOf("Navigate", "Mark as Read", "Resolve", "Delete…"), window.contextMenu("Look here"))
         window.chooseFromContextMenu("Look here", "Navigate")
         assertEquals("Sample.kt", openFile())
         assertEquals(14, caretLine())
@@ -214,10 +214,84 @@ class ToolWindowActionsTest : ToolWindowTestCase() {
         window.toggleFolding("src", under = "Resolved")
         window.toggleFolding("Sample.kt", under = "Resolved")
 
-        assertEquals(listOf("Navigate", "Reopen", "Delete…"), window.contextMenu("Look here"))
+        assertEquals(listOf("Navigate", "Mark as Read", "Reopen", "Delete…"), window.contextMenu("Look here"))
         window.rebuiltBy { window.chooseFromContextMenu("Look here", "Reopen") }
         assertEquals("open", status(id))
         assertEquals("Open  1", window.rows().first())
+    }
+
+    fun testAReadThreadIsMarkedUnreadFromItsContextMenuAndReadAgain() {
+        // GIVEN - the user has read an fyi, so it waits on nobody
+        sample()
+        val id = agent.addOnLine(14, "intent" to "fyi", "body" to "Look here")
+        user.read(id)
+        assertEquals(listOf("Navigate", "Mark as Unread", "Resolve", "Delete…"), window.contextMenu("Look here"))
+
+        // WHEN - the user marks it unread
+        window.rebuiltBy { window.chooseFromContextMenu("Look here", "Mark as Unread") }
+
+        // THEN - it is new and the user's move again, as when it arrived, and the entry now reads Mark as Read
+        assertEquals(1, user.thread(id).unreadByUserCount())
+        assertEquals("✉ L14  Look here", window.rows().last())
+        assertEquals(listOf("Navigate", "Mark as Read", "Resolve", "Delete…"), window.contextMenu("Look here"))
+
+        window.rebuiltBy { window.chooseFromContextMenu("Look here", "Mark as Read") }
+        assertEquals(0, user.thread(id).unreadByUserCount())
+    }
+
+    fun testAThreadOfOnlyYourOwnWordsOffersNoReadMark() {
+        sample()
+        user.comment(SAMPLE, 14, "Note to self")
+
+        assertEquals(listOf("Navigate", "Resolve", "Delete…"), window.contextMenu("Note to self"))
+    }
+
+    fun testWithSeveralThreadsSelectedTheReadMarkActsOnAllOfThem() {
+        // GIVEN - two read threads selected together
+        sample()
+        val first = agent.addOnLine(3, "body" to "first")
+        val second = agent.addOnLine(6, "body" to "second")
+        user.read(first)
+        user.read(second)
+        window.select("first")
+        window.selectAlso("second")
+
+        // WHEN - the user marks the selection unread
+        val offered = window.contextMenu("second")
+        window.select("first")
+        window.selectAlso("second")
+        window.rebuiltBy { window.chooseFromContextMenu("second", "Mark as Unread") }
+
+        // THEN - the menu spoke for both, and both are unread
+        assertEquals(listOf("Mark as Unread", "Resolve 2 Open Thread(s)…", "Delete 2 Thread(s)…"), offered)
+        assertEquals(listOf(1, 1), listOf(first, second).map { user.thread(it).unreadByUserCount() })
+    }
+
+    fun testWhenAnySelectedThreadIsUnreadTheEntryMarksThemAllRead() {
+        // GIVEN - one read and one unread thread selected together
+        sample()
+        val read = agent.addOnLine(3, "body" to "first")
+        val unread = agent.addOnLine(6, "body" to "second")
+        user.read(read)
+        window.select("first")
+        window.selectAlso("second")
+
+        // WHEN - the user marks the selection read
+        window.rebuiltBy { window.chooseFromContextMenu("first", "Mark as Read") }
+
+        // THEN - nothing in either is new any more
+        assertEquals(listOf(0, 0), listOf(read, unread).map { user.thread(it).unreadByUserCount() })
+    }
+
+    fun testRightClickingOutsideTheSelectionActsOnTheClickedThreadOnly() {
+        sample()
+        agent.addOnLine(3, "body" to "first")
+        agent.addOnLine(6, "body" to "second")
+        agent.addOnLine(9, "body" to "third")
+        window.select("first")
+        window.selectAlso("second")
+
+        assertEquals(listOf("Navigate", "Mark as Read", "Resolve", "Delete…"), window.contextMenu("third"))
     }
 
     fun testDeletingFromAThreadsContextMenuAsksFirst() {
@@ -313,7 +387,7 @@ class ToolWindowActionsTest : ToolWindowTestCase() {
 
         assertEquals(emptyList<String>(), window.contextMenu("Open"))
         assertEquals(emptyList<String>(), window.contextMenu("Project  1"))
-        assertEquals(listOf("Navigate", "Resolve", "Delete…"), window.contextMenu("project wide"))
+        assertEquals(listOf("Navigate", "Mark as Read", "Resolve", "Delete…"), window.contextMenu("project wide"))
     }
 
     fun testTheTitleBarShowsWhoListensAndSubmitsTheRound() {

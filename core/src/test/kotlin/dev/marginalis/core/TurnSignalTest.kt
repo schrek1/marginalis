@@ -74,6 +74,18 @@ class TurnSignalTest {
     }
 
     @Test
+    fun `a signalled tally leaves out an Agree the agent has not answered yet`() {
+        val builder = Author.Agent("Claude · builder", "claude-builder")
+        val agreed = CommentThread(file = "a.py", line = 1, anchorText = "x").also {
+            it.addMessage(Message(builder, "Rename it?"))
+            it.addMessage(Message.agreement(by = user, with = builder))
+        }
+
+        assertEquals(TurnTally(user = 0, agent = 1), TurnTally.of(listOf(agreed)))
+        assertEquals(TurnTally(user = 0, agent = 1), TurnTally.signalled(listOf(agreed, thread(user))))
+    }
+
+    @Test
     fun `a turn is spoken in words for assistive technology`() {
         assertEquals("your move", TurnSignal.spoken(Turn.USER_OWES))
         assertEquals("agent's move", TurnSignal.spoken(Turn.AGENT_OWES))
