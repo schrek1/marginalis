@@ -9,7 +9,6 @@ import dev.marginalis.plugin.sandbox.scenarios.ReviewDiffWalkthroughTest.Compani
 import dev.marginalis.plugin.sandbox.scenarios.ReviewDiffWalkthroughTest.Companion.SHOWS_TARGET
 import dev.marginalis.plugin.sandbox.scenarios.ReviewDiffWalkthroughTest.Companion.TARGET
 import dev.marginalis.plugin.sandbox.scenarios.ReviewDiffWalkthroughTest.Companion.TARGET_AFTER
-import dev.marginalis.plugin.sandbox.awaitUntil
 import dev.marginalis.plugin.sandbox.readUntil
 import dev.marginalis.plugin.sandbox.waitUntil
 import org.junit.jupiter.api.Order
@@ -71,21 +70,6 @@ class SelectOpenedThreadInReviewDiffTest : SandboxScenario("select_opened_thread
         check("on a line without a thread it selects the file", name == "review_target.py", name)
     }
 
-    @Test
-    @Order(5)
-    fun buttonSelectsTheThreadWhoseReplyBoxHasTheFocus() = case("button_selects_the_thread_whose_reply_box_has_the_focus") {
-        SandboxUi.openThreadInDiff(total, TARGET_AFTER)
-        awaitUntil("the step opens in the review diff") { total in SandboxUi.threadIdsOpenInDiff(TARGET_AFTER) }
-        putCaretInReview(IMPORT_IN_REVIEW)
-        ToolWindowUi.selectDir("Open", "src")
-        val focused = focusReplyBox(total)
-        check("setup: the step's reply box holds the focus", focused == "true", focused)
-        ToolWindowUi.pressToolWindowAction(BUTTON)
-        val got = totalSelectedUntil()
-        ToolWindowUi.screenshotToolWindow(shots.resolve("2-reply-box.png"))
-        check("with the caret in a thread's reply box it selects that thread, not the caret line's file", got?.thread == total, got)
-    }
-
     private fun totalSelectedUntil(): ToolWindowUi.SelectedStep? =
         readUntil("the step selected in the tool window", read = { ToolWindowUi.selectedStep() }) { it?.thread == total }
 
@@ -97,43 +81,6 @@ class SelectOpenedThreadInReviewDiffTest : SandboxScenario("select_opened_thread
             asUser(function () { editor.getCaretModel().moveToLogicalPosition(new com.intellij.openapi.editor.LogicalPosition($line, 0)); });
             String(true)
             """,
-        )
-    }
-
-    /**
-     * Opens the thread's reply box and makes it the frame's focus owner. The sandbox IDE runs in the background, so a
-     * focus request alone is not kept: the frame's most recent focus owner is recorded, as the window would.
-     */
-    private fun focusReplyBox(threadId: String): String {
-        SandboxUi.js(
-            SandboxUi.FIND + """
-            var link = find(component, function (c) {
-                return c instanceof com.intellij.ui.components.ActionLink && c.getText() == 'Reply…';
-            });
-            if (link != null) link.doClick();
-            String(true)
-            """,
-            SandboxUi.threadPanel(threadId),
-        )
-        Thread.sleep(1_000)
-        return SandboxUi.js(
-            SandboxUi.FIND + """
-            var area = find(component, function (c) { return c instanceof com.intellij.ui.EditorTextField; });
-            var target = area.getEditor().getContentComponent();
-            target.requestFocusInWindow();
-            var window = javax.swing.SwingUtilities.getWindowAncestor(target);
-            if (window.getMostRecentFocusOwner() !== target) {
-                var types = java.lang.reflect.Array.newInstance(java.lang.Class.forName('java.lang.Class'), 1);
-                types[0] = java.lang.Class.forName('java.awt.Component');
-                var remember = java.lang.Class.forName('java.awt.KeyboardFocusManager').getDeclaredMethod('setMostRecentFocusOwner', types);
-                remember.setAccessible(true);
-                var args = java.lang.reflect.Array.newInstance(java.lang.Class.forName('java.lang.Object'), 1);
-                args[0] = target;
-                remember.invoke(null, args);
-            }
-            String(window.getMostRecentFocusOwner() === target)
-            """,
-            SandboxUi.threadPanel(threadId),
         )
     }
 

@@ -373,6 +373,7 @@ object Sandbox {
                 .start()
 
         private fun awaitUp(process: Process?) {
+            val launched = System.nanoTime()
             val port = awaitValue(
                 "the sandbox IDE answers on robot port $robotPort", startTimeout, Duration.ofSeconds(1), retryOn = { it !is IdeExited },
             ) {
@@ -382,7 +383,10 @@ object Sandbox {
             cachedPort = port
             val frame = sizeTheFrame()
             awaitProjectStartup()
-            println("sandbox up: robot http://127.0.0.1:$robotPort, marginalis http://127.0.0.1:$port, frame $frame")
+            println(
+                "sandbox up in ${seconds(Duration.ofNanos(System.nanoTime() - launched))}: robot http://127.0.0.1:$robotPort, " +
+                    "marginalis http://127.0.0.1:$port, frame $frame",
+            )
         }
 
         private fun containerRunning(): Boolean = container?.let { name ->
@@ -511,13 +515,17 @@ object Sandbox {
 
         // The IDE restores its tool window layout during the project's startup; the Project view it shows then takes
         // the left side from a Marginalis tool window a scenario has just shown. And while the platform's own startup
-        // write (the JPS global model reloaded from disk, about 4 s after the IDE answers) waits for the lock, a file
-        // opened on the EDT blocks the editor providers' reads until their 30 s timeout. The Margin tab's startup
-        // decision waits for the project's configuration and comes after the platform's post-startup mark; a scenario
-        // must not race it. Smart mode flickers on right after startup, so it must hold three samples in a row.
+        // write (the JPS global model reloaded from disk 5 s after a start from its cache; a Docker sandbox drops the
+        // cache, so there it loads at once) waits for the lock, a file opened on the EDT blocks the editor providers'
+        // reads until their 30 s timeout. The Margin tab's startup decision waits for the project's configuration and
+        // comes after the platform's post-startup mark; a scenario must not race it. Smart mode flickers on right after
+        // startup, so it must hold three samples in a row.
         private fun awaitProjectStartup() {
             var settledPolls = 0
             var noted = false
+            val started = System.nanoTime()
+            // Since when each condition has held without a break: the last one to hold is what the start waited for.
+            val heldSince = linkedMapOf<String, Duration?>()
             awaitUntil(
                 "the project has started up, is out of dumb mode, has its global model from disk, no write pending and " +
                     "the Margin tab's startup decision made, 3 s in a row",
@@ -560,12 +568,14 @@ object Sandbox {
                                 && !properties.isValueSet('marginalis.projectTab.reopen');
                         })(com.intellij.ide.util.PropertiesComponent.getInstance(projects[0]));
                         String(JSON.stringify({
-                            settled: projects.length > 0
-                                && com.intellij.ide.startup.StartupManagerEx.getInstanceEx(projects[0]).postStartupActivityPassed()
-                                && !com.intellij.openapi.project.DumbService.isDumb(projects[0])
-                                && !com.intellij.openapi.application.ApplicationManager.getApplication().isWriteActionPending()
-                                && globalModel
-                                && tabDecided,
+                            conditions: {
+                                'post-startup': projects.length > 0
+                                    && com.intellij.ide.startup.StartupManagerEx.getInstanceEx(projects[0]).postStartupActivityPassed(),
+                                'smart mode': projects.length > 0 && !com.intellij.openapi.project.DumbService.isDumb(projects[0]),
+                                'no write pending': !com.intellij.openapi.application.ApplicationManager.getApplication().isWriteActionPending(),
+                                'global model from disk': globalModel,
+                                'Margin tab decided': tabDecided
+                            },
                             globalModelUnavailable: globalModelUnavailable
                         }))
                         """,
@@ -575,10 +585,19 @@ object Sandbox {
                     println("note  the start does not wait for the global workspace model loaded from disk: ${reason.asString}")
                     noted = true
                 }
-                settledPolls = if (probe.get("settled").asBoolean) before + 1 else 0
+                val elapsed = Duration.ofNanos(System.nanoTime() - started)
+                val conditions = probe.getAsJsonObject("conditions").entrySet().associate { (name, held) -> name to held.asBoolean }
+                conditions.forEach { (name, held) -> heldSince[name] = if (held) heldSince[name] ?: elapsed else null }
+                settledPolls = if (conditions.values.all { it }) before + 1 else 0
                 settledPolls >= 3
             }
+            println(
+                "project settled in ${seconds(Duration.ofNanos(System.nanoTime() - started))}; each condition held from " +
+                    heldSince.entries.joinToString { (name, since) -> "$name ${since?.let(::seconds)}" },
+            )
         }
+
+        private fun seconds(duration: Duration) = "%.1f s".format(Locale.ROOT, duration.toMillis() / 1000.0)
 
         @OptIn(ExperimentalPathApi::class)
         private fun freshProject() {

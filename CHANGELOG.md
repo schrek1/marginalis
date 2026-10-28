@@ -23,6 +23,12 @@ History before 0.1.19 lives in git tags.
   waits for you like a new message until you open it again. On a thread
   with something new, the same entry marks it read, and with several
   threads selected it acts on all of them.
+- Navigate › Select In › Marginalis finds the thread on the caret's line
+  in the tool window, from a file or a review diff, and the file when the
+  line has none. A balloon says why when nothing can be selected, or when
+  the filter had to reset to show the thread.
+- *Select Opened Thread* can take a keyboard shortcut and is in Find
+  Action.
 
 ### Changed
 

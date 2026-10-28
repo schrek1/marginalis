@@ -223,7 +223,8 @@ class ReviewDiffTest : HttpContractTestCase() {
 
         assertTrue(diff.laterListenersToldOfClose)
         assertTrue(icons.none { it.isValid })
-        assertNull(diff.editor.getUserData(ThreadInlayManager.THREAD_LINE))
+        assertNull(diff.editor.getUserData(ThreadInlayManager.SHOWN_THREADS))
+        assertNull(diff.baseEditor.getUserData(ThreadInlayManager.SHOWN_THREADS))
     }
 
     fun testAThreadAddedAfterAReviewClosedStillReachesTheEditor() {
@@ -249,7 +250,31 @@ class ReviewDiffTest : HttpContractTestCase() {
         assertNull(failure)
         assertEquals(emptyList<Int>(), diff.iconRows())
         assertEquals(emptyList<Any>(), diff.panels())
-        assertNull(diff.editor.getUserData(ThreadInlayManager.THREAD_LINE))
+        assertNull(diff.editor.getUserData(ThreadInlayManager.SHOWN_THREADS))
         assertEquals(listening, store.threads.listenerCount)
+    }
+
+    fun testUpdatingThePluginWithAReviewOpenForgetsWhatBothItsEditorsShow() {
+        sample()
+        agent.addOnLine(20, "body" to "Open in the review")
+        val diff = diffs.sideBySide(SAMPLE, base, pullRequest)
+        assertNotNull(diff.editor.getUserData(ThreadInlayManager.SHOWN_THREADS))
+        assertNotNull(diff.baseEditor.getUserData(ThreadInlayManager.SHOWN_THREADS))
+
+        assertNull(PluginUnload.forUpdate())
+
+        assertNull(diff.editor.getUserData(ThreadInlayManager.SHOWN_THREADS))
+        assertNull(diff.baseEditor.getUserData(ThreadInlayManager.SHOWN_THREADS))
+    }
+
+    fun testClosingADiffOfLocalChangesForgetsWhatItsBaseShows() {
+        sample()
+        val diff = diffs.localChanges(SAMPLE, pullRequest, unified = false)
+        assertNotNull(diff.baseEditor.getUserData(ThreadInlayManager.SHOWN_THREADS))
+        assertNull(diff.editor.getUserData(ThreadInlayManager.SHOWN_THREADS))
+
+        diff.close()
+
+        assertNull(diff.baseEditor.getUserData(ThreadInlayManager.SHOWN_THREADS))
     }
 }

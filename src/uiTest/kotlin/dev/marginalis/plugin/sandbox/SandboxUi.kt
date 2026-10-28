@@ -230,6 +230,51 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
         )
     }
 
+    /** What Navigate › Select In offered: whether its popup listed Marginalis, and the file its context named. */
+    data class SelectIn(val offered: Boolean, val file: String)
+
+    /** Navigate › Select In from the file's open editor, choosing Marginalis in its popup when it is listed. */
+    fun selectInMarginalisFromEditor(file: String): SelectIn = selectInMarginalis("textEditorOf(${lit(file)})")
+
+    /** As [selectInMarginalisFromEditor], from the review diff editor that shows `after`. */
+    fun selectInMarginalisFromDiff(after: String): SelectIn = selectInMarginalis("diffEditorShowing(${lit(after)})")
+
+    private fun selectInMarginalis(editor: String): SelectIn {
+        val outcome = js(
+            EDITORS + """
+            var editor = $editor;
+            if (editor == null) throw 'no such editor on screen';
+            var selectIn = com.intellij.openapi.actionSystem.ActionManager.getInstance().getAction('SelectIn');
+            var event = com.intellij.openapi.actionSystem.AnActionEvent.createEvent(
+                selectIn, com.intellij.ide.DataManager.getInstance().getDataContext(editor.getContentComponent()),
+                selectIn.getTemplatePresentation().clone(), 'MarginalisSandbox', com.intellij.openapi.actionSystem.ActionUiKind.NONE, null);
+            var context = read(function () { return com.intellij.ide.actions.SelectInContextImpl.createContext(event); });
+            var targets = com.intellij.ide.SelectInTarget.EP_NAME.getExtensions(project);
+            var marginalis = null;
+            for (var i = 0; i < targets.length; i++) if (String(targets[i]) == 'Marginalis') marginalis = targets[i];
+            if (marginalis == null) throw 'no Marginalis target in Select In';
+            var file = String(context.getVirtualFile().getPath());
+            var result = 'not offered';
+            // `read` hands back a boxed Boolean, and any Java object is truthy in JavaScript, FALSE included.
+            if (String(read(function () { return marginalis.canSelect(context); })) == 'true') {
+                var token = String(java.util.UUID.randomUUID());
+                com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater(
+                    new java.lang.Runnable({ run: function () {
+                        var outcome = 'ok';
+                        try { marginalis.selectIn(context, true); } catch (error) { outcome = 'failed: ' + error; }
+                        java.lang.System.getProperties().put('marginalis.sandbox.action.' + token, outcome);
+                    } }));
+                result = token;
+            }
+            String(result + '|' + file)
+            """,
+        )
+        val (token, file) = outcome.split('|', limit = 2)
+        if (token == "not offered") return SelectIn(offered = false, file = file)
+        awaitActionRan("Select In › Marginalis", token)
+        return SelectIn(offered = true, file = file)
+    }
+
     /** Puts the caret of the file's open editor on a 1-based line, as a click there would. */
     fun moveCaret(file: String, line: Int) {
         js(
@@ -548,17 +593,20 @@ function projectTab() { return pluginLoader.loadClass('dev.marginalis.plugin.ui.
         }
 
     /** Edits the file's document as typing does: one undoable command, through the editor's document. */
+    // From a background call: the robot's own EDT script is a raw Swing event, which TransactionGuard holds write-unsafe.
+    // Its report is only logged as a rule, but an IDE whose logger still is the bootstrap DefaultLogger throws it.
     private fun editDocument(file: String, change: String) {
-        js(
-            EDITORS + """
-            var document = textEditorOf('$file').getDocument();
+        Sandbox.robot.callJs(
+            PRELUDE + EDITORS + """
             com.intellij.openapi.application.ApplicationManager.getApplication().invokeAndWait(new java.lang.Runnable({ run: function () {
+                var document = textEditorOf('$file').getDocument();
                 com.intellij.openapi.command.WriteCommandAction.runWriteCommandAction(project, new java.lang.Runnable({ run: function () {
                     $change
                 } }));
-            } }));
+            } }), com.intellij.openapi.application.ModalityState.nonModal());
             String(true)
             """,
+            edt = false,
         )
     }
 
