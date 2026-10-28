@@ -24,7 +24,7 @@ runs:
     - id: restore
       uses: actions/cache/restore@v6
       with:
-        path: .intellijPlatform/layoutIndex
+        path: .intellijPlatform/ides/layoutIndex
         key: ${{ steps.key.outputs.key }}
     - name: Index the IDE's bundled plugins
       if: steps.restore.outputs.cache-hit != 'true'
@@ -33,7 +33,7 @@ runs:
         for attempt in 1 2 3; do
           ./gradlew dependencies --configuration compileClasspath --console=plain -q > /dev/null
           complete=true
-          for index in .intellijPlatform/layoutIndex/*.json; do
+          for index in .intellijPlatform/ides/layoutIndex/*.json; do
             if ! jq -e 'any(.entries[]; .id == "com.intellij.java")' "$index" > /dev/null; then
               echo "Attempt $attempt: $index lacks the Java plugin; rebuilding it."
               rm -f "$index"
@@ -48,5 +48,5 @@ runs:
     - if: inputs.save == 'true' && steps.restore.outputs.cache-hit != 'true'
       uses: actions/cache/save@v6
       with:
-        path: .intellijPlatform/layoutIndex
+        path: .intellijPlatform/ides/layoutIndex
         key: ${{ steps.key.outputs.key }}
