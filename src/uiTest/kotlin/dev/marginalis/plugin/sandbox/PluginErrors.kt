@@ -17,19 +17,28 @@ object PluginErrors {
      */
     fun inLog(lines: List<String>, since: String? = null): List<String> {
         val entries = mutableListOf<List<String>>()
-        for (line in lines) {
+        for (line in if (since == null) lines else writtenSince(lines, since)) {
             when {
                 ENTRY.matches(line) -> entries.add(listOf(line))
                 entries.isNotEmpty() -> entries[entries.lastIndex] = entries.last() + line
             }
         }
         return entries
-            .filter { entry -> since == null || entry.first().take(since.length) >= since }
             .filter { entry -> ENTRY.matchEntire(entry.first())!!.groupValues[1] in setOf("ERROR", "SEVERE") }
             .filter { entry -> entry.any { PLUGIN_PACKAGE in it } }
             .map { entry ->
                 val where = entry.drop(1).firstOrNull { PLUGIN_PACKAGE in it }?.trim()
                 listOfNotNull(entry.first(), where).joinToString(" | ")
             }
+    }
+
+    /**
+     * The lines of a log from its first entry written at or after `since` on; empty when every entry is older.
+     *
+     * @param since a timestamp in the log's own format
+     */
+    fun writtenSince(lines: List<String>, since: String): List<String> {
+        val first = lines.indexOfFirst { line -> ENTRY.matches(line) && line.take(since.length) >= since }
+        return if (first < 0) emptyList() else lines.drop(first)
     }
 }
