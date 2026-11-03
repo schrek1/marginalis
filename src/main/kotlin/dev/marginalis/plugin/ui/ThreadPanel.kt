@@ -596,8 +596,7 @@ class ThreadPanel(
         override fun actionPerformed(e: AnActionEvent) {
             val (walk, i) = WalkthroughNavigator.walkFrom(project, thread)
             val destination = target(walk, i) ?: return
-            onClose()
-            stayOrNavigateTo(destination)
+            stayOrNavigateTo(destination, leaving = onClose)
         }
     }
 
@@ -756,10 +755,10 @@ class ThreadPanel(
         stayOrNavigateTo(wider)
     }
 
-    private fun stayOrNavigateTo(target: CommentThread) {
+    private fun stayOrNavigateTo(target: CommentThread, leaving: () -> Unit = {}) {
         val here = editor
-        if (here == null || !WalkthroughNavigator.navigateWithin(here, project, target)) {
-            WalkthroughNavigator.navigateTo(project, target)
+        if (here == null || !WalkthroughNavigator.navigateWithin(here, project, target, leaving)) {
+            WalkthroughNavigator.navigateTo(project, target, leaving = leaving)
         }
     }
 
