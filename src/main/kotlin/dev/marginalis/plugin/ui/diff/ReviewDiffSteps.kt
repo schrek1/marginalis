@@ -33,9 +33,18 @@ object ReviewDiffSteps {
     /**
      * @param from the editor the step is moving from
      * @param file the step's project-relative file
+     * @param leaving runs right before the switch, while the file being left is still the one the review shows: a
+     *   step folded after it would open again when the review comes back to that file
      * @return false when [from] is not in a review diff or the diff does not list [file]; nothing was changed then
      */
-    fun switchTo(project: Project, from: Editor, file: String, thread: CommentThread, revealing: Message?): Boolean {
+    fun switchTo(
+        project: Project,
+        from: Editor,
+        file: String,
+        thread: CommentThread,
+        revealing: Message?,
+        leaving: () -> Unit = {},
+    ): Boolean {
         val viewer = FileEditorManager.getInstance(project).allEditors
             .filterIsInstance<DiffEditorViewerFileEditor>()
             .firstOrNull { from in it.embeddedEditors }
@@ -47,6 +56,7 @@ object ReviewDiffSteps {
         val index = ReviewDiffFiles.switchTarget(file, root, files.paths, files.shownIndex) ?: return false
         // The diff may build the new viewer before select() returns.
         pending[viewer.context] = PendingStep(file, thread, revealing)
+        leaving()
         if (withReviewDiffApi { files.select(index) } != null) return true
         pending.remove(viewer.context)
         return false

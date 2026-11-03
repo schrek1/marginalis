@@ -621,8 +621,8 @@ class ThreadPanel(
         override fun actionPerformed(e: AnActionEvent) {
             val (walk, i) = WalkthroughNavigator.walkFrom(project, thread)
             val destination = target(walk, i) ?: return
-            if (MarginalisSettings.getInstance().leavingAStep == LeavingAStep.FOLD) onClose()
-            stayOrNavigateTo(destination)
+            val folding = MarginalisSettings.getInstance().leavingAStep == LeavingAStep.FOLD
+            stayOrNavigateTo(destination, leaving = if (folding) onClose else ({}))
         }
     }
 
@@ -799,8 +799,8 @@ class ThreadPanel(
         stayOrNavigateTo(wider)
     }
 
-    private fun stayOrNavigateTo(target: CommentThread) =
-        WalkthroughNavigator.navigateTo(project, target, from = editor)
+    private fun stayOrNavigateTo(target: CommentThread, leaving: () -> Unit = {}) =
+        WalkthroughNavigator.navigateTo(project, target, from = editor, leaving = leaving)
 
     private fun pickAddressee(atOffset: Int) {
         val composerEditor = replyArea.editor ?: return
