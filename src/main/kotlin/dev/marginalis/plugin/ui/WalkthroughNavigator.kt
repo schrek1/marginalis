@@ -47,7 +47,7 @@ object WalkthroughNavigator {
         val stayed = when {
             from == null || from.isDisposed -> false
             from.shows(project, path) -> navigateWithin(from, project, thread, revealing, leaving)
-            else -> ReviewDiffSteps.switchTo(project, from, path, thread, revealing).also { switched -> if (switched) leaving() }
+            else -> ReviewDiffSteps.switchTo(project, from, path, thread, revealing, leaving)
         }
         if (!stayed) openStepInFileTab(project, thread, revealing, leaving)
     }
