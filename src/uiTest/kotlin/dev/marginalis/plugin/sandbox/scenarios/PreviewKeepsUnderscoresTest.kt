@@ -44,9 +44,9 @@ class PreviewKeepsUnderscoresTest : SandboxScenario("preview_keeps_underscores")
     fun theBalloonKeepsTheUnderscores() = case("the_balloon_keeps_the_underscores") {
         ids["P"] = Agent.agentStartsProjectThread("Release checklist")
         SandboxUi.userReads(id("P"))
-        clearBalloons()
+        SandboxUi.expireBalloons()
         Agent.agentReplies(id("P"), P_REPLY)
-        val balloon = readUntil("a balloon for P's reply", read = { balloonTexts() }) { shown -> shown.isNotEmpty() }
+        val balloon = readUntil("a balloon for P's reply", read = { SandboxUi.marginalisBalloons() }) { shown -> shown.isNotEmpty() }
         shot("2-balloon")
         check("balloon: the reply keeps its underscores", balloon.contains(P_REPLY_PREVIEW), balloon)
     }
@@ -91,32 +91,6 @@ class PreviewKeepsUnderscoresTest : SandboxScenario("preview_keeps_underscores")
         )
         return ids.mapValues { (_, threadId) -> raw.get(threadId)?.asString ?: "missing" }
     }
-
-    private fun clearBalloons() {
-        SandboxUi.js(
-            """
-            var shown = com.intellij.notification.NotificationsManager.getNotificationsManager()
-                .getNotificationsOfType(com.intellij.notification.Notification, project);
-            for (var i = 0; i < shown.length; i++) shown[i].expire();
-            'ok'
-            """,
-        )
-    }
-
-    /** The content of every Marginalis notification still shown in the project. */
-    private fun balloonTexts(): List<String> = SandboxUi.stringList(
-        SandboxUi.js(
-            """
-            var shown = com.intellij.notification.NotificationsManager.getNotificationsManager()
-                .getNotificationsOfType(com.intellij.notification.Notification, project);
-            var texts = [];
-            for (var i = 0; i < shown.length; i++) {
-                if (String(shown[i].getGroupId()) == 'Marginalis') texts.push(String(shown[i].getContent()));
-            }
-            String(JSON.stringify(texts))
-            """,
-        ),
-    )
 
     private fun marginCardLastLine(threadId: String): String = SandboxUi.marginJs(
         """
