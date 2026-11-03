@@ -10,6 +10,7 @@ import java.net.http.HttpResponse
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
+import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -45,7 +46,8 @@ object Sandbox {
     private const val CONTAINER_ROBOT_PORT = 8082
     private const val CONTAINER_REST_PORT = 63342
     private const val CONTAINER_PROJECT = "/work/runtime/project"
-    private const val CONTAINER_IDE_LOG = "/work/runtime/ide/log_runIdeForUiTests/idea.log"
+    private const val CONTAINER_IDE_LOGS = "/work/runtime/ide/log_runIdeForUiTests"
+    private val logClock = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss,SSS")
 
     // Below 8100 the manual sandboxes of sandbox.py run (8082 by default); the claim stops at the first port docker can
     // create and start.
@@ -96,8 +98,11 @@ object Sandbox {
     val robot: Robot get() = sandbox.robot
     val project: Path get() = sandbox.project
 
-    /** The sandbox IDE's console log; a Docker sandbox's holds every start of its container, restarts included. */
-    val ideLog: Path get() = sandbox.logFile
+    /**
+     * Where the sandbox's stop for good saves the IDE's own log, from the sandbox's first start on, restarts included;
+     * null for an attached IDE, whose log the harness does not know.
+     */
+    val ideLog: Path? get() = sandbox.savedIdeLog.takeIf { launch != Launch.ATTACH }
 
     /** The `handed_back_at` of the last round that woke the agent in this sandbox; the next `comment_wait` waits after it. */
     var lastRoundAt: String?
@@ -132,7 +137,7 @@ object Sandbox {
     /** Puts a file of this machine where the sandbox IDE reads it; returns its path there. */
     fun fileForIde(file: Path): String = sandbox.fileForIde(file)
 
-    /** The running Docker sandbox IDE's own `idea.log`; its volume keeps earlier runs' entries above this run's. */
+    /** The sandbox IDE's own log; a Docker sandbox's volume keeps earlier runs' entries above this run's. */
     fun ideLogLines(): List<String> = sandbox.ideLogLines()
 
     /** Records what the calling thread's sandbox is doing: a thread dump in its IDE log and a shot of its frame. */
@@ -160,6 +165,10 @@ object Sandbox {
             private set
         val project: Path = dir.resolve("project")
         val logFile: Path = dir.resolve("run.log")
+        val savedIdeLog: Path = dir.resolve("idea.log").also { Files.deleteIfExists(it) }
+
+        /** The first start's moment by the IDE's clock, in its log's format: the log holds earlier runs' entries above. */
+        private var ideLogSince: String? = null
 
         /** The claimed container: created by the first start, kept over restarts, removed by a releasing stop. */
         private var container: String? = null
@@ -199,6 +208,7 @@ object Sandbox {
                 Launch.DOCKER -> startContainer()
                 else -> {
                     check(!robotUp()) { "a sandbox already answers on robot port $robotPort; stop it first" }
+                    ideLogSince = ideLogSince ?: LocalDateTime.now().format(logClock)
                     startOnXvfb()
                 }
             }
@@ -235,6 +245,7 @@ object Sandbox {
                     // the next start seeds the container from the host folder.
                     pullFailure = pullProject(name)
                     if (release) {
+                        saveIdeLog()
                         docker("rm", "-f", name)
                         liveContainers.remove(name)
                         container = null
@@ -243,6 +254,7 @@ object Sandbox {
                 Launch.XVFB -> ide?.let { process ->
                     process.descendants().forEach { it.destroyForcibly() }
                     process.destroyForcibly()
+                    if (release) saveIdeLog()
                 }
                 Launch.ATTACH -> Unit
             }
@@ -311,6 +323,9 @@ object Sandbox {
             // `uiSandboxTest` built the image already (`sandboxImage`).
             if (prebuilt == null) docker("build", "-q", "-t", image, harness.toString(), check = true)
             val name = container?.also { docker("start", it, check = true) } ?: claimContainer()
+            // The container's clock and zone are the IDE's; its JVM takes seconds before its first log entry.
+            ideLogSince = ideLogSince
+                ?: checkNotNull(dockerOutput("exec", name, "date", "+%Y-%m-%d %H:%M:%S,%3N")) { "the clock of $name could not be read" }.trim()
             return ProcessBuilder("docker", "logs", "-f", name).redirectErrorStream(true).redirectOutput(logFile.toFile()).start()
         }
 
@@ -428,9 +443,35 @@ object Sandbox {
                 .also { println("DIAG  $it") }
         }
 
-        fun ideLogLines(): List<String> {
-            check(launch == Launch.DOCKER && containerRunning()) { "the IDE's own log is read from a running Docker sandbox" }
-            return checkNotNull(dockerOutput("exec", container!!, "cat", CONTAINER_IDE_LOG)) { "$CONTAINER_IDE_LOG could not be read" }.lines()
+        /** `idea.1.log` first: a rotation at 10 MB moves the older entries there. */
+        fun ideLogLines(): List<String> =
+            (ideLogFile("idea.1.log") ?: emptyList()) + checkNotNull(ideLogFile("idea.log")) { "the sandbox IDE has no idea.log" }
+
+        /** A file of the IDE's log folder, running or stopped, as lines; null when it does not exist. */
+        private fun ideLogFile(name: String): List<String>? = when (launch) {
+            Launch.DOCKER -> {
+                val inContainer = "${checkNotNull(container) { "the sandbox has no container" }}:$CONTAINER_IDE_LOGS/$name"
+                val copy = Files.createTempFile(dir, "ide-log-", ".log")
+                try {
+                    val run = dockerRun("cp", inContainer, copy.toString())
+                    when {
+                        run.exit == 0 -> copy.readText().lines()
+                        "Could not find" in run.output -> null
+                        else -> error("docker cp $inContainer exited with ${run.exit}: ${run.output}")
+                    }
+                } finally {
+                    Files.deleteIfExists(copy)
+                }
+            }
+            Launch.XVFB -> dir.resolve("ide/log_runIdeForUiTests/$name").takeIf { it.exists() }?.readText()?.lines()
+            Launch.ATTACH -> error("an attached IDE's log is not known")
+        }
+
+        /** Keeps the IDE's log since the first start in [savedIdeLog]; a log it cannot save fails the plugin-error check. */
+        private fun saveIdeLog() {
+            val since = ideLogSince ?: return
+            runCatching { Files.write(savedIdeLog, PluginErrors.writtenSince(ideLogLines(), since)) }
+                .onFailure { println("DIAG  the IDE's log could not be saved to $savedIdeLog: ${it.message}") }
         }
 
         fun fileForIde(file: Path): String {

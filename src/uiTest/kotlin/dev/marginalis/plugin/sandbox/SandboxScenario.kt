@@ -56,9 +56,17 @@ abstract class SandboxScenario(private val scenario: String) {
         try {
             case("ide_shutdown") {
                 check("the IDE exited when asked and its project came back to the host", stopFailure == null, stopFailure?.message)
-                // Read after the stop: errors the plugin raises while the IDE shuts down count too.
-                val errors = PluginErrors.inLog(if (Files.exists(ideLog)) Files.readAllLines(ideLog) else emptyList())
-                check("the IDE logged no error from the plugin", errors.isEmpty(), errors.firstOrNull()?.let { "${errors.size} entries in $ideLog, first: $it" })
+                if (ideLog == null) {
+                    report("INFO  an attached IDE's log is not read for the plugin's errors")
+                } else {
+                    // Saved by the stop: errors the plugin raises while the IDE shuts down count too.
+                    val errors = if (Files.exists(ideLog)) PluginErrors.inLog(Files.readAllLines(ideLog)) else null
+                    check(
+                        "the IDE logged no error from the plugin",
+                        errors?.isEmpty() == true,
+                        if (errors == null) "the stop saved no IDE log to $ideLog" else "${errors.size} entries in $ideLog, first: ${errors.firstOrNull()}",
+                    )
+                }
             }
         } finally {
             report("== $scenario: $passes pass, ${failures.size} fail, ${"%.1f".format(Locale.ROOT, minutes)} min")
