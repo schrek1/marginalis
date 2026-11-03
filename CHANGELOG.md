@@ -7,6 +7,13 @@ History before 0.1.19 lives in git tags.
 
 ## [Unreleased]
 
+### Fixed
+
+- A walkthrough keeps its place when the next step's file won't open,
+  such as an OpenAPI spec whose Swagger preview fails to load. The step
+  you are on stays open, and a balloon names the step and the file it
+  could not show.
+
 ## [0.2.7] - 2026-10-22
 
 Thanks to [@schrek1](https://github.com/schrek1) for starting the long-thread work in this release.
