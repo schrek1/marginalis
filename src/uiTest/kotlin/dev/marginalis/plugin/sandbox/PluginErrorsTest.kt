@@ -67,4 +67,29 @@ class PluginErrorsTest {
         // THEN - only the later entry is reported
         errors shouldContainExactly listOf(log[1])
     }
+
+    @Test
+    fun `a log is cut where the first entry since a moment starts, keeping the lines under each entry`() {
+        // GIVEN - an earlier run's entry with its stack trace, then this run's entry with its own
+        val log = """
+            2026-10-28 06:40:00,000 [   1000]  ERROR - #dev.marginalis.plugin.ui.AvatarIcon - from an earlier run
+            	at dev.marginalis.plugin.ui.AvatarIcon.paint(AvatarIcon.kt:10)
+            2026-10-28 06:48:56,900 [  14819]   INFO - #c.i.i.StartupUtil - ------ IDE STARTED ------
+            2026-10-28 06:48:57,000 [  14919]  ERROR - #dev.marginalis.plugin.ui.AvatarIcon - in this run
+            	at dev.marginalis.plugin.ui.AvatarIcon.paint(AvatarIcon.kt:10)
+        """.trimIndent().lines()
+
+        // WHEN - the log is cut at this run's start
+        val written = PluginErrors.writtenSince(log, since = "2026-10-28 06:48:55,000")
+
+        // THEN - this run's lines stay, the trace under its error included
+        written shouldContainExactly log.drop(2)
+    }
+
+    @Test
+    fun `a log with no entry since a moment is cut to nothing`() {
+        val log = listOf("2026-10-28 06:40:00,000 [   1000]  ERROR - #dev.marginalis.plugin.ui.AvatarIcon - from an earlier run")
+
+        PluginErrors.writtenSince(log, since = "2026-10-28 06:48:55,000").shouldBeEmpty()
+    }
 }

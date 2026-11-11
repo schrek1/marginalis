@@ -209,6 +209,7 @@ jobs:
           path: |
             build/test-results/uiSandboxTest/
             build/sandbox-runtime/*/run.log
+            build/sandbox-runtime/*/idea.log
             build/sandbox-runtime/*/diagnostics/
             build/sandbox-runtime/shots/
           if-no-files-found: ignore
