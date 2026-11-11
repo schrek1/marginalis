@@ -114,6 +114,7 @@
         <!-- The project tab: project-level threads in an editor tab of their own. -->
         <virtualFileSystem key="marginalis" implementationClass="dev.marginalis.plugin.ui.tab.MarginFileSystem"/>
         <fileEditorProvider implementation="dev.marginalis.plugin.ui.tab.MarginEditorProvider"/>
+        <fileEditorProvider implementation="dev.marginalis.plugin.ui.TextOnlyEditorProvider"/>
         <editorTabTitleProvider implementation="dev.marginalis.plugin.ui.tab.MarginTabTitleProvider" order="first"/>
         <fileIconProvider implementation="dev.marginalis.plugin.ui.tab.MarginTabIconProvider"/>
         <!-- The turn signal's long arm: agent posts in unfocused files. -->

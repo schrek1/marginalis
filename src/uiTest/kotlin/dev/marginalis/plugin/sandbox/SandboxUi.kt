@@ -1273,20 +1273,28 @@ function sortButton() {
         ),
     )
 
-    /** The names [closeOnOpen] has closed so far, in order. */
+    /** The names [closeOnOpen] and [previewFailsOn] have closed so far, in order. */
     fun closedOnOpen(): List<String> =
         js("String(java.lang.System.getProperty('marginalis.sandbox.closeOnOpen.closed', ''))").split(' ').filter { it.isNotEmpty() }
 
     /**
-     * From now on the IDE closes a file named [fileName] the moment it opens, as it does when the file's preview editor
-     * fails to build (an OpenAPI spec whose Swagger preview crashes in JCEF); null stops that.
+     * From now on the IDE closes a file named [fileName] the moment it opens, even as plain text; null stops that.
      */
-    fun closeOnOpen(fileName: String?) {
+    fun closeOnOpen(fileName: String?) = closeOpening("marginalis.sandbox.closeOnOpen", fileName)
+
+    /**
+     * From now on the IDE closes a file named [fileName] the moment it opens with any editor besides Marginalis's
+     * text-only one, as it does when the file's preview editor fails to build (an OpenAPI spec whose Swagger preview
+     * crashes in JCEF); null stops that.
+     */
+    fun previewFailsOn(fileName: String?) = closeOpening("marginalis.sandbox.previewFailsOn", fileName)
+
+    private fun closeOpening(property: String, fileName: String?) {
         js(
             """
             var props = java.lang.System.getProperties();
-            if (${lit(fileName ?: "")} == '') props.remove('marginalis.sandbox.closeOnOpen');
-            else props.put('marginalis.sandbox.closeOnOpen', ${lit(fileName ?: "")});
+            if (${lit(fileName ?: "")} == '') props.remove(${lit(property)});
+            else props.put(${lit(property)}, ${lit(fileName ?: "")});
             if (props.get('marginalis.sandbox.closeOnOpen.installed') == null) {
                 props.put('marginalis.sandbox.closeOnOpen.installed', 'yes');
                 // A plain Proxy: Rhino's interface adapters implement only abstract methods, and every method of this
@@ -1301,7 +1309,16 @@ function sortButton() {
                     new java.lang.reflect.InvocationHandler({
                         invoke: function (proxy, method, args) {
                             var name = String(method.getName());
-                            if (name == 'fileOpened' && String(args[1].getName()) == String(java.lang.System.getProperty('marginalis.sandbox.closeOnOpen'))) {
+                            var opened = name == 'fileOpened' ? String(args[1].getName()) : null;
+                            var withPreview = function () {
+                                var providers = args[0].getComposite(args[1]).getAllProviders();
+                                for (var i = 0; i < providers.size(); i++) {
+                                    if (String(providers.get(i).getEditorTypeId()) != 'marginalis-text-only') return true;
+                                }
+                                return false;
+                            };
+                            if (opened != null && (opened == String(java.lang.System.getProperty('marginalis.sandbox.closeOnOpen'))
+                                || opened == String(java.lang.System.getProperty('marginalis.sandbox.previewFailsOn')) && withPreview())) {
                                 args[0].closeFile(args[1]);
                                 java.lang.System.setProperty('marginalis.sandbox.closeOnOpen.closed',
                                     java.lang.System.getProperty('marginalis.sandbox.closeOnOpen.closed', '') + ' ' + args[1].getName());
