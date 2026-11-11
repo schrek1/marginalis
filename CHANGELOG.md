@@ -77,22 +77,12 @@ History before 0.1.19 lives in git tags.
   without project threads opens without it, and an agent's new project
   thread opens a closed tab behind the file you are reading. It no
   longer pins itself on a project's first open.
-- The reply composer's send menu reads "Submit & send round" again,
-  instead of losing the ampersand to an underlined letter.
-- On a line with several threads, choosing an open thread in the
-  chooser folds it again, just as clicking the icon of a single thread
-  does.
-- The buttons in a thread's header and the Margin tab's Sort menu no
-  longer wait for a busy IDE, so they stop holding up the editor while
-  the IDE is under load.
-- A code block with lines wider than the thread scrolls sideways in its
-  own pane, so its end is no longer cut off at the panel's edge.
+- The Margin tab's Sort menu no longer waits for a busy IDE, so it
+  stops holding up the editor while the IDE is under load.
 - The step you move to in a pull or merge request review stays open.
   The review rebuilds a file's view whenever its data refreshes, and that
   folded the thread you had just stepped to, leaving only its gutter icon;
   threads open in the review now open again with it.
-- Escape in a reply box now closes just the reply box: the thread stays
-  open with your draft kept, and a second Escape folds the thread.
 - Updating Marginalis without restarting the IDE no longer logs an
   error while the tool window repaints during the update.
 - The 12-hour clock on messages speaks the IDE's language. On a system
@@ -112,6 +102,29 @@ History before 0.1.19 lives in git tags.
   such as an OpenAPI spec whose Swagger preview fails to load. The step
   you are on stays open, and a balloon names the step and the file it
   could not show.
+
+## [0.2.8] - 2026-11-11
+
+Thanks to [@schrek1](https://github.com/schrek1) for the fixes in this release.
+
+### Changed
+
+- Escape in a reply box now closes just the reply box: the thread stays
+  open with your draft kept, and a second Escape folds the thread.
+
+### Fixed
+
+- The reply composer's send menu reads "Submit & send round" in full,
+  instead of losing the ampersand to an underlined letter.
+- The buttons in a thread's header no longer wait for a busy IDE, so
+  they stop holding up the editor while the IDE is under load.
+- Editing one of your messages no longer discards a reply you had
+  started. Your unsent reply is back when you save or cancel the edit.
+- On a line with several threads, choosing an open thread in the
+  chooser folds it again, just as clicking the icon of a single thread
+  does.
+- A code block with lines wider than the thread scrolls sideways in its
+  own pane, so its end is no longer cut off at the panel's edge.
 
 ## [0.2.7] - 2026-10-22
 
