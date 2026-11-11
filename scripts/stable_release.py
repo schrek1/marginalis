@@ -123,10 +123,11 @@ def follow_up(sha: str, outcome: str, version: str, reason: str, run_url: str, d
 
 
 def tell_issue(actions: Actions, number: int, in_stable: str) -> None:
-    issue = json.loads(gh("issue", "view", str(number), "--repo", REPO, "--json", "state,labels"))
+    issue = json.loads(gh("issue", "view", str(number), "--repo", REPO, "--json", "state,labels,comments"))
     labels = {label["name"] for label in issue["labels"]}
-    if IN_STABLE in labels:
-        print(f"issue {number} already carries {IN_STABLE}")
+    # The comment names the release, so it marks a re-run; `in-stable` from an earlier release must not (a reopened issue).
+    if any(comment["body"].strip() == in_stable for comment in issue["comments"]):
+        print(f"issue {number} was already told about this release")
         return
     actions.run(f"comment on issue {number}: {in_stable}", "issue", "comment", str(number), "--repo", REPO, "--body", in_stable)
     edit = ["issue", "edit", str(number), "--repo", REPO, "--add-label", IN_STABLE]
