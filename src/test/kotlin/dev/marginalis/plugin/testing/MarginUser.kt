@@ -374,20 +374,16 @@ class MarginUser(private val project: Project, private val disposable: Disposabl
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
     }
 
-    fun submitLabel(panel: ThreadPanel): String = sendButton(panel).action.getValue(Action.NAME) as String
+    fun submitLabel(panel: ThreadPanel): String = labelAsShown(sendButton(panel).action)
 
-    fun sendOptions(panel: ThreadPanel): List<String> = sendButton(panel).options.orEmpty().map(::shownText)
+    fun sendOptions(panel: ThreadPanel): List<String> = sendButton(panel).options.orEmpty().map(::labelAsShown)
 
     fun sendInstead(panel: ThreadPanel, option: String) {
-        sendButton(panel).options!!.single { shownText(it) == option }.actionPerformed(null)
+        sendButton(panel).options!!.single { labelAsShown(it) == option }.actionPerformed(null)
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
     }
 
-    /**
-     * An option as the send button's popup shows it: through a [Presentation], which reads a `&` in the name as a
-     * mnemonic marker. A headless button has no UI to open the popup itself.
-     */
-    private fun shownText(option: Action): String = Presentation().apply { text = option.getValue(Action.NAME) as String }.text
+    private fun labelAsShown(option: Action): String = Presentation().apply { text = option.getValue(Action.NAME) as String }.text
 
     private fun sendButton(panel: ThreadPanel): JBOptionButton {
         panel.focusReply()
@@ -585,7 +581,6 @@ class MarginUser(private val project: Project, private val disposable: Disposabl
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
     }
 
-    /** A header action updating on the EDT waits for it, so a busy EDT stalls the whole toolbar. */
     fun headerActionsUpdatingOnTheUiThread(panel: ThreadPanel): List<String> = toolbarActions(panel)
         .filter { it !is Separator && it.actionUpdateThread == ActionUpdateThread.EDT }
         .map { it.templatePresentation.text ?: it.javaClass.name }

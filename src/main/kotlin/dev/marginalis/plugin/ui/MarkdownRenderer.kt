@@ -60,8 +60,9 @@ import javax.swing.text.html.StyleSheet
 /**
  * GitHub-flavoured, with images as placeholders and raw HTML reduced to
  * what the Markdown itself produces: each extra construct carries its own
- * Swing sizing tax. A top-level table pays it in its own pane at natural
- * width, scrolling sideways, so the prose around it keeps wrapping.
+ * Swing sizing tax. A top-level table and a fenced code block each pay it
+ * in their own pane at natural width, scrolling sideways, so the prose
+ * around them keeps wrapping.
  */
 object MarkdownRenderer {
 

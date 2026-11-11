@@ -715,6 +715,59 @@ class ThreadPanelTest : HttpContractTestCase() {
         assertEquals("Typo hre.", agent.threads().single().messages().last().string("body"))
     }
 
+    fun testEscapeWhileEditingKeepsTheUnsentReply() {
+        val (id, panel) = editingWithAnUnsentReply()
+
+        user.pressKeyInComposer(panel, KeyEvent.VK_ESCAPE)
+
+        assertEquals("half a thought", user.composer(panel).text)
+        assertEquals("half a thought", user.composer(user.open(id)).text)
+    }
+
+    fun testCancellingAnEditKeepsTheUnsentReply() {
+        val (id, panel) = editingWithAnUnsentReply()
+
+        user.clickLink(panel, "Cancel")
+
+        assertEquals("half a thought", user.composer(panel).text)
+        assertEquals("half a thought", user.composer(user.open(id)).text)
+    }
+
+    fun testSavingAnEditKeepsTheUnsentReply() {
+        val (id, panel) = editingWithAnUnsentReply()
+        user.type(panel, "Typo here.")
+
+        user.submit(panel)
+
+        assertEquals("Typo here.", agent.threads().single().messages().last().string("body"))
+        assertEquals("half a thought", user.composer(panel).text)
+        assertEquals("half a thought", user.composer(user.open(id)).text)
+    }
+
+    fun testAThreadReopenedWithADraftTakesOneEscapeForTheReplyBoxAndOneToFold() {
+        sample()
+        val id = agent.addOnLine(5)
+        user.type(user.open(id), "keep me")
+        val panel = user.open(id)
+
+        user.pressEscape(panel)
+        assertEquals(listOf(panel), user.panels())
+        assertTrue(user.visibleLinks(panel).contains("Reply…"))
+
+        user.pressEscape(panel)
+        assertEquals(emptyList<ThreadPanel>(), user.panels())
+    }
+
+    private fun editingWithAnUnsentReply(): Pair<String, ThreadPanel> {
+        sample()
+        val id = agent.addOnLine(5)
+        user.reply(id, "Typo hre.")
+        val panel = user.open(id)
+        user.type(panel, "half a thought")
+        user.clickLink(panel, "Edit")
+        return id to panel
+    }
+
     fun testBylinesFollowTheChosenClock() {
         sample()
         val id = agent.addOnLine(5)

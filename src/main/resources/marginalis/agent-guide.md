@@ -399,6 +399,8 @@ natural width and scrolls sideways when it is wider than the panel; a
 table inside a list or quote wraps with its text. Fenced code blocks
 display as read-only editor fragments with native syntax highlighting —
 tag your fences with a language and prefer them to prose-wrapped code.
+A code block wider than the panel scrolls sideways too, so keep long
+lines whole instead of breaking them to fit.
 Deliberately outside the scope: images show as `[image]`, and raw HTML
 is reduced to the constructs above — any other tag is dropped, keeping
 its text — so stay within them.
