@@ -33,6 +33,14 @@ object ReflectionGuard {
         "com.intellij.util.ReflectionUtil", "com.intellij.util.ReflectionUtilRt", "com.intellij.util.MethodInvocator",
     )
 
+    // Production code cannot opt out with @AllowReflection. These functions are the only exceptions, each with why
+    // public API cannot do it and when the exception goes; one that no longer needs its exception fails the check.
+    private val PRODUCTION_EXCEPTIONS = mapOf(
+        "dev.marginalis.plugin.ui.tab.ProjectTab.requestOpen" to
+            "FileEditorManager.requestOpenFile(VirtualFile) returns void up to 2026.2 and a CompletableFuture from 2026.3, " +
+            "and every other non-blocking opener is internal API; remove once since-build reaches 263 and call it directly",
+    )
+
     private val CLASS_TYPE_IDENTITY_AND_RESOURCES = setOf(
         "getName", "getSimpleName", "getClassLoader", "isInstance", "cast", "getResource", "getResourceAsStream",
     )
@@ -79,7 +87,10 @@ object ReflectionGuard {
                 "[${production.first().project}] contributed no production classes: nothing compiled to ${production.flatMap { it.compiledTo }}"
             }
         }
-        rule(owners).check(classes)
+        val usedExceptions = mutableSetOf<String>()
+        rule(owners, usedExceptions).check(classes)
+        val unused = PRODUCTION_EXCEPTIONS.keys - usedExceptions
+        check(unused.isEmpty()) { "production reflection exceptions no code needs any more, remove them: $unused" }
     }
 
     private fun discoveredSourceSets(rootProjectName: String): List<SourceSetClasses> =
@@ -90,10 +101,10 @@ object ReflectionGuard {
             SourceSetClasses(projectPath, project, sourceSet, kind == "production", compiledTo)
         }
 
-    private fun rule(owners: Map<JavaClass, SourceSetClasses>): ArchRule =
-        classes().should(useNoReflection(owners)).because(HOW_TO_FIX)
+    private fun rule(owners: Map<JavaClass, SourceSetClasses>, usedExceptions: MutableSet<String>): ArchRule =
+        classes().should(useNoReflection(owners, usedExceptions)).because(HOW_TO_FIX)
 
-    private fun useNoReflection(owners: Map<JavaClass, SourceSetClasses>) =
+    private fun useNoReflection(owners: Map<JavaClass, SourceSetClasses>, usedExceptions: MutableSet<String>) =
         object : ArchCondition<JavaClass>("use no reflection") {
             override fun check(item: JavaClass, events: ConditionEvents) {
                 val owner = owners.getValue(item)
@@ -108,6 +119,7 @@ object ReflectionGuard {
                 (dependencies + calls)
                     .map { violation -> violation to (originOf(violation, origins) ?: item) }
                     .filterNot { (_, origin) -> owner.mayOptOut && origin is JavaCodeUnit && isExempt(origin) }
+                    .filterNot { (_, origin) -> owner.isProduction && origin is JavaCodeUnit && isProductionException(origin, usedExceptions) }
                     .forEach { (violation, origin) ->
                         events.add(SimpleConditionEvent.violated(item, "[${owner.project}] " + violation.describeFrom(origin)))
                     }
@@ -144,6 +156,13 @@ object ReflectionGuard {
             owner.packageName == "kotlin.reflect" -> name !in KOTLIN_TYPE_IDENTITY_AND_REFERENCES
             else -> false
         }
+    }
+
+    private fun isProductionException(codeUnit: JavaCodeUnit, usedExceptions: MutableSet<String>): Boolean {
+        val name = "${codeUnit.owner.name}.${codeUnit.name}"
+        if (name !in PRODUCTION_EXCEPTIONS) return false
+        usedExceptions += name
+        return true
     }
 
     private fun isExempt(codeUnit: JavaCodeUnit, seen: MutableSet<JavaCodeUnit> = mutableSetOf()): Boolean {

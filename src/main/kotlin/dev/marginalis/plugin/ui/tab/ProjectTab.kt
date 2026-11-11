@@ -7,12 +7,15 @@ import com.intellij.openapi.fileEditor.ex.FileEditorManagerEx
 import com.intellij.openapi.fileEditor.impl.EditorHistoryManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
+import com.intellij.openapi.vfs.VirtualFile
 import dev.marginalis.core.CommentThread
 import dev.marginalis.core.Message
 import dev.marginalis.core.ProjectTabStartup
 import dev.marginalis.core.ProjectTabStartup.Outcome
 import dev.marginalis.plugin.settings.MarginalisSettings
 import dev.marginalis.plugin.store.MarginalisStore
+import java.lang.reflect.InvocationTargetException
+import java.util.concurrent.CompletableFuture
 
 object ProjectTab {
 
@@ -98,10 +101,23 @@ object ProjectTab {
         val tab = MarginFile.of(project)
         // openFile waits on the EDT until every editor provider has checked the file; at startup a pending write holds
         // their checks back for 30 s. requestOpenFile adds the tab at once and lets the checks finish in the background.
-        editors.requestOpenFile(tab)
-        if (pin) pin(project, tab)
-        selected?.let(editors::requestOpenFile)
+        val opening = requestOpen(editors, tab)
+        if (pin) {
+            // Up to 2026.2 the tab is in its window once requestOpenFile returns; 2026.3 adds it later, on the EDT.
+            if (opening == null) pin(project, tab) else opening.thenRun { pin(project, tab) }
+        }
+        selected?.let { requestOpen(editors, it) }
     }
+
+    // requestOpenFile returns void up to 2026.2 and a CompletableFuture from 2026.3, so a call compiled against the
+    // 2025.2 floor names a method 2026.3 no longer has. Looked up by name, it resolves on both. ReflectionGuard's
+    // production exceptions name this function and when it goes.
+    private fun requestOpen(editors: FileEditorManager, file: VirtualFile): CompletableFuture<*>? =
+        try {
+            FileEditorManager::class.java.getMethod("requestOpenFile", VirtualFile::class.java).invoke(editors, file) as CompletableFuture<*>?
+        } catch (failure: InvocationTargetException) {
+            throw failure.targetException
+        }
 
     private fun openTabs(project: Project): List<MarginFile> =
         FileEditorManager.getInstance(project).openFiles.filterIsInstance<MarginFile>()
