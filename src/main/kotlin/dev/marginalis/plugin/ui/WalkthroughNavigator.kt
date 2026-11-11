@@ -88,17 +88,33 @@ object WalkthroughNavigator {
 
     /**
      * @param leaving runs once the step's file has stayed open with the step shown; when the IDE does not keep the
-     *   file open, a balloon names the step and its file instead
+     *   file open, the file opens again as plain text alone, and only when that closes too does a balloon name the
+     *   step and its file instead
      */
     fun openStepInFileTab(project: Project, thread: CommentThread, revealing: Message?, leaving: () -> Unit = {}) {
         val place = placeOf(project, thread) ?: return stepNotShown(project, thread)
+        // A file whose preview editor fails to build (Swagger UI on an OpenAPI spec) opens and is closed right after.
+        showStep(project, place, thread, revealing, leaving) {
+            FileEditorManager.getInstance(project).closeFile(place.file)
+            TextOnlyEditorProvider.showAsText(place.file)
+            showStep(project, place, thread, revealing, leaving) { stepNotShown(project, thread) }
+        }
+    }
+
+    private fun showStep(
+        project: Project,
+        place: OpenFileDescriptor,
+        thread: CommentThread,
+        revealing: Message?,
+        shown: () -> Unit,
+        notShown: () -> Unit,
+    ) {
         val editors = FileEditorManager.getInstance(project)
         // The step file's own editor: when its tab closes while opening, the selected one is still the previous file's.
-        val editor = editors.openTextEditor(place, true) ?: return stepNotShown(project, thread)
+        val editor = editors.openTextEditor(place, true) ?: return notShown()
         ThreadInlayManager.open(project, editor, thread, revealing)
-        // A file whose preview editor fails to build (Swagger UI on an OpenAPI spec) opens and is closed right after.
         ApplicationManager.getApplication().invokeLater({
-            if (editor.isDisposed || !editors.isFileOpen(place.file)) stepNotShown(project, thread) else leaving()
+            if (editor.isDisposed || !editors.isFileOpen(place.file)) notShown() else shown()
         }, project.disposed)
     }
 

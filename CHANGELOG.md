@@ -112,6 +112,11 @@ History before 0.1.19 lives in git tags.
   such as an OpenAPI spec whose Swagger preview fails to load. The step
   you are on stays open, and a balloon names the step and the file it
   could not show.
+- A walkthrough step in a file whose preview fails to load, such as an
+  OpenAPI spec whose Swagger preview crashes, now opens in that file as
+  plain text instead of stopping the walk. The file keeps opening as
+  plain text until the IDE restarts. The balloon is left for a file the
+  IDE won't keep open even so.
 
 ## [0.2.7] - 2026-10-22
 
