@@ -3,6 +3,7 @@ package dev.marginalis.plugin.ui.tab
 import com.intellij.ide.util.PropertiesComponent
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.fileEditor.ex.FileEditorManagerEx
 import com.intellij.openapi.fileEditor.impl.EditorHistoryManager
 import com.intellij.openapi.project.Project
@@ -136,8 +137,9 @@ object ProjectTab {
         val state = ProjectTabState.getInstance(project)
         state.cancelOpenBehind()
         state.request(request)
-        val shown = FileEditorManager.getInstance(project).openFile(MarginFile.of(project), true, true).filterIsInstance<MarginEditor>()
+        val tab = MarginFile.of(project)
+        OpenFileDescriptor(project, tab).navigate(true)
         val pending = state.takeRequest() ?: return
-        shown.forEach { it.handle(pending) }
+        FileEditorManager.getInstance(project).getEditors(tab).filterIsInstance<MarginEditor>().forEach { it.handle(pending) }
     }
 }

@@ -10,6 +10,7 @@ import com.intellij.openapi.editor.ScrollType
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
+import com.intellij.openapi.fileEditor.TextEditor
 import com.intellij.openapi.fileEditor.ex.IdeDocumentHistory
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
@@ -110,8 +111,9 @@ object WalkthroughNavigator {
         notShown: () -> Unit,
     ) {
         val editors = FileEditorManager.getInstance(project)
+        place.navigate(true)
         // The step file's own editor: when its tab closes while opening, the selected one is still the previous file's.
-        val editor = editors.openTextEditor(place, true) ?: return notShown()
+        val editor = (editors.getSelectedEditor(place.file) as? TextEditor)?.editor ?: return notShown()
         ThreadInlayManager.open(project, editor, thread, revealing)
         ApplicationManager.getApplication().invokeLater({
             if (editor.isDisposed || !editors.isFileOpen(place.file)) notShown() else shown()
