@@ -12,6 +12,7 @@ import dev.marginalis.core.Mark
 import dev.marginalis.core.MarkSubject
 import dev.marginalis.core.StripeBadge
 import dev.marginalis.core.Turn
+import java.awt.Color
 import java.util.concurrent.ConcurrentHashMap
 import javax.swing.Icon
 import javax.swing.SwingConstants
@@ -21,7 +22,8 @@ object MarginalisIcons {
     val Agree = load("agree")
 
     private val marks: Map<Mark, Icon> = Mark.all().associateWith { mark ->
-        load("mark_${mark.subject.name.lowercase()}_${mark.intent?.name?.lowercase() ?: "none"}")
+        val shape = if (mark.step) "step" else mark.subject.name.lowercase()
+        load("mark_${shape}_${mark.intent?.name?.lowercase() ?: "none"}")
     }
     private val orphanFrame = load("markOrphanFrame")
     private val markInState = ConcurrentHashMap<Triple<Mark, AggregateState, Boolean>, Icon>()
@@ -35,6 +37,7 @@ object MarginalisIcons {
     private val turnSignalGap = EmptyIcon.create(3, 16)
     private val noTurnSignal = EmptyIcon.create(16)
     private val markWithTurn = ConcurrentHashMap<Triple<Icon, Turn?, AgreementSignal?>, Icon>()
+    private val markWithStripe = ConcurrentHashMap<Pair<Icon, Color>, Icon>()
 
     val Brand = load("marginalisToolWindow")
     private val toolWindowBadged = mapOf(
@@ -65,6 +68,9 @@ object MarginalisIcons {
             val signal = turn?.let(turnSignals::getValue) ?: agreement?.let(agreementSignals::getValue) ?: noTurnSignal
             RowIcon(mark, turnSignalGap, signal)
         }
+
+    fun withWalkthroughStripe(mark: Icon, stripe: Color): Icon =
+        markWithStripe.computeIfAbsent(mark to stripe) { WalkthroughStripeIcon(mark, stripe) }
 
     fun withTurnBadge(fileIcon: Icon, turn: Turn): Icon = badged(fileIcon, turnBadges.getValue(turn))
 

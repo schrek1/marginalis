@@ -3,12 +3,15 @@ package dev.marginalis.plugin.ui
 import com.intellij.DynamicBundle
 import com.intellij.openapi.editor.markup.HighlighterLayer
 import dev.marginalis.plugin.settings.TimeFormat
+import java.awt.Color
 import java.awt.event.InputEvent
+import java.awt.image.BufferedImage
 import java.awt.event.KeyEvent
 import java.text.DateFormatSymbols
 import java.util.Locale
 import javax.swing.JLabel
 import com.intellij.testFramework.PlatformTestUtil
+import com.intellij.ui.JBColor
 import com.intellij.util.ui.UIUtil
 import dev.marginalis.plugin.settings.MarginalisSettings
 import dev.marginalis.plugin.store.Authors
@@ -58,15 +61,90 @@ class ThreadPanelTest : HttpContractTestCase() {
 
         val steps = (1..3).map { agent.addOnLine(10 + it, "order" to it, "walkthrough" to "tour") }
 
-        assertTrue(user.shownText(user.open(steps[1])).lines().contains("open · step 2/3"))
+        assertTrue(user.shownText(user.open(steps[1])).lines().contains("<html>open · <b>tour</b> (2/3)</html>"))
     }
 
-    fun testUnorderedThreadsCountTheirPlaceAmongTheOpenThreads() {
+    fun testAnUnnamedWalkthroughsStepIsTitledWalkthroughAndANameIsEscaped() {
         sample()
+        val unnamed = agent.addOnLine(5, "order" to 1)
+        val named = agent.addOnLine(7, "order" to 1, "walkthrough" to "Split <a> & b")
+
+        assertTrue(user.shownText(user.open(unnamed)).lines().contains("<html>open · <b>Walkthrough</b> (1/1)</html>"))
+        assertTrue(user.shownText(user.open(named)).lines().contains("<html>open · <b>Split &lt;a&gt; &amp; b</b> (1/1)</html>"))
+    }
+
+    private fun edgeColour(panel: ThreadPanel): Color {
+        val image = BufferedImage(40, 40, BufferedImage.TYPE_INT_RGB)
+        val g = image.createGraphics()
+        try {
+            panel.border.paintBorder(panel, g, 0, 0, 40, 40)
+        } finally {
+            g.dispose()
+        }
+        return Color(image.getRGB(1, 20))
+    }
+
+    fun testAStepsEdgeTakesItsWalkthroughsColourButABlockerStaysRed() {
+        sample()
+        val comment = agent.addOnLine(3)
+        val first = agent.addOnLine(5, "order" to 1, "walkthrough" to "first")
+        val second = agent.addOnLine(7, "order" to 1, "walkthrough" to "second", "severity" to "nit")
+        val blocker = agent.addOnLine(9, "order" to 2, "walkthrough" to "second", "severity" to "blocker")
+        val commentEdge = edgeColour(user.open(comment))
+        val blockerCommentEdge = edgeColour(user.open(agent.addOnLine(11, "severity" to "blocker")))
+
+        assertEquals(WalkthroughColours.palette[0].rgb, edgeColour(user.open(first)).rgb)
+        assertEquals(WalkthroughColours.palette[1].rgb, edgeColour(user.open(second)).rgb)
+        assertEquals(blockerCommentEdge, edgeColour(user.open(blocker)))
+        assertFalse(commentEdge == edgeColour(user.open(first)))
+    }
+
+    fun testALongWalkthroughNameIsShortenedInTheHeader() {
+        sample()
+        val step = agent.addOnLine(5, "order" to 1, "walkthrough" to "&" + "x".repeat(59))
+
+        assertTrue(user.shownText(user.open(step)).lines().contains("<html>open · <b>&amp;${"x".repeat(36)}...</b> (1/1)</html>"))
+    }
+
+    fun testAResolvedStepSaysWhoResolvedItAndNamesItsWalkthrough() {
+        sample()
+        val steps = (1..3).map { agent.addOnLine(10 + it, "order" to it, "walkthrough" to "tour") }
+        agent.post("comment_resolve", "thread_id" to steps[1])
+
+        assertTrue(user.shownText(user.open(steps[1])).lines().contains("<html>resolved by Claude · <b>tour</b> (2/3)</html>"))
+    }
+
+    fun testAnOrphanedStepNamesItsWalkthrough() {
+        sample()
+        val steps = (1..2).map { agent.addOnLine(10 + it, "order" to it, "walkthrough" to "tour") }
+        user.thread(steps[0]).markOrphaned()
+
+        assertTrue(user.shownText(user.open(steps[0])).lines().contains("<html>orphaned (anchor deleted) · <b>tour</b> (1/2)</html>"))
+    }
+
+    fun testAStepOfAFinishedWalkthroughNamesItWithoutAPosition() {
+        sample()
+        val step = agent.addOnLine(11, "order" to 1, "walkthrough" to "tour")
+        agent.post("comment_resolve", "thread_id" to step)
+
+        assertTrue(user.shownText(user.open(step)).lines().contains("<html>resolved by Claude · <b>tour</b></html>"))
+    }
+
+    fun testANitCommentsEdgeStaysGrey() {
+        sample()
+        val nit = agent.addOnLine(5, "severity" to "nit")
+
+        assertEquals(JBColor(Color(0xB8, 0xB8, 0xB8), Color(0x5E, 0x61, 0x64)).rgb, edgeColour(user.open(nit)).rgb)
+    }
+
+    fun testAnOrdinaryCommentCountsItsPlaceAmongTheOpenCommentsAlone() {
+        sample()
+        agent.addOnLine(3, "order" to 1, "walkthrough" to "tour")
         agent.addOnLine(5)
+        agent.addOnLine(7, "order" to 2, "walkthrough" to "tour")
         val second = agent.addOnLine(9)
 
-        assertTrue(user.shownText(user.open(second)).lines().contains("open · step 2/2"))
+        assertTrue(user.shownText(user.open(second)).lines().contains("open · comment 2/2"))
     }
 
     fun testAStepKeepsItsTotalWhileEarlierStepsResolve() {
@@ -74,7 +152,7 @@ class ThreadPanelTest : HttpContractTestCase() {
         val steps = (1..3).map { agent.addOnLine(10 + it, "order" to it, "walkthrough" to "tour") }
         agent.post("comment_resolve", "thread_id" to steps[0])
 
-        assertTrue(user.shownText(user.open(steps[2])).lines().contains("open · step 3/3"))
+        assertTrue(user.shownText(user.open(steps[2])).lines().contains("<html>open · <b>tour</b> (3/3)</html>"))
     }
 
     fun testAResolvedThreadSaysWhoResolvedItAndOffersReopen() {
@@ -532,18 +610,18 @@ class ThreadPanelTest : HttpContractTestCase() {
         assertEquals(emptyList<ThreadPanel>(), user.panels())
     }
 
-    fun testAThreadAddedAboveWhileThePanelWasInABackgroundTabMovesItsStepWhenItComesBack() {
+    fun testAThreadAddedAboveWhileThePanelWasInABackgroundTabMovesItsPositionWhenItComesBack() {
         sample()
         agent.addOnLine(5)
         val panel = user.open(agent.addOnLine(9))
-        assertTrue(user.shownText(panel).lines().contains("open · step 2/2"))
+        assertTrue(user.shownText(panel).lines().contains("open · comment 2/2"))
 
         user.whileInABackgroundTab(panel) { agent.addOnLine(3) }
 
-        assertTrue(user.shownText(panel).lines().contains("open · step 3/3"))
+        assertTrue(user.shownText(panel).lines().contains("open · comment 3/3"))
     }
 
-    fun testAThreadResolvedWhileThePanelWasInABackgroundTabDropsItsStepWhenItComesBack() {
+    fun testAThreadResolvedWhileThePanelWasInABackgroundTabDropsItsPositionWhenItComesBack() {
         sample()
         val earlier = agent.addOnLine(5)
         val panel = user.open(agent.addOnLine(9))

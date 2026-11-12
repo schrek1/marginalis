@@ -163,7 +163,7 @@ class ToolWindowUpdatesTest : ToolWindowTestCase() {
         sample("a/b/Deep.kt")
         sample("a/Shallow.kt")
         agent.addOnLine(5, "body" to "deep", file = "a/b/Deep.kt")
-        window.press("Next Step")
+        window.click("L5  deep")
         assertEquals(listOf("Open  1", "a/b  1", "Deep.kt ✉1", "✉ L5  deep"), window.selectedPath())
 
         window.rebuiltBy { agent.addOnLine(3, "body" to "shallow", file = "a/Shallow.kt") }
@@ -172,27 +172,33 @@ class ToolWindowUpdatesTest : ToolWindowTestCase() {
     }
 
     @DisplayOnly
-    fun testARefreshKeepsAFolderYouUnfoldedUnderResolvedOpen() {
-        val steps = interleaved()
-        agent.post("comment_resolve", "thread_id" to steps.getValue(8))
-        agent.post("comment_resolve", "thread_id" to steps.getValue(18))
-        window.click("Resolved")
-        window.press("Next Step")
-        window.toggleFolding("shop-orders/src/main/java/com/acme/orders/api", under = "Resolved")
-        assertTrue(window.isExpanded("shop-orders/src/main/java/com/acme/orders/api", under = "Resolved"))
+    fun testARefreshKeepsTheResolvedSectionAsTheUserUnfoldedIt() {
+        sample()
+        sample("src/deeper/Other.kt")
+        val open = agent.addOnLine(12, "body" to "still open")
+        listOf(
+            agent.addOnLine(3, "body" to "first done"),
+            agent.addOnLine(9, "body" to "second done"),
+            agent.addOnLine(5, "body" to "deeper done", file = "src/deeper/Other.kt"),
+        ).forEach { agent.post("comment_resolve", "thread_id" to it) }
+        window.toggleFolding("Resolved")
+        listOf("src", "Sample.kt").forEach { window.toggleFolding(it, under = "Resolved") }
+        window.click("first done", under = "Resolved")
+        window.toggleFolding("deeper", under = "Resolved")
+        assertTrue(window.isExpanded("deeper", under = "Resolved"))
 
-        window.rebuiltBy { agent.reply(steps.getValue(9), "more") }
+        window.rebuiltBy { agent.reply(open, "more") }
 
-        assertEquals("L10  Step 8", window.selected())
+        assertEquals("L3  first done", window.selected())
         assertEquals(
             """
             Resolved  3
-              acme/backend  3
-                shop-common/src/main/java/com/acme/backend/common/order  1
-                  Order.java
-                    L10  Step 8
-                shop-orders/src/main/java/com/acme/orders/api  2
-                  OrderController.java
+              src  3
+                deeper  1
+                  Other.kt
+                Sample.kt
+                  L3  first done
+                  L9  second done
             """.trimIndent(),
             section("Resolved"),
         )

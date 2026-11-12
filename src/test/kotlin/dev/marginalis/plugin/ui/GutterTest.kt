@@ -7,6 +7,7 @@ import com.intellij.testFramework.LightVirtualFile
 import com.intellij.openapi.project.guessProjectDir
 import com.intellij.testFramework.PlatformTestUtil
 import dev.marginalis.core.AggregateState
+import dev.marginalis.core.CommentThread
 import dev.marginalis.core.Intent
 import dev.marginalis.core.Mark
 import dev.marginalis.core.MarkSubject
@@ -14,6 +15,7 @@ import dev.marginalis.plugin.store.Authors
 import dev.marginalis.plugin.testing.LiveBadge
 import dev.marginalis.plugin.testing.Pixels
 import dev.marginalis.plugin.transport.HttpContractTestCase
+import javax.swing.Icon
 
 class GutterTest : HttpContractTestCase() {
 
@@ -374,5 +376,168 @@ class GutterTest : HttpContractTestCase() {
         assertFalse(cleared.isEmpty())
         assertTrue("cut reaches ${reach.max()}", reach.max() <= LiveBadge.GAP + bolt.strokeHalf + 0.1)
         assertTrue("cut reaches only ${reach.max()}", reach.max() >= LiveBadge.GAP + bolt.strokeHalf - 0.4)
+    }
+
+    private fun markShownBeside(stripe: Icon, mark: Icon): Boolean =
+        Pixels.onTransparent(stripe).rightmost(mark.iconWidth).sameAs(Pixels.onTransparent(mark), Pixels.onTransparent(mark).everywhere())
+
+    private fun stripeIn(icon: Icon): List<Pair<Int, Int>> =
+        WalkthroughColours.palette.flatMap { colour -> Pixels.onTransparent(icon).painted(colour, tolerance = 4) }
+            .filter { (x, _) -> x < icon.iconWidth - 16 }
+
+    private fun stripeShows(icon: Icon, colour: java.awt.Color): Boolean {
+        val pixels = Pixels.onTransparent(icon)
+        return (0 until icon.iconHeight).all { y -> Pixels.close(pixels.at(1.0, y.toDouble()), colour, 4) && pixels.alphaAt(1, y) > 200 }
+    }
+
+    fun testAStepOnALineWearsTheSignpostInItsIntentInsteadOfTheBubble() {
+        sample()
+        agent.addOnLine(5, "order" to 1, "walkthrough" to "tour", "intent" to "question")
+        agent.addOnLine(9, "intent" to "question")
+        settle()
+
+        val signpost = MarginalisIcons.mark(Mark(MarkSubject.LINE, Intent.QUESTION, step = true))
+        val bubble = MarginalisIcons.mark(Mark(MarkSubject.LINE, Intent.QUESTION))
+        assertTrue(markShownBeside(iconAt(5), signpost))
+        assertFalse(markShownBeside(iconAt(5), bubble))
+        assertSame(bubble, iconAt(9))
+    }
+
+    fun testEachWalkthroughsStepsCarryAStripeInItsOwnColourOnTheGutterEdge() {
+        sample()
+        agent.addOnLine(5, "order" to 1, "walkthrough" to "first")
+        agent.addOnLine(7, "order" to 2, "walkthrough" to "first")
+        agent.addOnLine(9, "order" to 1, "walkthrough" to "second")
+        settle()
+
+        assertEquals(19, iconAt(5).iconWidth)
+        assertTrue(stripeShows(iconAt(5), WalkthroughColours.palette[0]))
+        assertTrue(stripeShows(iconAt(7), WalkthroughColours.palette[0]))
+        assertTrue(stripeShows(iconAt(9), WalkthroughColours.palette[1]))
+    }
+
+    fun testTheStripeStandsApartFromTheMark() {
+        sample()
+        agent.addOnLine(5, "order" to 1, "walkthrough" to "tour")
+        settle()
+
+        val icon = iconAt(5)
+        val pixels = Pixels.onTransparent(icon)
+        val gap = icon.iconWidth - 16 - 1
+        assertTrue((0 until icon.iconHeight).all { y -> pixels.alphaAt(gap, y) == 0 })
+    }
+
+    fun testAnOrdinaryCommentCarriesNoStripe() {
+        sample()
+        agent.addOnLine(5)
+        settle()
+
+        assertEquals(16, iconAt(5).iconWidth)
+    }
+
+    fun testALineSharedByStepsOfOneWalkthroughCarriesItsStripe() {
+        sample()
+        agent.addOnLine(5, "order" to 1, "walkthrough" to "tour")
+        agent.addOnLine(5, "order" to 2, "walkthrough" to "tour")
+        settle()
+
+        assertTrue(stripeShows(iconAt(5), WalkthroughColours.palette[0]))
+        assertTrue(markShownBeside(iconAt(5), MarginalisIcons.mark(Mark(MarkSubject.LINE, null, step = true))))
+    }
+
+    fun testALineSharedByAStepAndACommentCarriesNoStripeAndTheBubble() {
+        sample()
+        agent.addOnLine(5, "order" to 1, "walkthrough" to "tour")
+        agent.addOnLine(5)
+        settle()
+
+        assertSame(MarginalisIcons.LineMark, iconAt(5))
+    }
+
+    fun testALineSharedByTwoWalkthroughsCarriesNoStripe() {
+        sample()
+        agent.addOnLine(5, "order" to 1, "walkthrough" to "first")
+        agent.addOnLine(5, "order" to 1, "walkthrough" to "second")
+        settle()
+
+        assertEquals(emptyList<Pair<Int, Int>>(), stripeIn(iconAt(5)))
+        assertEquals(16, iconAt(5).iconWidth)
+    }
+
+    fun testTheStripeWrapsTheMarkInItsStateAndLiveBadge() {
+        sample()
+        val id = agent.addOnLine(5, "order" to 1, "walkthrough" to "tour", "severity" to "blocker")
+        user.goProjectLive()
+        settle()
+
+        assertTrue(stripeShows(iconAt(5), WalkthroughColours.palette[0]))
+        assertTrue(markShownBeside(iconAt(5), MarginalisIcons.markOf(listOf(user.thread(id)), live = true)))
+        assertTrue(LiveBadge.shownIn(iconAt(5)))
+    }
+
+    fun testTheStripeWrapsAnUnreadStepsBadgedMark() {
+        sample()
+        val id = agent.addOnLine(5, "order" to 1, "walkthrough" to "tour")
+        user.reply(id, "Why here?")
+        settle()
+
+        assertEquals(AggregateState.UNREAD, stateDrawnFor(id))
+        assertSame(MarginalisIcons.withWalkthroughStripe(MarginalisIcons.markOf(listOf(user.thread(id))), WalkthroughColours.palette[0]), iconAt(5))
+    }
+
+    fun testTheStripeWrapsAResolvedStepsFadedMark() {
+        val step = CommentThread(file = SAMPLE, line = 4, anchorText = lineText(5), order = 1, walkthroughId = "tour")
+        step.resolve(Authors.user)
+        val faded = MarginalisIcons.markOf(listOf(step))
+
+        val striped = MarginalisIcons.withWalkthroughStripe(faded, WalkthroughColours.palette[0])
+
+        assertTrue(markShownBeside(striped, faded))
+        assertFalse(markShownBeside(striped, MarginalisIcons.mark(Mark(MarkSubject.LINE, null, step = true))))
+        assertTrue(stripeShows(striped, WalkthroughColours.palette[0]))
+    }
+
+    fun testAFileGlyphWhoseThreadsAreStepsOfOneWalkthroughKeepsTheStripe() {
+        sample()
+        agent.add("file" to SAMPLE, "order" to 1, "walkthrough" to "tour")
+        agent.add("file" to SAMPLE, "order" to 2, "walkthrough" to "tour")
+        settle()
+
+        assertTrue(stripeShows(iconAt(1), WalkthroughColours.palette[0]))
+        assertTrue(markShownBeside(iconAt(1), MarginalisIcons.mark(Mark(MarkSubject.FILE, null))))
+    }
+
+    fun testDeletingAWalkthroughRecoloursTheNextOneInAnotherFile() {
+        sample()
+        val other = sample("src/Other.kt")
+        val first = listOf(agent.addOnLine(5, "order" to 1, "walkthrough" to "first"), agent.addOnLine(7, "order" to 2, "walkthrough" to "first"))
+        agent.addOnLine(5, "order" to 1, "walkthrough" to "second", file = other)
+        settle()
+        assertTrue(stripeShows(iconAt(5, other), WalkthroughColours.palette[1]))
+
+        first.forEach(user::delete)
+        settle()
+
+        assertTrue(stripeShows(iconAt(5, other), WalkthroughColours.palette[0]))
+    }
+
+    fun testALongWalkthroughNameIsShortenedInTheTooltip() {
+        sample()
+        agent.addOnLine(5, "order" to 1, "walkthrough" to "&" + "x".repeat(59))
+        settle()
+
+        assertTrue(tooltipAt(5), tooltipAt(5).startsWith("<html><b>&amp;${"x".repeat(36)}...</b> (1/1)<br/>"))
+    }
+
+    fun testAStepsTooltipLeadsWithItsWalkthroughAndPosition() {
+        sample()
+        agent.addOnLine(5, "order" to 1, "walkthrough" to "How <the> split works")
+        agent.addOnLine(7, "order" to 2, "walkthrough" to "How <the> split works")
+        agent.addOnLine(9, "order" to 1)
+        settle()
+
+        assertTrue(tooltipAt(7), tooltipAt(7).startsWith("<html><b>How &lt;the&gt; split works</b> (2/2)<br/>"))
+        assertTrue(tooltipAt(9), tooltipAt(9).startsWith("<html><b>Walkthrough</b> (1/1)<br/>"))
+        assertTrue(tooltipAt(9), tooltipAt(9).contains("<b>Claude</b> · open · 1 message(s)"))
     }
 }

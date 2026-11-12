@@ -46,7 +46,10 @@ class PreviewKeepsUnderscoresTest : SandboxScenario("preview_keeps_underscores")
         SandboxUi.userReads(id("P"))
         SandboxUi.expireBalloons()
         Agent.agentReplies(id("P"), P_REPLY)
-        val balloon = readUntil("a balloon for P's reply", read = { SandboxUi.marginalisBalloons() }) { shown -> shown.isNotEmpty() }
+        // The balloon for P's start may still be on screen, so wait for the reply's own.
+        val balloon = readUntil("a balloon for P's reply", read = { SandboxUi.marginalisBalloons() }) { shown ->
+            shown.any { it.contains(P_REPLY_PREVIEW) }
+        }
         shot("2-balloon")
         check("balloon: the reply keeps its underscores", balloon.contains(P_REPLY_PREVIEW), balloon)
     }

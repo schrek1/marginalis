@@ -45,6 +45,7 @@ import dev.marginalis.core.ThreadSummary
 import dev.marginalis.core.Turn
 import dev.marginalis.core.WaitTimeout
 import dev.marginalis.core.Wake
+import dev.marginalis.core.Walkthrough
 import dev.marginalis.core.getOrElse
 import dev.marginalis.plugin.settings.MarginalisSettings
 import dev.marginalis.plugin.store.Authors
@@ -301,12 +302,13 @@ class MarginalisRestService : RestService() {
             val store = MarginalisStore.getInstance(project)
             relaying = relayed?.let { store.threads.relaying(it.key) }?.let { addedJson(it, store.syncLine(it)) }
             if (relaying != null) return@invokeAndWait
+            val walkthroughId = order?.let { Walkthrough.forArrival(store.threads.all(), walkthroughLabel, it) }
             // Agents never create segments — the selection gesture is human.
             val created = if (wireLine == null || file == null || vFile == null) {
                 CommentThread(
                     file, line = null, anchorText = null,
-                    order = order, walkthrough = walkthroughLabel, severity = classification.severity,
-                    intent = classification.intent, label = classification.label,
+                    order = order, walkthrough = walkthroughLabel, walkthroughId = walkthroughId,
+                    severity = classification.severity, intent = classification.intent, label = classification.label,
                 )
             } else {
                 val document = FileDocumentManager.getInstance().getDocument(vFile)
@@ -326,8 +328,8 @@ class MarginalisRestService : RestService() {
                 adjusted = placed.adjusted
                 CommentThread(
                     file, placed.line, lineText(document, placed.line),
-                    order = order, walkthrough = walkthroughLabel, severity = classification.severity,
-                    intent = classification.intent, label = classification.label,
+                    order = order, walkthrough = walkthroughLabel, walkthroughId = walkthroughId,
+                    severity = classification.severity, intent = classification.intent, label = classification.label,
                 ).also { MarginalisMarkers.attach(project, it, document) }
             }
             val message = Message(agentAuthor(json), body, to = to, relayed = relayed)

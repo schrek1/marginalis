@@ -1232,7 +1232,7 @@ function sortButton() {
         )
     }
 
-    fun marginSort(): String = js("String(service('dev.marginalis.plugin.ui.tab.ProjectTabSort').getOrder().getStored())")
+    fun marginSort(): String = js("String(service('dev.marginalis.plugin.ui.tab.ProjectTabSort').getOrder().name())")
 
     /** Forced save of the project's workspace.xml, off the EDT: non-forced saves skip recently loaded components. */
     fun saveProjectState() {

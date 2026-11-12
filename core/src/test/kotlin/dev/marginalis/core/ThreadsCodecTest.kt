@@ -13,7 +13,7 @@ class ThreadsCodecTest {
     fun `full round trip preserves everything`() {
         val agent = Author.Agent("Claude", id = "claude-1")
         val user = Author.User("Muhammad")
-        val t = CommentThread("src/a.py", 7, "def f():", order = 2, walkthrough = "A")
+        val t = CommentThread("src/a.py", 7, "def f():", order = 2, walkthrough = "A", walkthroughId = "w-7")
         t.addMessage(Message(agent, "**bold** question"))
         t.addMessage(Message(user, "answer"))
         t.resolve(user)
@@ -26,6 +26,7 @@ class ThreadsCodecTest {
         assertEquals("def f():", decoded.anchorText)
         assertEquals(2, decoded.order)
         assertEquals("A", decoded.walkthrough)
+        assertEquals("w-7", decoded.walkthroughId)
         assertEquals(t.createdAt, decoded.createdAt)
         val status = decoded.status
         assertIs<ThreadStatus.Resolved>(status)
@@ -82,6 +83,33 @@ class ThreadsCodecTest {
             }]}
         """.trimIndent()
         assertEquals("B", ThreadsCodec.decode(legacy).single().walkthrough)
+    }
+
+    @Test
+    fun `steps saved before walkthroughs had identities split where a step number repeats`() {
+        fun step(id: String, order: Int, second: Int) =
+            """{"id":"$id","file":"a.py","line":$order,"anchor_text":"x","order":$order,"walkthrough":"A",
+              "status":"RESOLVED","resolved_by":{"kind":"USER","name":"M"},
+              "created_at":"2026-07-18T12:00:${"%02d".format(second)}Z","messages":[]}"""
+        val legacy = """{"version":1,"threads":[${listOf(step("n1", 1, 3), step("o2", 2, 1), step("o1", 1, 0), step("n2", 2, 4)).joinToString(",")}]}"""
+
+        val walkthroughOf = ThreadsCodec.decode(legacy).associate { it.id to it.walkthroughId }
+
+        assertEquals(walkthroughOf["o1"], walkthroughOf["o2"])
+        assertEquals(walkthroughOf["n1"], walkthroughOf["n2"])
+        assertTrue(walkthroughOf["o1"] != null && walkthroughOf["o1"] != walkthroughOf["n1"])
+    }
+
+    @Test
+    fun `a replayed walkthrough identity is written back on the next save`() {
+        val legacy = """
+            {"version":1,"threads":[{
+              "id":"t2","file":"a.py","line":3,"anchor_text":"x = 1","order":1,
+              "status":"OPEN","created_at":"2026-07-18T12:00:00Z","messages":[]
+            }]}
+        """.trimIndent()
+        val loaded = ThreadsCodec.decode(legacy).single()
+        assertEquals(loaded.walkthroughId, ThreadsCodec.decode(ThreadsCodec.encode(listOf(loaded))).single().walkthroughId)
     }
 
     @Test

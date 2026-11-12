@@ -21,6 +21,7 @@ class CommentThread(
     val severity: Severity? = null,
     val intent: Intent? = null,
     val label: String? = null,
+    walkthroughId: String? = null,
 ) {
     init {
         require((line == null) == (anchorText == null)) {
@@ -36,6 +37,9 @@ class CommentThread(
             "a line is a place in a file; a thread without a file has no line to hold"
         }
     }
+
+    var walkthroughId: String? = walkthroughId
+        private set
 
     val isProjectLevel: Boolean
         get() = file == null
@@ -131,6 +135,10 @@ class CommentThread(
     /** Rehydration only. */
     fun restoreStatus(status: ThreadStatus) {
         this.status = status
+    }
+
+    fun restoreWalkthroughId(walkthroughId: String) {
+        this.walkthroughId = walkthroughId
     }
 
     /** Rehydration only: loading a thread is not a change to it. */

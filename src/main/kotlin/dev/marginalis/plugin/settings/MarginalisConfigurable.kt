@@ -286,8 +286,8 @@ class MarginalisConfigurable : Configurable {
                 }
             }
             row {
-                checkBox("Jump to the next step after resolving")
-                    .comment("While walking a guided walkthrough, resolving a step opens the next one.")
+                checkBox("Jump to the next thread after resolving")
+                    .comment("Resolving a step opens the next step of its walkthrough; resolving a comment opens the next open comment.")
                     .bindSelected(state::walkthroughAutoAdvance)
             }
             row("When stepping to another step:") {
@@ -352,8 +352,8 @@ class MarginalisConfigurable : Configurable {
                 row("List while the tab is in front:") {
                     comboBox(ListWhileInFront.entries, textListCellRenderer { it?.let(::labelOf) })
                         .comment(
-                            "Live keeps the latest activity on top. Hold still keeps everything in place " +
-                                "while you read, and new threads wait behind a pill.",
+                            "Live keeps the list in its sort order as threads change. " +
+                                "Hold still keeps everything in place while you read, and new threads wait behind a pill.",
                         )
                         .bindItem(
                             { settings.listWhileInFront },
@@ -415,6 +415,7 @@ class MarginalisConfigurable : Configurable {
         val settings = MarginalisSettings.getInstance()
         val bylinesBefore = bylineSettings()
         val foldingBefore = settings.foldingPrefs
+        val timeFormatBefore = settings.timeFormat
         val tabBefore = settings.projectTabPrefs
         val liveByDefaultBefore = settings.state.liveByDefault
         panel?.apply()
@@ -422,7 +423,7 @@ class MarginalisConfigurable : Configurable {
         settings.state.userPicture = userPicture
         Pictures.deleteUnreferenced(edited, userPicture)
         resetPeople()
-        if (bylineSettings() != bylinesBefore || settings.foldingPrefs != foldingBefore) refreshThreads()
+        if (bylineSettings() != bylinesBefore || settings.foldingPrefs != foldingBefore || settings.timeFormat != timeFormatBefore) refreshThreads()
         if (settings.projectTabPrefs != tabBefore) ProjectTab.applyPrefs()
         if (settings.state.liveByDefault != liveByDefaultBefore) MarginalisStore.liveByDefaultChanged(settingsWasLive = liveByDefaultBefore)
     }

@@ -1,6 +1,5 @@
 package dev.marginalis.plugin.ui
 
-import com.intellij.DynamicBundle
 import com.intellij.icons.AllIcons
 import com.intellij.ide.BrowserUtil
 import com.intellij.ide.SelectInContext
@@ -33,6 +32,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.wm.IdeFrame
 import com.intellij.ui.EditorTextField
 import com.intellij.ui.JBColor
@@ -69,7 +69,6 @@ import dev.marginalis.core.ThreadStatus
 import dev.marginalis.core.WebLink
 import dev.marginalis.plugin.avatars.AvatarsListener
 import dev.marginalis.plugin.settings.MarginalisSettings
-import dev.marginalis.plugin.settings.TimeFormat
 import dev.marginalis.plugin.store.Authors
 import dev.marginalis.plugin.store.MarginalisStore
 import dev.marginalis.plugin.ui.toolwindow.MarginalisToolWindow
@@ -89,9 +88,7 @@ import java.awt.event.FocusEvent
 import java.awt.event.HierarchyEvent
 import java.awt.event.KeyAdapter
 import java.awt.event.KeyEvent
-import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
 import javax.swing.AbstractAction
 import javax.swing.Action
 import javax.swing.Box
@@ -244,10 +241,12 @@ class ThreadPanel(
     private var headerToolbar: ActionToolbar? = null
 
     init {
-        val accent = when (thread.severity) {
-            Severity.BLOCKER -> JBColor(Color(0xDB, 0x58, 0x60), Color(0xC7, 0x54, 0x50))
-            Severity.NIT -> JBColor(Color(0xB8, 0xB8, 0xB8), Color(0x5E, 0x61, 0x64))
-            null -> JBColor(Color(0x9C, 0x27, 0xB0), Color(0xCE, 0x93, 0xD8))
+        val walkthroughColour = WalkthroughColours.of(project, listOf(thread))
+        val accent = when {
+            thread.severity == Severity.BLOCKER -> JBColor(Color(0xDB, 0x58, 0x60), Color(0xC7, 0x54, 0x50))
+            walkthroughColour != null -> walkthroughColour
+            thread.severity == Severity.NIT -> JBColor(Color(0xB8, 0xB8, 0xB8), Color(0x5E, 0x61, 0x64))
+            else -> JBColor(Color(0x9C, 0x27, 0xB0), Color(0xCE, 0x93, 0xD8))
         }
         border = JBUI.Borders.compound(
             JBUI.Borders.compound(
@@ -381,8 +380,8 @@ class ThreadPanel(
 
     private fun toggleResolved() {
         if (thread.status is ThreadStatus.Open) {
-            // Capture the next step BEFORE resolving: the walk holds only open threads.
-            val next = nextStepIfAutoAdvancing()
+            // Capture the next thread in the walk BEFORE resolving: the walk holds only open threads.
+            val next = nextInWalkIfAutoAdvancing()
             thread.resolve(Authors.user)
             MarginalisStore.getInstance(project).threads.notifyChanged(thread)
             if (next != null) {
@@ -396,32 +395,31 @@ class ThreadPanel(
     }
 
     private fun buildHeaderToolbar(): JComponent {
-        val firstStep = navAction("First Step", AllIcons.Actions.Play_first) { walk, i ->
+        val unit = if (thread.order != null) "Step" else "Comment"
+        val first = navAction("First $unit", AllIcons.Actions.Play_first) { walk, i ->
             walk.firstOrNull().takeIf { i != 0 }
         }
-        val previousStep = navAction("Previous Step", AllIcons.Actions.PreviousOccurence) { walk, i ->
+        val previous = navAction("Previous $unit", AllIcons.Actions.PreviousOccurence) { walk, i ->
             if (i != null && i > 0) walk[i - 1] else null
         }
-        val nextStep = navAction("Next Step", AllIcons.Actions.NextOccurence) { walk, i ->
+        val next = navAction("Next $unit", AllIcons.Actions.NextOccurence) { walk, i ->
             if (i == null) walk.firstOrNull() else walk.getOrNull(i + 1)
         }
-        val lastStep = navAction("Last Step", AllIcons.Actions.Play_last) { walk, i ->
+        val last = navAction("Last $unit", AllIcons.Actions.Play_last) { walk, i ->
             walk.lastOrNull().takeIf { i != walk.size - 1 }
         }
-        // The served skill promises the occurrence shortcuts walk steps
-        // without the tool window.
         val actionManager = ActionManager.getInstance()
-        previousStep.registerCustomShortcutSet(
+        previous.registerCustomShortcutSet(
             actionManager.getAction(IdeActions.ACTION_PREVIOUS_OCCURENCE).shortcutSet, this,
         )
-        nextStep.registerCustomShortcutSet(
+        next.registerCustomShortcutSet(
             actionManager.getAction(IdeActions.ACTION_NEXT_OCCURENCE).shortcutSet, this,
         )
         val group = DefaultActionGroup(
-            firstStep,
-            previousStep,
-            nextStep,
-            lastStep,
+            first,
+            previous,
+            next,
+            last,
             Separator.getInstance(),
             foldAction(),
             expandAction(),
@@ -892,28 +890,26 @@ class ThreadPanel(
         markReadIfSeen()
     }
 
-    private fun nextStepIfAutoAdvancing(): CommentThread? {
+    private fun nextInWalkIfAutoAdvancing(): CommentThread? {
         if (!MarginalisSettings.getInstance().state.walkthroughAutoAdvance) return null
         val (walk, i) = WalkthroughNavigator.walkFrom(project, thread)
         return i?.let { walk.getOrNull(it + 1) }
     }
 
-    private fun messageTimeFormatter(): DateTimeFormatter =
-        when (MarginalisSettings.getInstance().timeFormat) {
-            TimeFormat.TWELVE_HOUR -> DateTimeFormatter.ofPattern("h:mm a", DynamicBundle.getLocale())
-            TimeFormat.TWENTY_FOUR_HOUR -> DateTimeFormatter.ofPattern("HH:mm")
-            TimeFormat.AUTO -> DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
-        }.withZone(ZoneId.systemDefault())
+    private fun messageTimeFormatter(): DateTimeFormatter = MarginalisSettings.getInstance().timeFormat.formatter()
 
-    /** Ordered steps use the stable total so they agree with the tool window's (n/total) as steps resolve. */
-    private fun walkPosition(): String {
-        val order = thread.order
-        if (order != null) {
-            val total = WalkthroughNavigator.stableTotal(project, thread) ?: return ""
-            return " · step $order/$total"
-        }
+    private fun openStatus(): String {
+        if (thread.order != null) return stepStatus("open")
         val (walk, i) = WalkthroughNavigator.walkFrom(project, thread)
-        return if (i != null && walk.size > 1) " · step ${i + 1}/${walk.size}" else ""
+        return if (i != null && walk.size > 1) "open · comment ${i + 1}/${walk.size}" else "open"
+    }
+
+    /** Steps use the stable total so they agree with the tool window's (n/total) as steps resolve. */
+    private fun stepStatus(status: String): String {
+        val order = thread.order ?: return status
+        val title = StringUtil.escapeXmlEntities(WalkthroughNavigator.title(project, thread))
+        val position = WalkthroughNavigator.stableTotal(project, thread)?.let { " ($order/$it)" }.orEmpty()
+        return "<html>${StringUtil.escapeXmlEntities(status)} · <b>$title</b>$position</html>"
     }
 
     private fun refreshSendOptions() {
@@ -963,9 +959,9 @@ class ThreadPanel(
 
     private fun statusText(): String = when {
         isDraft() -> "new comment — unsent"
-        thread.status is ThreadStatus.Open -> "open${walkPosition()}"
-        thread.status is ThreadStatus.Resolved -> "resolved by ${thread.resolvedBy?.displayName ?: "?"}"
-        else -> "orphaned (anchor deleted)"
+        thread.status is ThreadStatus.Open -> openStatus()
+        thread.status is ThreadStatus.Resolved -> stepStatus("resolved by ${thread.resolvedBy?.displayName ?: "?"}")
+        else -> stepStatus("orphaned (anchor deleted)")
     }
 
     override fun addNotify() {

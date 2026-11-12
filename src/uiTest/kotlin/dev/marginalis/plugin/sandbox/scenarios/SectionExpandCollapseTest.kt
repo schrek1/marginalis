@@ -1,5 +1,6 @@
 package dev.marginalis.plugin.sandbox.scenarios
 
+import dev.marginalis.plugin.sandbox.Agent
 import dev.marginalis.plugin.sandbox.SandboxScenario
 import dev.marginalis.plugin.sandbox.SandboxUi
 import dev.marginalis.plugin.sandbox.ToolWindowUi
@@ -21,6 +22,8 @@ class SectionExpandCollapseTest : SandboxScenario("section_expand_collapse") {
     fun postTheWalkthroughLaidOutByFolder() {
         SandboxUi.showToolWindow()
         postWalkthrough(DeepWalkthrough)
+        // Steps are listed apart from comments, so Open needs a comment of its own.
+        Agent.agentAddsLineThread("src/review_target.py", 2, "A comment beside the walkthrough")
         folderLayout()
         // Creating 33 threads queues rebuilds; let them land before the first press.
         Thread.sleep(5_000)
@@ -39,16 +42,16 @@ class SectionExpandCollapseTest : SandboxScenario("section_expand_collapse") {
         }
         report("INFO  Collapse from step 16 folded, press by press: $walked")
         check("Collapse folds one level further out with each press, up to the section", walked == LEVELS_FROM_16, walked)
-        var state = sectionsUntil("only the Guided section folded") { state ->
-            !state.getValue(GUIDED).expanded && state.getValue("Open").expanded
+        var state = sectionsUntil("only the walkthrough section folded") { state ->
+            !state.getValue(WALKTHROUGH).expanded && state.getValue("Open").expanded
         }
         check(
             "Collapse up to the section leaves the other sections open",
-            !state.getValue(GUIDED).expanded && state.getValue("Open").expanded, state,
+            !state.getValue(WALKTHROUGH).expanded && state.getValue("Open").expanded, state,
         )
 
-        ToolWindowUi.openSectionOnly(GUIDED)
-        val folded = sectionsUntil("nothing open inside the reopened Guided section") { it.getValue(GUIDED).folded }.getValue(GUIDED).folded
+        ToolWindowUi.openSectionOnly(WALKTHROUGH)
+        val folded = sectionsUntil("nothing open inside the reopened walkthrough section") { it.getValue(WALKTHROUGH).folded }.getValue(WALKTHROUGH).folded
         check("Collapse folds everything inside, as IntelliJ does", folded)
         ToolWindowUi.screenshotToolWindow(shots.resolve("reopened-section-one-level.png"))
 
@@ -64,55 +67,55 @@ class SectionExpandCollapseTest : SandboxScenario("section_expand_collapse") {
     @Test
     @Order(2)
     fun expandLevels() = case("expand_levels") {
-        // Everything is folded and the Guided section is selected.
+        // Everything is folded and the walkthrough section is selected.
         ToolWindowUi.pressToolWindowAction(*EXPAND)
-        var state = sectionsUntil("only the Guided section open all the way down") { state ->
-            state.getValue(GUIDED).full && !state.getValue("Open").expanded
+        var state = sectionsUntil("only the walkthrough section open all the way down") { state ->
+            state.getValue(WALKTHROUGH).full && !state.getValue("Open").expanded
         }
-        check("Expand opens the selected section all the way down", state.getValue(GUIDED).full, state)
+        check("Expand opens the selected section all the way down", state.getValue(WALKTHROUGH).full, state)
         check("Expand leaves the other sections folded", !state.getValue("Open").expanded, state)
 
         ToolWindowUi.pressToolWindowAction(*EXPAND)
         state = sectionsUntil("every section open all the way down") { state -> state.values.all { it.full } }
         check("Expand again opens every section all the way down", state.values.all { it.full }, state)
 
-        ToolWindowUi.foldDir(GUIDED, ORDERS_SRC)
-        ToolWindowUi.selectDir(GUIDED, ORDERS_SRC)
+        ToolWindowUi.foldDir(WALKTHROUGH, ORDERS_SRC)
+        ToolWindowUi.selectDir(WALKTHROUGH, ORDERS_SRC)
         pause()
         ToolWindowUi.pressToolWindowAction(*EXPAND)
-        val opened = readUntil("$ORDERS_SRC open", read = { ToolWindowUi.dirExpanded(GUIDED, ORDERS_SRC) }) { it }
+        val opened = readUntil("$ORDERS_SRC open", read = { ToolWindowUi.dirExpanded(WALKTHROUGH, ORDERS_SRC) }) { it }
         check("Expand on a folded folder opens that folder", opened)
     }
 
     @Test
     @Order(3)
     fun foldsSurviveRefresh() = case("folds_survive_refresh") {
-        ToolWindowUi.foldDir(GUIDED, ORDERS_SRC)
+        ToolWindowUi.foldDir(WALKTHROUGH, ORDERS_SRC)
         pause()
         ToolWindowUi.pokeAThread()
         // Time for the refresh to open the folder again, which it must not.
         pause()
-        check("a folded folder stays folded when the tree refreshes", !ToolWindowUi.dirExpanded(GUIDED, ORDERS_SRC))
+        check("a folded folder stays folded when the tree refreshes", !ToolWindowUi.dirExpanded(WALKTHROUGH, ORDERS_SRC))
         ToolWindowUi.screenshotToolWindow(shots.resolve("folded-folder-after-refresh.png"))
     }
 
     @Test
     @Order(4)
     fun collapsingASectionFoldsEveryFolderInIt() = case("collapsing_a_section_folds_every_folder_in_it") {
-        ToolWindowUi.selectSection(GUIDED)
+        ToolWindowUi.selectSection(WALKTHROUGH)
         pause()
         ToolWindowUi.pressToolWindowAction(*EXPAND)
-        check(sectionsUntil("the Guided section open all the way down") { it.getValue(GUIDED).full }.getValue(GUIDED).full) {
-            "setup: the Guided section is not open all the way down"
+        check(sectionsUntil("the walkthrough section open all the way down") { it.getValue(WALKTHROUGH).full }.getValue(WALKTHROUGH).full) {
+            "setup: the walkthrough section is not open all the way down"
         }
         // The section itself is the collapse target: no walk out from a step folds the folders on the way.
         ToolWindowUi.pressToolWindowAction(*COLLAPSE)
         pause()
-        ToolWindowUi.openSectionOnly(GUIDED)
-        val folderOpen = readUntil("$ORDERS_SRC folded in the reopened section", read = { ToolWindowUi.dirExpanded(GUIDED, ORDERS_SRC) }) { !it }
+        ToolWindowUi.openSectionOnly(WALKTHROUGH)
+        val folderOpen = readUntil("$ORDERS_SRC folded in the reopened section", read = { ToolWindowUi.dirExpanded(WALKTHROUGH, ORDERS_SRC) }) { !it }
         check(
             "Collapse on a section folds a folder beside the selection too, so reopening it shows one level",
-            !folderOpen, ToolWindowUi.sectionsState().getValue(GUIDED),
+            !folderOpen, ToolWindowUi.sectionsState().getValue(WALKTHROUGH),
         )
         ToolWindowUi.screenshotToolWindow(shots.resolve("section-collapsed-directly.png"))
     }
@@ -121,8 +124,7 @@ class SectionExpandCollapseTest : SandboxScenario("section_expand_collapse") {
         readUntil(what, read = { ToolWindowUi.sectionsState() }, done = done)
 
     /**
-     * Folders are the levels Expand and Collapse step through; a build with a Guided layout menu (MARG-10) starts in
-     * step order, which has none. Set on the panel rather than through the header menu: this is setup, and the header
+     * Folders are the levels Expand and Collapse step through; a walkthrough starts in step order, which has none. Set on the panel rather than through the header menu: this is setup, and the header
      * is built a while after start.
      */
     private fun folderLayout() {
@@ -130,9 +132,8 @@ class SectionExpandCollapseTest : SandboxScenario("section_expand_collapse") {
             ToolWindowUi.TREE + """
             var panel = marginalisTree();
             while (panel != null && panel.getClass().getSimpleName() != 'MarginalisToolWindowPanel') panel = panel.getParent();
-            var layouts = null;
-            try { layouts = java.lang.Class.forName('dev.marginalis.core.GuidedLayout', true, panel.getClass().getClassLoader()); } catch (e) {}
-            if (layouts != null) panel.setGuidedLayout(java.lang.Enum.valueOf(layouts, 'BY_FOLDER'));
+            var layouts = java.lang.Class.forName('dev.marginalis.core.WalkthroughLayout', true, panel.getClass().getClassLoader());
+            panel.setWalkthroughLayout(java.lang.Enum.valueOf(layouts, 'BY_FOLDER'));
             String(true)
             """,
         )
@@ -140,11 +141,11 @@ class SectionExpandCollapseTest : SandboxScenario("section_expand_collapse") {
     }
 
     private companion object {
-        const val GUIDED = "Guided SHOP-42"
+        const val WALKTHROUGH = "SHOP-42"
         const val ORDERS_SRC = "shop-orders/src"
 
         /** From step 16 outwards, the folders around it, then its section. */
-        val LEVELS_FROM_16 = listOf("api", "customer/settings", "main/java/com/acme/backend/common", "shop-common/src", "backend", "acme", GUIDED)
+        val LEVELS_FROM_16 = listOf("api", "customer/settings", "main/java/com/acme/backend/common", "shop-common/src", "backend", "acme", WALKTHROUGH)
 
         // The header renames these buttons after the scope they act on; one lookup tries every name.
         val COLLAPSE = arrayOf("Collapse Folder", "Collapse Section", "Collapse All Sections", "Collapse")

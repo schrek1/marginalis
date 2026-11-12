@@ -33,8 +33,11 @@ object ThreadsCodec {
 
     fun decodeDocument(text: String): Document {
         val root = JsonParser.parseString(text).asJsonObject
+        val threads = root.getAsJsonArray("threads").mapNotNull { runCatching { thread(it.asJsonObject) }.getOrNull() }
+        val replayed = Walkthrough.replay(threads)
+        threads.forEach { thread -> replayed[thread.id]?.let(thread::restoreWalkthroughId) }
         return Document(
-            threads = root.getAsJsonArray("threads").mapNotNull { runCatching { thread(it.asJsonObject) }.getOrNull() },
+            threads = threads,
             handedBackAt = root.get("handed_back_at")?.takeIf { it.isJsonPrimitive }?.asString?.let(::instantOrNull),
             deletedRelays = root.get("deleted_relays")?.takeIf { it.isJsonArray }?.asJsonArray
                 ?.mapNotNull { it.takeIf { key -> key.isJsonObject }?.asJsonObject?.let(::relayKey) }?.toSet()
@@ -76,6 +79,7 @@ object ThreadsCodec {
         }
         thread.order?.let { addProperty("order", it) }
         thread.walkthrough?.let { addProperty("walkthrough", it) }
+        thread.walkthroughId?.let { addProperty("walkthrough_id", it) }
         thread.severity?.let { addProperty("severity", it.name) }
         thread.intent?.let { addProperty("intent", it.name) }
         thread.label?.let { addProperty("label", it) }
@@ -121,6 +125,7 @@ object ThreadsCodec {
             // Legacy files wrote "tour".
             walkthrough = (json.get("walkthrough") ?: json.get("tour"))
                 ?.takeIf { it.isJsonPrimitive }?.asString,
+            walkthroughId = json.get("walkthrough_id")?.takeIf { it.isJsonPrimitive }?.asString,
             segment = json.get("segment")?.takeIf { it.isJsonObject }?.asJsonObject?.let { seg ->
                 seg.get("exact")?.takeIf { it.isJsonPrimitive }?.asString?.let { exact ->
                     Segment(

@@ -44,7 +44,7 @@ class SelectInMarginalisTest : SandboxScenario("select_in_marginalis") {
         val got = readUntil("the step selected", read = { ToolWindowUi.selectedStep() }) { it?.thread == step }
         ToolWindowUi.screenshotToolWindow(shots.resolve("1-step.png"))
         check("the step on the caret's line is selected", got?.thread == step, got)
-        check("…in its Guided section", got?.section.orEmpty().startsWith("Guided"), got)
+        check("…in its walkthrough's section", got?.section == "review", got)
     }
 
     @Test
@@ -52,8 +52,9 @@ class SelectInMarginalisTest : SandboxScenario("select_in_marginalis") {
     fun onALineWithoutAThreadItSelectsTheFile() = case("on_a_line_without_a_thread_it_selects_the_file") {
         SandboxUi.moveCaret(TARGET, 4)
         SandboxUi.selectInMarginalisFromEditor(TARGET)
-        val name = readUntil("the file selected", read = { ToolWindowUi.selectedNodeName() }) { it == "review_target.py" }
-        check("on a line without a thread the file is selected", name == "review_target.py", name)
+        // In step order a walkthrough has no file nodes: its step row that names the file stands for it.
+        val name = readUntil("the file's row selected", read = { ToolWindowUi.selectedNodeName() }) { it in FILE_ROWS }
+        check("on a line without a thread the file's row is selected", name in FILE_ROWS, name)
     }
 
     @Test
@@ -95,6 +96,8 @@ class SelectInMarginalisTest : SandboxScenario("select_in_marginalis") {
     }
 
     private companion object {
+        val FILE_ROWS = setOf("review_target.py", "step 1")
+
         // 0-based line in TARGET_AFTER: the review's copy moves every line down by three.
         const val TOTAL_IN_REVIEW = 8
 

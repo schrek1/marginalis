@@ -108,6 +108,18 @@ class ThreadPanelToolbarTest : HttpContractTestCase() {
         assertEquals(15, caretLine())
     }
 
+    fun testResolvingACommentMovesOnToTheNextCommentPassingTheStepsBetween() = withAutoAdvance(true) {
+        tour()
+        val first = agent.addOnLine(3, "body" to "First comment")
+        agent.addOnLine(20, "body" to "Second comment")
+        val panel = user.open(first)
+
+        user.press(panel, "Resolve")
+
+        assertTrue(shownIn(user.panel()).contains("Second comment"))
+        assertEquals(20, caretLine())
+    }
+
     fun testResolvingTheLastStepInAnotherFileStaysPut() = withAutoAdvance(true) {
         val steps = tour()
         val panel = user.open(steps[2])
@@ -205,6 +217,60 @@ class ThreadPanelToolbarTest : HttpContractTestCase() {
         user.press(panel, "Next Step")
 
         assertTrue(shownIn(user.panel()).contains("Step one"))
+    }
+
+    private fun postUnlabelledSteps(vararg steps: Pair<Int, String>): List<String> {
+        val items = steps.mapIndexed { index, (line, body) ->
+            mapOf("file" to SAMPLE, "line" to line, "anchor_text" to lineText(line), "order" to index + 1, "body" to body)
+        }
+        return agent.post("comment_add_batch", "items" to items).json.getAsJsonArray("results").map { it.asJsonObject.id }
+    }
+
+    fun testTwoUnlabelledWalkthroughsWalkApart() {
+        sample()
+        val first = postUnlabelledSteps(5 to "First one", 15 to "First two")
+        postUnlabelledSteps(10 to "Second one", 20 to "Second two", 30 to "Second three")
+
+        val panel = user.open(first[0])
+        val header = shownIn(panel).lines().single { it.startsWith("<html>open · ") }
+        assertTrue(header, header.startsWith("<html>open · <b>Walkthrough · ") && header.endsWith("</b> (1/2)</html>"))
+        user.press(panel, "Last Step")
+
+        assertTrue(shownIn(user.panel()).contains("First two"))
+        assertEquals(setOf("First Step", "Previous Step"), enabled(user.panel()).filter { it.endsWith("Step") }.toSet())
+        assertEquals(emptyList<String>(), agent.threads().filter { thread -> thread.keySet().any { it.startsWith("walkthrough_") } }.map { it.id })
+    }
+
+    fun testAnOrdinaryCommentsArrowsAreCommentArrows() {
+        tour()
+        val comment = agent.addOnLine(3, "body" to "Comment one")
+        agent.addOnLine(10, "body" to "Comment two")
+
+        val names = user.toolbar(user.open(comment)).keys
+
+        assertTrue(names.containsAll(listOf("First Comment", "Previous Comment", "Next Comment", "Last Comment")))
+        assertEquals(emptyList<String>(), names.filter { it.endsWith("Step") })
+    }
+
+    fun testCommentArrowsWalkTheOpenCommentsPassingStepsBy() {
+        tour()
+        val first = agent.addOnLine(12, "body" to "Comment one", file = other)
+        agent.addOnLine(3, "body" to "Comment two")
+        agent.addOnLine(10, "body" to "Comment three")
+
+        assertEquals(setOf("Next Comment", "Last Comment"), enabled(user.open(first)).filter { it.endsWith("Comment") }.toSet())
+        user.press(user.panel(), "Next Comment")
+        assertEquals("Sample.kt", openFileName())
+        assertEquals(3, caretLine())
+        assertTrue(shownIn(user.panel()).contains("Comment two"))
+
+        user.press(user.panel(), "Next Comment")
+        assertEquals(10, caretLine())
+        assertTrue(shownIn(user.panel()).contains("Comment three"))
+
+        user.press(user.panel(), "First Comment")
+        assertEquals("Other.kt", openFileName())
+        assertTrue(shownIn(user.panel()).contains("Comment one"))
     }
 
     fun testCopyReferenceCopiesTheThreadsShortReference() {
