@@ -18,6 +18,9 @@ object ToolWindowUi {
     private val HEADER_WAIT: Duration = Duration.ofSeconds(60)
     private const val NO_HEADER_BUTTON = "no tool window button"
 
+    /** A section prefix that matches the first walkthrough's section, whatever the walkthrough is named. */
+    const val ANY_WALKTHROUGH = "<any walkthrough>"
+
     const val TREE = """
 function marginalisTree() {
     var window = com.intellij.openapi.wm.ToolWindowManager.getInstance(project).getToolWindow('Marginalis');
@@ -36,6 +39,10 @@ function threadOfNode(node) {
     return data.getThread();
 }
 function sectionTitle(node) { return String(node.getUserObject().getTitle()); }
+function inSection(node, prefix) {
+    if (prefix == '$ANY_WALKTHROUGH') return node.getUserObject().isWalkthrough();
+    return sectionTitle(node).indexOf(prefix) == 0;
+}
 """
 
     private const val THREAD_ROWS = """
@@ -191,21 +198,21 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
         return outcome
     }
 
-    /** Picks an entry of the header's Guided Layout menu through the button's own action group. */
-    fun chooseGuidedLayout(label: String) {
+    /** Picks an entry of the header's Walkthrough Layout menu through the button's own action group. */
+    fun chooseWalkthroughLayout(label: String) {
         val escaped = lit(label)
-        retryWhileHeaderIsBuilt("no Guided Layout button in the tool window header") {
+        retryWhileHeaderIsBuilt("no Walkthrough Layout button in the tool window header") {
             js(
                 FIND + HEADER + """
                 var button = find(root, function (c) {
                     return c instanceof com.intellij.openapi.actionSystem.impl.ActionButton
-                        && String(c.getAction().getClass().getSimpleName()) == 'GuidedLayoutMenuAction';
+                        && String(c.getAction().getClass().getSimpleName()) == 'WalkthroughLayoutMenuAction';
                 });
-                if (button == null) throw '$NO_HEADER_BUTTON Guided Layout';
+                if (button == null) throw '$NO_HEADER_BUTTON Walkthrough Layout';
                 var children = button.getAction().getChildActionsOrStubs();
                 var picked = null;
                 for (var i = 0; i < children.length; i++) if (children[i].getTemplatePresentation().getText() == $escaped) picked = children[i];
-                if (picked == null) throw 'no Guided Layout entry ' + $escaped;
+                if (picked == null) throw 'no Walkthrough Layout entry ' + $escaped;
                 var event = com.intellij.openapi.actionSystem.AnActionEvent.createEvent(
                     picked, com.intellij.ide.DataManager.getInstance().getDataContext(button),
                     picked.getTemplatePresentation().clone(), 'MarginalisSandbox',
@@ -226,7 +233,7 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
         }
     }
 
-    fun guidedLayout(): String = js("String(service('dev.marginalis.plugin.ui.toolwindow.GuidedLayoutSetting').getLayout().getStored())")
+    fun walkthroughLayout(): String = js("String(service('dev.marginalis.plugin.store.ProjectWalkthroughLayout').getLayout().name())")
 
     // --- tree ---------------------------------------------------------------------------------------------------
 
@@ -279,7 +286,7 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
             var root = tree.getModel().getRoot();
             for (var i = 0; i < root.getChildCount(); i++) {
                 var section = root.getChildAt(i);
-                if (sectionTitle(section).indexOf(${lit(sectionPrefix)}) == 0) {
+                if (inSection(section, ${lit(sectionPrefix)})) {
                     tree.expandPath(new javax.swing.tree.TreePath(section.getPath()));
                     break;
                 }
@@ -295,7 +302,7 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
         var dir = null;
         for (var i = 0; i < root.getChildCount() && dir == null; i++) {
             var section = root.getChildAt(i);
-            if (sectionTitle(section).indexOf(${lit(sectionPrefix)}) != 0) continue;
+            if (!inSection(section, ${lit(sectionPrefix)})) continue;
             var nodes = section.preorderEnumeration();
             while (nodes.hasMoreElements()) {
                 var node = nodes.nextElement();
@@ -323,7 +330,7 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
             var root = tree.getModel().getRoot();
             var found = null;
             for (var i = 0; i < root.getChildCount() && found == null; i++) {
-                if (sectionTitle(root.getChildAt(i)).indexOf(${lit(sectionPrefix)}) == 0) found = root.getChildAt(i);
+                if (inSection(root.getChildAt(i), ${lit(sectionPrefix)})) found = root.getChildAt(i);
             }
             if (found == null) throw 'no section starting with ' + ${lit(sectionPrefix)};
             tree.setSelectionPath(new javax.swing.tree.TreePath(found.getPath()));
@@ -351,14 +358,14 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
     }
 
     /** Step numbers of the thread nodes of the first section whose title starts with `sectionPrefix`, in tree order. */
-    fun treeSteps(sectionPrefix: String = "Guided"): List<Int> = intList(
+    fun treeSteps(sectionPrefix: String = ANY_WALKTHROUGH): List<Int> = intList(
         js(
             TREE + """
             var root = marginalisTree().getModel().getRoot();
             var orders = [];
             for (var i = 0; i < root.getChildCount(); i++) {
                 var section = root.getChildAt(i);
-                if (sectionTitle(section).indexOf(${lit(sectionPrefix)}) != 0) continue;
+                if (!inSection(section, ${lit(sectionPrefix)})) continue;
                 var nodes = section.preorderEnumeration();
                 while (nodes.hasMoreElements()) {
                     var thread = threadOfNode(nodes.nextElement());
@@ -371,7 +378,7 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
         ),
     )
 
-    /** Per Guided section title: the prefix each step shows in the tree, e.g. `(1/5)`, in tree order. */
+    /** Per walkthrough section title: the prefix each step shows in the tree, e.g. `(1/5)`, in tree order. */
     /** The ids of every thread the tool window's tree holds, folded sections included, each once. */
     fun treeThreadIds(): Set<String> =
         JsonParser.parseString(
@@ -397,7 +404,7 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
                 for (var i = 0; i < root.getChildCount(); i++) {
                     var section = root.getChildAt(i);
                     var title = sectionTitle(section);
-                    if (title.indexOf('Guided') != 0) continue;
+                    if (!section.getUserObject().isWalkthrough()) continue;
                     var prefixes = [];
                     var nodes = section.preorderEnumeration();
                     while (nodes.hasMoreElements()) {
@@ -466,7 +473,7 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
     }
 
     /** Selects the step's node in the tree, as a click on it would (no editor navigation). */
-    fun selectStep(order: Int, sectionPrefix: String = "Guided") {
+    fun selectStep(order: Int, sectionPrefix: String = ANY_WALKTHROUGH) {
         js(
             TREE + """
             var tree = marginalisTree();
@@ -474,7 +481,7 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
             var found = null;
             for (var i = 0; i < root.getChildCount() && found == null; i++) {
                 var section = root.getChildAt(i);
-                if (sectionTitle(section).indexOf(${lit(sectionPrefix)}) != 0) continue;
+                if (!inSection(section, ${lit(sectionPrefix)})) continue;
                 var nodes = section.preorderEnumeration();
                 while (nodes.hasMoreElements()) {
                     var node = nodes.nextElement();
@@ -549,8 +556,8 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
 
     data class ShapeNode(val kind: String, val name: String?, val steps: List<Int>, val showsFile: Boolean?)
 
-    /** The Guided section's direct children: kind, name (folder/file) and step numbers beneath, in tree order. */
-    fun guidedShape(sectionPrefix: String = "Guided"): List<ShapeNode> =
+    /** A walkthrough section's direct children: kind, name (folder/file) and step numbers beneath, in tree order. */
+    fun guidedShape(sectionPrefix: String = ANY_WALKTHROUGH): List<ShapeNode> =
         JsonParser.parseString(
             js(
                 TREE + """
@@ -558,7 +565,7 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
                 var shape = [];
                 for (var i = 0; i < root.getChildCount(); i++) {
                     var section = root.getChildAt(i);
-                    if (sectionTitle(section).indexOf(${lit(sectionPrefix)}) != 0) continue;
+                    if (!inSection(section, ${lit(sectionPrefix)})) continue;
                     for (var j = 0; j < section.getChildCount(); j++) {
                         var child = section.getChildAt(j);
                         var data = child.getUserObject();
@@ -570,7 +577,7 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
                             if (thread != null) steps.push(thread.getOrder().intValue());
                         }
                         var name = (kind == 'DirNode' || kind == 'FileNode') ? String(data.getName()) : null;
-                        var showsFile = kind == 'ThreadNode' ? data.getShowFile() : null;
+                        var showsFile = kind == 'ThreadNode' ? data.getNamesItsFile() : null;
                         shape.push({kind: kind, name: name, steps: steps, showsFile: showsFile});
                     }
                     break;

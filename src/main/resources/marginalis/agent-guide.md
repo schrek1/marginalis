@@ -446,14 +446,19 @@ warning instead of guessing.
 An ordered walk — "look here 1st, 2nd, …" — for reviewing your change,
 explaining how code hangs together, or onboarding. Create steps with
 `order` on `comment_add` (1, 2, …); an optional `walkthrough` label
-("A", "B") keeps concurrent walkthroughs separate. Rules:
+keeps concurrent walkthroughs separate. Give every walkthrough a short
+name in `walkthrough` ("How the split works"): the user sees it as the
+walkthrough's title in the tool window and in each step's header. An
+unnamed walkthrough still works and is shown as "Walkthrough". Rules:
 
 - A finished walk is one call: `comment_add_batch` takes the steps as
   items and answers per item, so a single stale anchor costs you that
   step and not the round.
 - One topic per step, anchored on the line that best embodies it. The
   body never restates position, file path, or severity — the UI carries
-  all three (steps render as "(2/5)" in a tree sorted in walking order).
+  all three (steps render as "(2/5)", listed in walking order with each
+  step's file beside it unless the user picks a by-folder or by-file
+  layout).
 - Order by the code's structure — entry point first, then callees —
   never by severity; severity has its own channel.
 - A step can sit at any rung: a line, a file, or the project; a
@@ -461,7 +466,21 @@ explaining how code hangs together, or onboarding. Create steps with
   scrolls to that thread.
 - The user walks with next/previous controls and resolves steps as they
   go. A step resolved without a reply is seen-and-approved; a reply is a
-  change request — land the change first, then resolve it.
+  change request — land the change first, then resolve it. The user can
+  also resolve a whole walkthrough in one action; each step it closes
+  reads the same way.
+- Steps are listed and walked apart from ordinary threads: the user's
+  previous/next on an ordinary thread never visits a step, and a
+  resolved or orphaned step is shown under its walkthrough. A
+  walkthrough whose steps are all resolved is listed with the resolved
+  threads; reopening any of its steps brings it back. Each
+  walkthrough keeps its own identity, so reusing a label — or none —
+  for a later walkthrough does not merge the two.
+- Steps with new numbers continue the open walkthrough under the same
+  label (no label and `""` count as one); a number that walkthrough
+  already has — even resolved — or a walkthrough with nothing left open
+  starts a new one. Re-posting a corrected step 3 therefore opens a
+  second walkthrough; reply on the existing step instead.
 
 ## Relaying from GitHub
 

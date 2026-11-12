@@ -22,11 +22,11 @@ class SelectThreadInToolWindowTest : ToolWindowTestCase() {
         window.settle()
     }
 
-    fun testSelectInMarginalisSelectsAStepInItsGuidedSection() {
+    fun testSelectInMarginalisSelectsAStepInItsWalkthroughSection() {
         selectInMarginalis(steps.getValue(27))
 
         assertTrue(window.selected(), window.selected()!!.contains("(27/33)"))
-        assertTrue(window.selectedPath().toString(), window.selectedPath().first().startsWith("Guided SHOP-42"))
+        assertTrue(window.selectedPath().toString(), window.selectedPath().first().startsWith("SHOP-42"))
     }
 
     fun testSelectInMarginalisSelectsAThreadOutsideAnyWalkthroughInOpen() {
@@ -56,9 +56,9 @@ class SelectThreadInToolWindowTest : ToolWindowTestCase() {
         user.press(panel, "Select in Marginalis")
         window.settle()
 
-        // THEN - the step is selected in its Guided section, not the file under the caret
+        // THEN - the step is selected in its walkthrough's section, not the file under the caret
         window.selected().shouldNotBeNull() shouldContain "(27/33)"
-        window.selectedPath().first() shouldStartWith "Guided SHOP-42"
+        window.selectedPath().first() shouldStartWith "SHOP-42"
     }
 
     fun testTheTitleBarHasNoSelectOpenedThreadButton() {

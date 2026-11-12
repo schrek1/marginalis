@@ -49,6 +49,12 @@ object ProjectTab {
         }
     }
 
+    fun sortChanged(project: Project) {
+        FileEditorManager.getInstance(project).allEditors
+            .filterIsInstance<MarginEditor>()
+            .forEach(MarginEditor::sortChanged)
+    }
+
     fun closeEverywhere() {
         for (project in ProjectManager.getInstance().openProjects) {
             if (project.isDisposed) continue

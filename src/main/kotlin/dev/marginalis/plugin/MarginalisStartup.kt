@@ -141,6 +141,7 @@ class MarginalisStartup : ProjectActivity {
                 MarginalisMarkers.attach(project, thread, document)
             }
         }
-        thread.file?.let { MarginalisMarkers.refreshIcons(project, it) }
+        val recoloured = if (store.threads.byId(thread.id) == null && thread.order != null) store.threads.all().mapNotNull { it.file } else emptyList()
+        (listOfNotNull(thread.file) + recoloured).distinct().forEach { MarginalisMarkers.refreshIcons(project, it) }
     }
 }

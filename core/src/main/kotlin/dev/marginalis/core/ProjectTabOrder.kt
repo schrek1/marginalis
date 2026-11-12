@@ -1,9 +1,9 @@
 package dev.marginalis.core
 
-enum class ProjectTabOrder(val stored: String, val label: String, val newOnTop: Boolean) {
-    OLDEST_FIRST("OLDEST_FIRST", "Oldest first", newOnTop = false),
-    NEWEST_FIRST("NEWEST_FIRST", "Newest first", newOnTop = true),
-    RECENT_ACTIVITY("RECENT_ACTIVITY", "Recent activity", newOnTop = true);
+enum class ProjectTabOrder(val label: String, val newOnTop: Boolean) {
+    OLDEST_FIRST("Oldest first", newOnTop = false),
+    NEWEST_FIRST("Newest first", newOnTop = true),
+    RECENT_ACTIVITY("Recent activity", newOnTop = true);
 
     val comparator: Comparator<CommentThread>
         get() = when (this) {
@@ -16,6 +16,6 @@ enum class ProjectTabOrder(val stored: String, val label: String, val newOnTop: 
     companion object {
         val DEFAULT = OLDEST_FIRST
 
-        fun fromStored(stored: String?): ProjectTabOrder = entries.firstOrNull { it.stored == stored } ?: DEFAULT
+        fun fromStored(stored: String?): ProjectTabOrder = entries.firstOrNull { it.name == stored } ?: DEFAULT
     }
 }

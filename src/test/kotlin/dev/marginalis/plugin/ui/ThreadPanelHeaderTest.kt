@@ -2,6 +2,7 @@ package dev.marginalis.plugin.ui
 
 import com.intellij.openapi.actionSystem.ActionToolbar
 import com.intellij.openapi.actionSystem.impl.ActionToolbarImpl
+import com.intellij.openapi.util.text.StringUtil
 import com.intellij.testFramework.PlatformTestUtil
 import com.intellij.util.ui.UIUtil
 import dev.marginalis.plugin.transport.HttpContractTestCase
@@ -58,7 +59,7 @@ class ThreadPanelHeaderTest : HttpContractTestCase() {
         val toolbar = UIUtil.uiTraverser(panel).filter(ActionToolbar::class.java).first() as ActionToolbarImpl
         PlatformTestUtil.waitForFuture(toolbar.updateActionsAsync())
         return generateSequence(toolbar.component.parent) { it.parent }.filterIsInstance<JComponent>()
-            .first { header -> UIUtil.uiTraverser(header).filter(JLabel::class.java).any { it.text.orEmpty().startsWith("open") } }
+            .first { header -> UIUtil.uiTraverser(header).filter(JLabel::class.java).any { StringUtil.removeHtmlTags(it.text.orEmpty()).startsWith("open") } }
     }
 
     private fun layOut(header: JComponent, width: Int) {
@@ -71,7 +72,7 @@ class ThreadPanelHeaderTest : HttpContractTestCase() {
     }
 
     private fun statusLabel(header: JComponent): JLabel =
-        UIUtil.uiTraverser(header).filter(JLabel::class.java).first { it.text.orEmpty().startsWith("open") }
+        UIUtil.uiTraverser(header).filter(JLabel::class.java).first { StringUtil.removeHtmlTags(it.text.orEmpty()).startsWith("open") }
 
     private fun toolbar(header: JComponent): JComponent =
         UIUtil.uiTraverser(header).filter(ActionToolbar::class.java).first()!!.component

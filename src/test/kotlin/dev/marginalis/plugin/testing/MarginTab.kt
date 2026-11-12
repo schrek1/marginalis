@@ -31,6 +31,7 @@ import com.intellij.testFramework.replaceService
 import com.intellij.ui.SearchTextField
 import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBScrollPane
+import com.intellij.ui.RowIcon
 import com.intellij.ui.components.JBTextArea
 import com.intellij.util.IconUtil
 import com.intellij.util.ui.UIUtil
@@ -260,7 +261,24 @@ class MarginTab(private val project: Project, private val disposable: Disposable
         return result
     }
 
-    val editor: MarginEditor get() = editors.getAllEditors(file).filterIsInstance<MarginEditor>().single()
+    private var half: Int? = null
+
+    val editor: MarginEditor
+        get() = editors.getAllEditors(file).filterIsInstance<MarginEditor>().let { shown -> half?.let(shown::get) ?: shown.single() }
+
+    fun splitInTwo() {
+        editors.windows.single().split(SwingConstants.VERTICAL, true, file, false)
+        settle()
+    }
+
+    fun <T> inHalf(index: Int, look: () -> T): T {
+        half = index
+        try {
+            return look()
+        } finally {
+            half = null
+        }
+    }
 
     @AllowReflection("The tab's own sense of being in front has no public read, and a headless frame gives a tab behind the file no window for it to show through")
     fun countsItselfInFront(): Boolean {
@@ -499,6 +517,9 @@ class MarginTab(private val project: Project, private val disposable: Disposable
         val expanded = if (card.panel != null) " [expanded]" else ""
         return "$turn$title$trailing$preview$expanded"
     }
+
+    fun markShown(text: String): Icon =
+        (UIUtil.findComponentsOfType(heading(card(text)), JLabel::class.java).first { it.icon != null }.icon as RowIcon).getIcon(0)!!
 
     private fun glyphOf(card: ThreadCard, icon: Icon?): String? {
         val mark = MarginalisIcons.markOf(listOf(card.thread))

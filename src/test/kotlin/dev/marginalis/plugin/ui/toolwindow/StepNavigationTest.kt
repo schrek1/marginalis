@@ -59,28 +59,6 @@ class StepNavigationTest : ToolWindowTestCase() {
         assertEquals(OPEN_STEPS.first() to OPEN_STEPS.last(), first to last)
     }
 
-    fun testInOpenNextFollowsTheTreeRatherThanTheStepNumbers() {
-        val treeOrder = threadsInTreeOrder("Open")
-        select("Step ${treeOrder.first()}", under = "Open")
-
-        val walked = listOf(selectedThread()) + (1..4).map {
-            window.press("Next Step")
-            selectedThread()
-        }
-
-        assertEquals(treeOrder.take(5), walked)
-        assertFalse(treeOrder.take(5) == treeOrder.take(5).sorted())
-    }
-
-    fun testInOpenNextStaysInOpen() {
-        val treeOrder = threadsInTreeOrder("Open")
-        select("Step ${treeOrder.first()}", under = "Open")
-
-        repeat(4) { window.press("Next Step") }
-
-        assertTrue(window.selectedPath().toString(), window.selectedPath().first().startsWith("Open"))
-    }
-
     private fun refreshTheTree() = window.rebuiltBy {
         val anyStep = store.threads.byId(steps.getValue(OPEN_STEPS.last()))!!
         store.threads.notifyChanged(anyStep)
@@ -92,16 +70,10 @@ class StepNavigationTest : ToolWindowTestCase() {
         window.settle()
     }
 
-    private fun threadsInTreeOrder(title: String): List<Int> =
-        section(title).lines().mapNotNull { STEP_BODY.find(it)?.groupValues?.get(1)?.toInt() }
-
     private fun selectedStep(): Int? = window.selected()?.let { STEP_PREFIX.find(it)?.groupValues?.get(1)?.toInt() }
-
-    private fun selectedThread(): Int? = window.selected()?.let { STEP_BODY.find(it)?.groupValues?.get(1)?.toInt() }
 
     private companion object {
         val STEP_PREFIX = Regex("""\((\d+)/33\)""")
-        val STEP_BODY = Regex("""Step (\d+)$""")
         val OPEN_STEPS: List<Int> = WalkthroughFixture.deep().let { walk ->
             walk.steps.map { it.order }.filterNot { it in walk.resolved }.sorted()
         }

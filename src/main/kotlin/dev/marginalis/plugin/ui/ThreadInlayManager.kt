@@ -59,6 +59,7 @@ object ThreadInlayManager {
             .also { editor.putUserData(OPEN_INLAYS, it) }
 
     private fun openPanel(project: Project, editor: Editor, thread: CommentThread, ensureStored: () -> Unit): ThreadPanel? {
+        LastStep.getInstance(project).landedOn(thread)
         val open = openInlays(editor)
         open[thread.id]?.let { (inlay, panel) ->
             // Document reloads dispose inlays behind our back; a stale entry

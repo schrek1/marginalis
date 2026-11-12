@@ -24,7 +24,7 @@ class GuidedStepLabelsTest : SandboxScenario("guided_step_labels") {
 
         val prefixes = readUntil("both walkthroughs listed with their step numbers", read = { ToolWindowUi.stepPrefixes() }) { shown ->
             val first = firstRoundOf(shown)
-            secondRoundOf(shown) == ROUND_TWO_PREFIXES && first.size == 24 && first.all { NUMBER_ONLY.matches(it) }
+            secondRoundOf(shown) == ROUND_TWO_PREFIXES && first.size == DeepWalkthrough.steps.size && first.all { NUMBER_ONLY.matches(it) }
         }
         report("INFO  sections: ${prefixes.keys}")
         val firstRound = firstRoundOf(prefixes)
@@ -32,13 +32,13 @@ class GuidedStepLabelsTest : SandboxScenario("guided_step_labels") {
         check("both walkthroughs have their own section", firstRound.isNotEmpty() && secondRound.isNotEmpty(), prefixes.keys)
         check("round 2 steps show just their number", secondRound == ROUND_TWO_PREFIXES, secondRound)
         val odd = firstRound.filterNot { NUMBER_ONLY.matches(it) }
-        check("round 1 steps show just their number", odd.isEmpty() && firstRound.size == 24, odd.take(3).ifEmpty { firstRound.size })
+        check("round 1 steps show just their number", odd.isEmpty() && firstRound.size == DeepWalkthrough.steps.size, odd.take(3).ifEmpty { firstRound.size })
         ToolWindowUi.screenshotToolWindow(shots.resolve("two-walkthroughs.png"))
     }
 
-    private fun firstRoundOf(prefixes: Map<String, List<String>>) = prefixes["Guided ${DeepWalkthrough.label}"].orEmpty()
+    private fun firstRoundOf(prefixes: Map<String, List<String>>) = prefixes[DeepWalkthrough.label].orEmpty()
 
-    private fun secondRoundOf(prefixes: Map<String, List<String>>) = prefixes["Guided $ROUND_TWO"].orEmpty()
+    private fun secondRoundOf(prefixes: Map<String, List<String>>) = prefixes[ROUND_TWO].orEmpty()
 
     private companion object {
         const val ROUND_TWO = "SHOP-42 · round 2 – split the importer"

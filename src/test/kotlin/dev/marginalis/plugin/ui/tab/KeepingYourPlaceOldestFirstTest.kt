@@ -2,7 +2,6 @@ package dev.marginalis.plugin.ui.tab
 
 import dev.marginalis.plugin.testing.Agent
 
-// KeepingYourPlaceTest with the default order, where new threads arrive at the bottom.
 class KeepingYourPlaceOldestFirstTest : TabInFrontTestCase() {
 
     private fun paragraphs(count: Int): String = (1..count).joinToString("\n\n") { "Paragraph $it." }

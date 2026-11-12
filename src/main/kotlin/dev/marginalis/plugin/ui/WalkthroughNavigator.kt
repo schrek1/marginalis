@@ -17,11 +17,14 @@ import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.util.text.StringUtil
 import dev.marginalis.core.CommentThread
 import dev.marginalis.core.Message
+import dev.marginalis.core.ThreadListing
 import dev.marginalis.core.WalkPosition
 import dev.marginalis.core.Walkthrough
+import dev.marginalis.plugin.settings.MarginalisSettings
 import dev.marginalis.plugin.store.MarginalisStore
 import dev.marginalis.plugin.ui.diff.ReviewDiffSteps
 import dev.marginalis.plugin.ui.tab.ProjectTab
+import java.time.Instant
 
 object WalkthroughNavigator {
 
@@ -30,6 +33,11 @@ object WalkthroughNavigator {
 
     fun stableTotal(project: Project, thread: CommentThread): Int? =
         Walkthrough.stableTotal(MarginalisStore.getInstance(project).threads.all(), thread)
+
+    fun startTime(): (Instant) -> String = MarginalisSettings.getInstance().timeFormat.formatter()::format
+
+    fun title(project: Project, thread: CommentThread): String =
+        ThreadListing.titleOf(MarginalisStore.getInstance(project).threads.all(), thread, startTime())
 
     /**
      * @param from the editor the move starts in; a step in the file it shows scrolls that editor, a diff included,
@@ -44,7 +52,11 @@ object WalkthroughNavigator {
         from: Editor? = null,
         leaving: () -> Unit = {},
     ) {
-        val path = thread.file ?: return ProjectTab.reveal(project, thread, revealing).also { leaving() }
+        val path = thread.file ?: return run {
+            LastStep.getInstance(project).landedOn(thread)
+            ProjectTab.reveal(project, thread, revealing)
+            leaving()
+        }
         val stayed = when {
             from == null || from.isDisposed -> false
             from.shows(project, path) -> navigateWithin(from, project, thread, revealing, leaving)
