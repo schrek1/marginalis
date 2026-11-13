@@ -35,6 +35,14 @@ class StripeBadgeTest {
     }
 
     @Test
+    fun `an Agree raises no envelope, answered or not`() {
+        val agreed = { thread(agent).also { it.addMessage(Message.agreement(by = user, with = agent)) } }
+        val answered = agreed().also { it.answerAgreement(by = agent, answer = AgreementAnswer.WORKING) }
+
+        assertNull(StripeBadge.of(listOf(agreed(), answered)))
+    }
+
+    @Test
     fun `an open blocker wins over the envelope`() {
         assertEquals(StripeBadge.BLOCKER, StripeBadge.of(listOf(thread(agent), thread(user, Severity.BLOCKER))))
     }

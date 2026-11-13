@@ -60,6 +60,16 @@ class SavedFileTest : SavedProjectTestCase() {
         assertEquals(listOf("user", "agent"), old.messages().map { it.getAsJsonObject("author").string("kind") })
     }
 
+    fun testAFileSavedBeforeAgentStatesLoadsAgreesAsUnanswered() {
+        val beforeAgentStates = """{"threads":[{"id":"agreed","file":"$SAMPLE","status":"OPEN","created_at":"2026-01-01T00:00:00Z",
+            |"messages":[{"id":"m","author":{"kind":"AGENT","name":"Claude","id":"claude-main"},"body":"Shall I?","created_at":"2026-01-01T00:00:00Z"},
+            |{"id":"n","author":{"kind":"USER","name":"Ada"},"body":"Agreed.","to":"claude-main","agrees":true,"created_at":"2026-01-01T00:01:00Z"}]}]}""".trimMargin()
+        openShop(saved = beforeAgentStates)
+
+        assertEquals("agent", agent.summaryOf("agreed").string("awaiting"))
+        assertNull(agent.summaryOf("agreed").string("agent_state"))
+    }
+
     // FixMe: Known issue - #53 a legacy line thread saved without anchor text orphans on reopen, or jumps to the nearest blank line
     fun testALegacyLineThreadWithoutAnchorTextJumpsToTheNearestBlankLine() {
         val text = sampleText().lines().toMutableList().apply { set(7, "") }.joinToString("\n")

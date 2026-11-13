@@ -3,6 +3,7 @@ package dev.marginalis.plugin.ui.toolwindow
 import com.intellij.openapi.command.CommandProcessor
 import com.intellij.openapi.fileEditor.ex.IdeDocumentHistory
 import dev.marginalis.plugin.testing.DisplayOnly
+import dev.marginalis.plugin.testing.FilesThatWontStayOpen
 import dev.marginalis.plugin.testing.NeedsADisplay
 import org.junit.runner.RunWith
 
@@ -212,6 +213,19 @@ class StepArrowsTest : ToolWindowTestCase() {
         assertEquals(28, caretLine())
     }
 
+    fun testAFailedMoveLeavesTheArrowsOnTheStepYouAreOn() {
+        interleaved()
+        repeat(2) { window.press("Next Step") }
+        FilesThatWontStayOpen(project, testRootDisposable).closeJustAfterOpening(loyaltyDiscountPolicy)
+
+        window.press("Next Step")
+
+        assertEquals("✉ (3/18)  OrderService.java L28  Step 3", window.selected())
+        window.selectNothing()
+        window.press("Previous Step")
+        assertEquals("✉ (2/18)  OrderService.java L20  Step 2", window.selected())
+    }
+
     fun testWithNoStepSelectedTheArrowsContinueFromAStepReachedByItsHeaderArrows() {
         interleaved()
         window.press("Next Step")
@@ -312,6 +326,8 @@ class StepArrowsTest : ToolWindowTestCase() {
         assertEquals("✉ (33/33)  InvoiceSettingsConfigurationTest.java L5  Step 33", last)
         assertEquals("InvoiceSettingsConfigurationTest.java", openFile())
     }
+
+    private val loyaltyDiscountPolicy = "acme/backend/shop-common/src/main/java/com/acme/backend/common/discount/LoyaltyDiscountPolicy.java"
 
     private val orderService = "acme/backend/shop-orders/src/main/java/com/acme/orders/OrderService.java"
 

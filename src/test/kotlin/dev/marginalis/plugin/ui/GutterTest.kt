@@ -210,6 +210,31 @@ class GutterTest : HttpContractTestCase() {
         assertSame(base, patcher.patchIcon(base, file, 0, project))
     }
 
+    fun testTheFileKeepsItsEnvelopeBadgeAfterYouReadTheThreadYouOwe() {
+        sample()
+        val id = agent.addOnLine(5, "body" to "Why this cap?")
+        assertEquals("✉", user.badgeOnFile(SAMPLE))
+
+        user.read(id)
+
+        assertEquals(0, user.thread(id).unreadByUserCount())
+        assertEquals("✉", user.badgeOnFile(SAMPLE))
+    }
+
+    fun testAnAgreeTakesTheAgentsMoveBadgeOffTheFile() {
+        sample()
+        val id = agent.addOnLine(5, "body" to "Extract this loop?")
+
+        user.agree(id)
+        assertNull(user.badgeOnFile(SAMPLE))
+
+        agent.answerAgreement(id, "working")
+        assertNull(user.badgeOnFile(SAMPLE))
+
+        agent.reply(id, "Extracted.")
+        assertEquals("✉", user.badgeOnFile(SAMPLE))
+    }
+
     fun testFoldersOtherFilesAndOtherProjectsKeepTheirPlainIcons() {
         sample()
         val other = sample("src/Other.kt")

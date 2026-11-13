@@ -220,6 +220,46 @@ class LayingOutAWalkthroughTest : ToolWindowTestCase() {
         assertEquals("Sample.kt  steps 1, 3 ✉2", section("tour").lines()[1].trim())
     }
 
+    fun testAStepYouHaveReadShowsNoEnvelopeInStepOrderWhetherGroupedOrNot() {
+        sample()
+        sample("src/Other.kt")
+        agent.addOnLine(3, "order" to 1, "walkthrough" to "tour", "body" to "one")
+        val read = agent.addOnLine(6, "order" to 2, "walkthrough" to "tour", "body" to "two")
+        agent.addOnLine(5, "order" to 3, "walkthrough" to "tour", "body" to "three", file = "src/Other.kt")
+        user.read(read)
+
+        assertEquals(
+            listOf("tour  3", "✉ (1/3)  Sample.kt L3  one", "(2/3)  Sample.kt L6  two", "✉ (3/3)  Other.kt L5  three"),
+            window.rows(),
+        )
+
+        window.groupConsecutiveStepsByFile(true)
+
+        assertEquals(
+            """
+            tour  3
+              Sample.kt  steps 1–2 ✉1
+                ✉ (1/3)  L3  one
+                (2/3)  L6  two
+              ✉ (3/3)  Other.kt L5  three
+            """.trimIndent(),
+            section("tour"),
+        )
+    }
+
+    fun testAnAgreedStepShowsAThumbsUpInStepOrder() {
+        sample()
+        agent.addOnLine(3, "order" to 1, "walkthrough" to "tour", "body" to "one")
+        val agreed = agent.addOnLine(6, "order" to 2, "walkthrough" to "tour", "body" to "two")
+        user.agree(agreed)
+
+        assertEquals(listOf("tour  2", "✉ (1/2)  Sample.kt L3  one", "👍 (2/2)  Sample.kt L6  two"), window.rows())
+
+        window.groupConsecutiveStepsByFile(true)
+
+        assertEquals(listOf("tour  2", "Sample.kt  steps 1–2 ✉1", "✉ (1/2)  L3  one", "👍 (2/2)  L6  two"), window.rows())
+    }
+
     fun testTurningGroupingOffListsEveryStepAsARowAgain() {
         returningWalk()
         window.groupConsecutiveStepsByFile(true)

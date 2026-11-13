@@ -12,7 +12,7 @@ data class ProjectTabTally(val open: Int, val turns: TurnTally, val signals: Tur
             val open = threads.filter { it.isProjectLevel && it.status is ThreadStatus.Open }
             return ProjectTabTally(
                 open = open.size,
-                turns = TurnTally.of(open),
+                turns = TurnTally.owed(open),
                 signals = TurnTally.signalled(open),
                 newCount = open.sumOf { it.unreadByUserCount() },
             )

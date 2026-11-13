@@ -229,10 +229,6 @@ class ThreadPanel(
     private var level = ThreadFolding.Level.DEFAULT
     private val keptOpen = mutableSetOf<String>()
     private val readWhileOpen = mutableSetOf<String>()
-    private val seenRead = thread.messages.filter { it.readByUser }.mapTo(mutableSetOf()) { it.id }
-
-    /** Marked unread elsewhere while shown here: only clicking into the thread, or opening it again, reads it. */
-    private val keptUnread = mutableSetOf<String>()
     private var foldedBy: FoldingPrefs? = null
     private var messagesRendered: Set<String>? = null
     private val openedHere = mutableSetOf<String>()
@@ -752,31 +748,23 @@ class ThreadPanel(
     }
 
     fun markReadIfSeen() {
-        keepWhatWasMarkedUnread()
         if (!mayMarkRead(false) || !isShowing || visibleRect.isEmpty || !ApplicationManager.getApplication().isActive) return
-        readHere(openMessages.filterNot { it.id in keptUnread })
+        markRead(openMessages.filterNot { it.markedUnreadByUser })
     }
 
     fun markRead() {
-        if (!mayMarkRead(true) || isDraft() || !ApplicationManager.getApplication().isActive) return
-        keptUnread.clear()
-        readHere(openMessages)
+        if (mayMarkReadOnClickingInto()) markRead(openMessages)
     }
 
-    private fun readHere(shown: List<Message>) {
-        shown.mapTo(seenRead) { it.id }
+    fun markReadWhatWasMarkedUnread() {
+        if (mayMarkReadOnClickingInto()) markRead(openMessages.filter { it.markedUnreadByUser })
+    }
+
+    private fun mayMarkReadOnClickingInto(): Boolean =
+        mayMarkRead(true) && !isDraft() && ApplicationManager.getApplication().isActive
+
+    private fun markRead(shown: List<Message>) {
         if (thread.markReadByUser(shown)) MarginalisStore.getInstance(project).threads.notifyChanged(thread)
-    }
-
-    private fun keepWhatWasMarkedUnread() {
-        for (message in thread.messages) {
-            if (message.readByUser) {
-                seenRead += message.id
-                keptUnread -= message.id
-            } else if (message.id in seenRead) {
-                keptUnread += message.id
-            }
-        }
     }
 
     private fun markReadIfSeenLater() {
@@ -799,7 +787,7 @@ class ThreadPanel(
     }
 
     private fun stayOrNavigateTo(target: CommentThread, leaving: () -> Unit = {}) =
-        WalkthroughNavigator.navigateTo(project, target, from = editor, leaving = leaving)
+        WalkthroughNavigator.navigateTo(project, target, from = editor, onShown = leaving)
 
     private fun pickAddressee(atOffset: Int) {
         val composerEditor = replyArea.editor ?: return

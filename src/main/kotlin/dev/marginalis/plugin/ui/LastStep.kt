@@ -15,6 +15,10 @@ class LastStep {
         StepMark.of(thread)?.let { mark = it }
     }
 
+    fun returnTo(previous: StepMark?) {
+        mark = previous
+    }
+
     companion object {
         fun getInstance(project: Project): LastStep = project.service()
     }

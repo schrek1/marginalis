@@ -42,33 +42,34 @@ object WalkthroughNavigator {
     /**
      * @param from the editor the move starts in; a step in the file it shows scrolls that editor, a diff included,
      *   and a step in another file of a review diff switches that diff to the file
-     * @param leaving runs once the move is sure to land, e.g. to fold the step being left; not when the step's file
-     *   could not be shown (a balloon says so then)
+     * @param onShown runs once the move is sure to land, e.g. to fold the step being left
+     * @param onNotShown gets the reason when the step's file could not be shown; the walk then stays where it was
      */
     fun navigateTo(
         project: Project,
         thread: CommentThread,
         revealing: Message? = null,
         from: Editor? = null,
-        leaving: () -> Unit = {},
+        onShown: () -> Unit = {},
+        onNotShown: (problem: String) -> Unit = { warn(project, it) },
     ) {
         val path = thread.file ?: return run {
             LastStep.getInstance(project).landedOn(thread)
             ProjectTab.reveal(project, thread, revealing)
-            leaving()
+            onShown()
         }
         val stayed = when {
             from == null || from.isDisposed -> false
-            from.shows(project, path) -> navigateWithin(from, project, thread, revealing, leaving)
-            else -> ReviewDiffSteps.switchTo(project, from, path, thread, revealing, leaving)
+            from.shows(project, path) -> navigateWithin(from, project, thread, revealing, beforeMoving = onShown)
+            else -> ReviewDiffSteps.switchTo(project, from, path, thread, revealing, onShown)
         }
-        if (!stayed) openStepInFileTab(project, thread, revealing, leaving)
+        if (!stayed) openStepInFileTab(project, thread, revealing, onShown, onNotShown)
     }
 
     /**
      * Moves [editor] to the step and opens its thread there, as one step of the IDE's Back / Forward history.
      *
-     * @param leaving runs right before the move, so a panel it removes above the step does not shift the scrolled view
+     * @param beforeMoving runs right before the move, so a panel it removes above the step does not shift the view
      * @return false when [editor] is released, shows another file, or (a review diff) holds no anchor for the step;
      *   nothing was changed then
      */
@@ -77,21 +78,21 @@ object WalkthroughNavigator {
         project: Project,
         thread: CommentThread,
         revealing: Message? = null,
-        leaving: () -> Unit = {},
+        beforeMoving: () -> Unit = {},
     ): Boolean {
         val path = thread.file ?: return false
         if (editor.isDisposed || !editor.shows(project, path)) return false
         val shown = editor.getUserData(ThreadInlayManager.SHOWN_THREADS)
         if (shown != null) {
             val line = shown.lineOf(thread) ?: return false
-            leaving()
+            beforeMoving()
             recordingHistory(project) {
                 editor.caretModel.moveToLogicalPosition(LogicalPosition(line, 0))
                 editor.scrollingModel.scrollToCaret(ScrollType.CENTER)
             }
         } else {
             val place = placeOf(project, thread) ?: return false
-            leaving()
+            beforeMoving()
             recordingHistory(project) { place.navigateIn(editor) }
         }
         editor.contentComponent.requestFocusInWindow()
@@ -100,17 +101,28 @@ object WalkthroughNavigator {
     }
 
     /**
-     * @param leaving runs once the step's file has stayed open with the step shown; when the IDE does not keep the
-     *   file open, the file opens again as plain text alone, and only when that closes too does a balloon name the
-     *   step and its file instead
+     * Opens the step in its file's own tab. When the IDE does not keep the file open, the file opens again as plain
+     * text alone; only when that fails too does [onNotShown] get the reason, with the walk back on the step it was on.
      */
-    fun openStepInFileTab(project: Project, thread: CommentThread, revealing: Message?, leaving: () -> Unit = {}) {
-        val place = placeOf(project, thread) ?: return stepNotShown(project, thread)
+    fun openStepInFileTab(
+        project: Project,
+        thread: CommentThread,
+        revealing: Message?,
+        onShown: () -> Unit = {},
+        onNotShown: (problem: String) -> Unit = { warn(project, it) },
+    ) {
+        val place = placeOf(project, thread)
+            ?: return onNotShown(couldNotShow(project, thread, "${thread.file} is no longer in the project"))
+        val lastStep = LastStep.getInstance(project)
+        val stepBefore = lastStep.mark
         // A file whose preview editor fails to build (Swagger UI on an OpenAPI spec) opens and is closed right after.
-        showStep(project, place, thread, revealing, leaving) {
+        showStep(project, place, thread, revealing, onShown) {
             FileEditorManager.getInstance(project).closeFile(place.file)
             TextOnlyEditorProvider.showAsText(place.file)
-            showStep(project, place, thread, revealing, leaving) { stepNotShown(project, thread) }
+            showStep(project, place, thread, revealing, onShown) { problem ->
+                lastStep.returnTo(stepBefore)
+                onNotShown(problem)
+            }
         }
     }
 
@@ -120,27 +132,32 @@ object WalkthroughNavigator {
         thread: CommentThread,
         revealing: Message?,
         shown: () -> Unit,
-        notShown: () -> Unit,
+        notShown: (problem: String) -> Unit,
     ) {
         val editors = FileEditorManager.getInstance(project)
+        fun closedAsItOpened() = couldNotShow(project, thread, "the IDE closed ${thread.file} as it opened")
         place.navigate(true)
         // The step file's own editor: when its tab closes while opening, the selected one is still the previous file's.
-        val editor = (editors.getSelectedEditor(place.file) as? TextEditor)?.editor ?: return notShown()
+        val editor = (editors.getSelectedEditor(place.file) as? TextEditor)?.editor
+            ?: return notShown(
+                if (editors.isFileOpen(place.file)) couldNotShow(project, thread, "${thread.file} doesn't open in a text editor")
+                else closedAsItOpened(),
+            )
         ThreadInlayManager.open(project, editor, thread, revealing)
         ApplicationManager.getApplication().invokeLater({
-            if (editor.isDisposed || !editors.isFileOpen(place.file)) notShown() else shown()
+            if (editor.isDisposed || !editors.isFileOpen(place.file)) notShown(closedAsItOpened()) else shown()
         }, project.disposed)
     }
 
-    private fun stepNotShown(project: Project, thread: CommentThread) {
-        val step = thread.order?.let { order -> stableTotal(project, thread)?.let { total -> "step $order/$total" } } ?: "this thread"
+    fun warn(project: Project, problem: String) {
         NotificationGroupManager.getInstance().getNotificationGroup("Marginalis")
-            .createNotification(
-                "Couldn't show $step: the IDE didn't keep <code>${StringUtil.escapeXmlEntities(thread.file.orEmpty())}</code> open, " +
-                    "so the walk stays where it was.",
-                NotificationType.WARNING,
-            )
+            .createNotification(StringUtil.escapeXmlEntities(problem), NotificationType.WARNING)
             .notify(project)
+    }
+
+    private fun couldNotShow(project: Project, thread: CommentThread, why: String): String {
+        val what = thread.order?.let { order -> "walkthrough step $order" + stableTotal(project, thread)?.let { "/$it" }.orEmpty() } ?: "the thread"
+        return "Couldn't show $what: $why."
     }
 
     private fun placeOf(project: Project, thread: CommentThread): OpenFileDescriptor? {

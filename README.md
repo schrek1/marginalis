@@ -62,15 +62,17 @@ editable until an agent has read it.
 - **Turn signals, not presence.** Files wear a small badge on their icon
   in tabs and the Project view: a violet envelope ✉ when it's your move,
   a blue plane ✈ when it's the agent's. The tool window's stripe icon
-  carries the envelope whenever something awaits you. A
+  carries the envelope while something you haven't read awaits you. A
   clickable balloon when a reply lands in a file that is not on screen.
   Nothing pulses.
 - **Brand marks.** Gutter marks are outline speech bubbles in the
   plugin's own colors, the intent (finding, guidance, question, fyi)
   drawn inside; file threads fold a corner, project threads peek an arc.
 - **One-click Agree.** When it's your move, *Agree* beside *Reply…*
-  answers "Agreed." to the agent who spoke last and passes the turn —
-  the margin protocol's "approval is a reply" without typing it.
+  answers "Agreed." to the agent who spoke last — the margin
+  protocol's "approval is a reply" without typing it. The thread shows
+  👍 until the agent says what it will do: ⏳ while it works on the
+  change, no sign once only your resolve is left.
 - **Live threads.** Switch a thread to *Live* (⚡) to go back and forth
   on one item without waiting for the next round: each Submit wakes the
   agent you're answering with that thread alone, and the header shows
@@ -245,5 +247,6 @@ JDK 21+, no other setup:
 `core/` is pure Kotlin: the model, thread lifecycle, anchoring policy,
 and persistence codec. The plugin module is adapters around it:
 `transport/`, `store/`, `ui/`, `settings/`, `actions/`, `avatars/`.
-CI verifies against the declared 2025.2 floor with the Plugin Verifier.
+CI runs the Plugin Verifier against the declared 2025.2 floor and the
+latest IntelliJ IDEA the sandbox scenarios run (`marginalis.latestIde`).
 Releases are tags (`v*`).

@@ -390,13 +390,13 @@ class ThreadsCodecTest {
         val answered = CommentThread("a.py", 1, "x")
         answered.addMessage(Message(agent, "Rename it?"))
         answered.addMessage(Message.agreement(by = Author.User("Muhammad"), with = agent))
-        answered.answerAgreement(by = agent, state = AgentState.WORKING)
+        answered.answerAgreement(by = agent, answer = AgreementAnswer.WORKING)
         val unanswered = CommentThread("a.py", 2, "y").also { it.addMessage(Message(agent, "Hm?")) }
 
         val encoded = ThreadsCodec.encode(listOf(answered, unanswered))
         val decoded = ThreadsCodec.decode(encoded)
 
-        assertEquals(listOf(AgentState.WORKING, null), decoded.map { it.agentState })
+        assertEquals(listOf(AgreementAnswer.WORKING, null), decoded.map { it.agreementAnswer })
         assertEquals(1, Regex("\"agent_state\"").findAll(encoded).count())
     }
 
@@ -407,7 +407,40 @@ class ThreadsCodecTest {
               "created_at": "2026-01-01T00:00:00Z", "agent_state": "pondering", "messages": []}]}
         """.trimIndent()
 
-        assertEquals(null, ThreadsCodec.decode(stored).single().agentState)
+        assertEquals(null, ThreadsCodec.decode(stored).single().agreementAnswer)
+    }
+
+    @Test
+    fun `a file without agent states loads every open Agree as unanswered`() {
+        val stored = """
+            {"threads": [{"id": "t1", "file": "a.py", "line": 1, "anchor_text": "x", "status": "OPEN",
+              "created_at": "2026-01-01T00:00:00Z", "messages": [
+                {"id": "m1", "author": {"kind": "AGENT", "name": "Claude", "id": "claude-main"}, "body": "Rename it?",
+                 "created_at": "2026-01-01T00:00:00Z"},
+                {"id": "m2", "author": {"kind": "USER", "name": "Muhammad"}, "body": "Agreed.", "to": "claude-main",
+                 "agrees": true, "created_at": "2026-01-01T00:01:00Z"}
+              ]}]}
+        """.trimIndent()
+
+        val decoded = ThreadsCodec.decode(stored).single()
+
+        assertEquals(null, decoded.agreementAnswer)
+        assertTrue(decoded.awaitsAgreementAnswer)
+    }
+
+    @Test
+    fun `a stored answer whose Agree is no longer the last word loads as none`() {
+        val stored = """
+            {"threads": [{"id": "t1", "file": "a.py", "line": 1, "anchor_text": "x", "status": "OPEN",
+              "created_at": "2026-01-01T00:00:00Z", "agent_state": "working", "messages": [
+                {"id": "m1", "author": {"kind": "AGENT", "name": "Claude", "id": "claude-main"}, "body": "Rename it?",
+                 "created_at": "2026-01-01T00:00:00Z"},
+                {"id": "m2", "author": {"kind": "USER", "name": "Muhammad"}, "body": "Actually, wait.",
+                 "created_at": "2026-01-01T00:01:00Z"}
+              ]}]}
+        """.trimIndent()
+
+        assertEquals(null, ThreadsCodec.decode(stored).single().agreementAnswer)
     }
 
     @Test

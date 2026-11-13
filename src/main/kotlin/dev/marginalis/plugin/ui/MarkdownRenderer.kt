@@ -348,7 +348,12 @@ object MarkdownRenderer {
 
     private fun follow(project: Project, reference: Reference, click: HyperlinkEvent) {
         val problem = when (val resolution = reference.resolveIn(MarginalisStore.getInstance(project).threads.all())) {
-            is Resolution.Found -> return WalkthroughNavigator.navigateTo(project, resolution.referent.thread, revealing = resolution.referent.message)
+            is Resolution.Found -> return WalkthroughNavigator.navigateTo(
+                project,
+                resolution.referent.thread,
+                revealing = resolution.referent.message,
+                onNotShown = { warn(it, click) },
+            )
             is Resolution.Ambiguous -> "${resolution.summary} in this project"
             Resolution.Unknown -> "$reference names no thread or message in this project"
         }

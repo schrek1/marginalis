@@ -2,6 +2,7 @@ package dev.marginalis.plugin.testing
 
 import com.intellij.ide.DataManager
 import com.intellij.ide.impl.HeadlessDataManager
+import com.intellij.notification.Notification
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionToolbar
@@ -41,11 +42,17 @@ import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBOptionButton
 import com.intellij.ui.popup.PopupFactoryImpl
 import com.intellij.util.ui.UIUtil
+import com.intellij.icons.AllIcons
+import com.intellij.ide.FileIconPatcher
 import dev.marginalis.core.CommentThread
 import dev.marginalis.core.Identity
+import dev.marginalis.core.Turn
+import dev.marginalis.core.TurnSignal
 import dev.marginalis.plugin.store.MarginalisStore
 import dev.marginalis.plugin.ui.AvatarIcon
 import dev.marginalis.plugin.ui.FoldedMessageRow
+import dev.marginalis.plugin.ui.MarginalisIcons
+import dev.marginalis.plugin.ui.TurnSignalIconPatcher
 import dev.marginalis.plugin.ui.StopAgentsGroup
 import dev.marginalis.plugin.ui.SubmitRoundAction
 import dev.marginalis.plugin.ui.ThreadGutterIconRenderer
@@ -81,6 +88,8 @@ class MarginUser(private val project: Project, private val disposable: Disposabl
 
     fun openMarginTab(): MarginTab = MarginTab(project, disposable).open()
 
+    fun notifications(): List<Notification> = ShownNotifications(project, disposable)
+
     fun changeLongThreadSettings(edit: LongThreadSettings.() -> Unit) = LongThreadSettings.change(edit)
 
     fun changeProjectTabSettings(edit: ProjectTabSettings.() -> Unit) {
@@ -102,6 +111,11 @@ class MarginUser(private val project: Project, private val disposable: Disposabl
     fun read(threadId: String) {
         open(threadId).markRead()
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+    }
+
+    fun markUnread(threadId: String) {
+        val window = openToolWindow()
+        window.rebuiltBy { window.chooseFromContextMenu(thread(threadId).messages.first().body, "Mark as Unread") }
     }
 
     fun reply(threadId: String, body: String, to: String? = null) {
@@ -243,6 +257,15 @@ class MarginUser(private val project: Project, private val disposable: Disposabl
         return markup.allHighlighters
             .filter { it.isValid && document.getLineNumber(it.startOffset) == line - 1 }
             .mapNotNull { it.gutterIconRenderer as? ThreadGutterIconRenderer }
+    }
+
+    fun badgeOnFile(file: String): String? {
+        PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+        val vFile = project.guessProjectDir()!!.findFileByRelativePath(file)!!
+        val plain = AllIcons.FileTypes.Text
+        val patcher = FileIconPatcher.EP_NAME.extensionList.filterIsInstance<TurnSignalIconPatcher>().single()
+        val shown = patcher.patchIcon(plain, vFile, 0, project)
+        return Turn.entries.firstOrNull { shown == MarginalisIcons.withTurnBadge(plain, it) }?.let(TurnSignal::glyph)
     }
 
     fun closePanels() {

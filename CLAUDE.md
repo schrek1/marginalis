@@ -57,7 +57,9 @@ is running the plugin:
   is never yours to resolve.
 - The resolver is the completer: RESOLVED means the outcome is in the
   code (or explicitly moot). Approval is a reply — often a one-click
-  Agree; land the change, then resolve.
+  Agree, which you answer at once with `comment_agent_state`: `working`
+  when you take the change on (land it, then resolve), `acknowledged`
+  when nothing is left to do (the user resolves).
 - Features are reviewed by live demo, not by walkthrough: build a dev
   zip, seed demo threads once `ping` reports that version, and wait in
   the margin. Use a review walkthrough only when the user asks for one;
@@ -110,8 +112,10 @@ is running the plugin:
 - Icons: SVGs in `src/main/resources/icons/`, loaded through
   `MarginalisIcons`. Brand icons are single theme-neutral SVGs (no
   `_dark` twin), designed dark-first; monochrome toolbar icons (e.g.
-  Submit round, file `handBack.svg`, and Agree) keep the `_dark` pair. Turn signals are ✉ (your move) and ✈
-  (the agent's). Some platform surfaces are plain strings (tab titles,
+  Submit round, file `handBack.svg`, and Agree) keep the `_dark` pair.
+  Thread signals are ✉ (your move), ✈ (the agent's), 👍 (an Agree the
+  agent has not answered yet) and ⏳ (the agent took the agreed change
+  on). Some platform surfaces are plain strings (tab titles,
   tool window titles) and can only carry text.
 - Platform floor: `since-build` 252 (2025.2). Prefer long-stable public
   API; CI's Plugin Verifier fails on internal / scheduled-for-removal
