@@ -290,6 +290,15 @@ class ThreadPanelTest : HttpContractTestCase() {
         assertEquals("claude-main", last.string("to"))
     }
 
+    fun testTheAgreeLinkSaysTheAgentWillAnswerWhetherItTakesTheChangeOn() {
+        sample()
+        val id = agent.addOnLine(5, "body" to "Inline this.")
+
+        val panel = user.open(id)
+
+        assertTrue(user.tooltips(panel).contains("Agree with Claude: replies \"Agreed.\"; the agent then says whether it takes it on"))
+    }
+
     fun testAnFyiStopsOfferingAgreeOnceItIsRead() {
         sample()
         val id = agent.addOnLine(5, "intent" to "fyi")

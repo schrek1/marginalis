@@ -1,7 +1,6 @@
 package dev.marginalis.plugin.transport
 
 import com.intellij.notification.Notification
-import com.intellij.notification.Notifications
 import com.intellij.openapi.application.WriteAction
 import com.intellij.openapi.editor.impl.DocumentMarkupModel
 import com.intellij.openapi.fileEditor.FileEditorManager
@@ -437,7 +436,7 @@ class AddingTest : HttpContractTestCase() {
 
     fun testAnAgentCommentInAFileOutOfSightNotifiesTheUser() {
         sample()
-        val shown = notifications()
+        val shown = user.notifications()
 
         agent.addOnLine(12, "body" to "Look **here**")
 
@@ -449,7 +448,7 @@ class AddingTest : HttpContractTestCase() {
 
     fun testTheNotificationOpensTheThread() {
         sample()
-        val shown = notifications()
+        val shown = user.notifications()
         agent.addOnLine(12)
         val notification = shown.single()
 
@@ -464,7 +463,7 @@ class AddingTest : HttpContractTestCase() {
     fun testAProjectThreadNotifiesWithTheProjectNameWhenTheMarginTabIsNotInFront() {
         sample()
         myFixture.openFileInEditor(myFixture.findFileInTempDir(SAMPLE))
-        val shown = notifications()
+        val shown = user.notifications()
 
         agent.add("body" to "Build is slow")
 
@@ -474,7 +473,7 @@ class AddingTest : HttpContractTestCase() {
     fun testAProjectThreadDoesNotNotifyWhileTheMarginTabIsInFront() {
         FileEditorManager.getInstance(project).openFile(MarginFile.of(project), true)
         assertTrue(ProjectTab.isInFront(project))
-        val shown = notifications()
+        val shown = user.notifications()
 
         agent.add("body" to "Build is slow")
 
@@ -497,7 +496,7 @@ class AddingTest : HttpContractTestCase() {
     fun testAnAgentCommentInTheFileTheUserIsReadingDoesNotNotify() {
         sample()
         myFixture.openFileInEditor(myFixture.findFileInTempDir(SAMPLE))
-        val shown = notifications()
+        val shown = user.notifications()
 
         agent.addOnLine(12)
 
@@ -509,7 +508,7 @@ class AddingTest : HttpContractTestCase() {
         val settings = MarginalisSettings.getInstance().state
         settings.notifyOnAgentReply = false
         try {
-            val shown = notifications()
+            val shown = user.notifications()
             agent.addOnLine(12)
             assertEquals(emptyList<Notification>(), shown)
         } finally {
@@ -519,7 +518,7 @@ class AddingTest : HttpContractTestCase() {
 
     fun testARelayedCommentNeverNotifies() {
         sample()
-        val shown = notifications()
+        val shown = user.notifications()
 
         agent.add("file" to SAMPLE, "relayed" to Relays.reviewComment(42))
 
@@ -529,31 +528,10 @@ class AddingTest : HttpContractTestCase() {
     fun testAnAgentReplyNotifiesTheUser() {
         sample()
         val id = agent.addOnLine(12)
-        val shown = notifications()
+        val shown = user.notifications()
 
         agent.reply(id, "One more thing")
 
         assertEquals("One more thing", shown.single().content)
-    }
-
-    private fun notifications(): List<Notification> {
-        PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
-        val shown = mutableListOf<Notification>()
-        project.messageBus.connect(testRootDisposable).subscribe(
-            Notifications.TOPIC,
-            object : Notifications {
-                override fun notify(notification: Notification) {
-                    if (notification.groupId == "Marginalis") shown += notification
-                }
-            },
-        )
-        return object : AbstractList<Notification>() {
-            override val size: Int get() = settle().size
-            override fun get(index: Int): Notification = settle()[index]
-            private fun settle(): List<Notification> {
-                PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
-                return shown
-            }
-        }
     }
 }

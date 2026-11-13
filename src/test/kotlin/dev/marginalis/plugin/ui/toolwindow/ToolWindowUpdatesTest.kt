@@ -66,6 +66,50 @@ class ToolWindowUpdatesTest : ToolWindowTestCase() {
         assertEquals("Nothing awaiting the agent", window.emptyText())
     }
 
+    fun testTheAwaitingAgentFilterListsAnAgentsMoveButNotTheAgreeBesideIt() {
+        sample()
+        val agreed = agent.addOnLine(5, "body" to "Extract this loop?")
+        val answered = agent.addOnLine(9, "body" to "Which name?")
+        user.agree(agreed)
+        user.reply(answered, "Oak.")
+
+        window.filterBy("Awaiting Agent")
+
+        assertEquals(listOf("Open  1", "src  1", "Sample.kt ✈1", "✈ L9  Which name?"), window.rows())
+    }
+
+    fun testAFileRowCountsNoAgentsMoveForAnAgree() {
+        sample()
+        val agreed = agent.addOnLine(5, "body" to "Extract this loop?")
+        val answered = agent.addOnLine(9, "body" to "Which name?")
+        user.reply(answered, "Oak.")
+
+        window.rebuiltBy { user.agree(agreed) }
+
+        assertEquals(listOf("Open  2", "src  2", "Sample.kt ✈1", "👍 L5  Extract this loop?", "✈ L9  Which name?"), window.rows())
+    }
+
+    fun testMarkingAnAgreedThreadUnreadKeepsItsThumbsUp() {
+        sample()
+        val id = agent.addOnLine(5, "body" to "Extract this loop?")
+        user.agree(id)
+
+        window.rebuiltBy { window.chooseFromContextMenu("Extract this loop?", "Mark as Unread") }
+
+        assertEquals(1, user.thread(id).unreadByUserCount())
+        assertEquals(listOf("Sample.kt", "👍 L5  Extract this loop?"), window.rows().takeLast(2))
+    }
+
+    fun testAnAgreeTheAgentIsWorkingOnIsSpokenAsAgentOnIt() {
+        sample()
+        val id = agent.addOnLine(5, "body" to "Extract this loop?")
+        user.agree(id)
+
+        window.rebuiltBy { agent.answerAgreement(id, "working") }
+
+        assertTrue(window.spoken("Extract this loop?"), window.spoken("Extract this loop?").startsWith("L5  Extract this loop?, agent on it, with Claude"))
+    }
+
     fun testWhatTheUserDoesInTheEditorShowsInTheTree() {
         sample()
         window.outline()
@@ -242,6 +286,22 @@ class ToolWindowUpdatesTest : ToolWindowTestCase() {
 
         user.reply(question, "This one.")
         assertBadge(null)
+    }
+
+    fun testTheStripeDropsTheEnvelopeOnceEverythingYouOweIsReadAndMarkingUnreadBringsItBack() {
+        sample()
+        val first = agent.addOnLine(5, "body" to "Which one?")
+        val second = agent.addOnLine(9, "body" to "And this?")
+        assertBadge(StripeBadge.AWAITING_YOU)
+
+        user.read(first)
+        assertBadge(StripeBadge.AWAITING_YOU)
+
+        user.read(second)
+        assertBadge(null)
+
+        window.rebuiltBy { window.chooseFromContextMenu("Which one?", "Mark as Unread") }
+        assertBadge(StripeBadge.AWAITING_YOU)
     }
 
     fun testTheStripeIconIsBadgedFromTheStartWhenThreadsAlreadyAwaitTheUser() {

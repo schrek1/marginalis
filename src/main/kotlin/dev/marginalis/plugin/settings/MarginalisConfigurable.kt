@@ -367,7 +367,7 @@ class MarginalisConfigurable : Configurable {
                 }
                 row("What counts as read:") {
                     comboBox(ReadWhen.entries, textListCellRenderer { it?.let(::labelOf) })
-                        .comment("Matters most for an FYI: its ✉ clears once you've read it.")
+                        .comment("A thread you've read drops its ✉ in the tool window, its stripe icon and the tab title, and an FYI asks nothing more.")
                         .bindItem(
                             { settings.readWhen },
                             { settings.readWhen = it ?: ReadWhen.EXPANDED_IN_FRONT },

@@ -66,6 +66,10 @@ first contact, look before you consume:
 3. Read deliberately — the bodies you are about to answer, scoped by
    `file=` or `awaiting=agent`. Those reads mark seen, as they should:
    the receipt belongs to what you actually read.
+4. Finish what you took on. A thread with `agent_state: "working"` may
+   be a change you said you would land, and nothing lists it under
+   `awaiting`: spot it in the survey, read it, and if its Agree is
+   addressed to you, land the change, then reply or resolve.
 
 ## Addressing: several parties, one margin
 
@@ -138,14 +142,15 @@ approval, not completion: make the edit first, then resolve. If the
 user resolves a thread themselves while action seems pending, ask
 rather than assuming. Resolve immediately only when no action is needed
 — never an fyi, which is the user's to resolve. An Agree (`agrees:
-true`, addressed to you) is the same approval: land what was agreed,
-then resolve. The user sees 👍 on it, not your move, so answer every
-Agree at once with `comment_agent_state`: `working` when you take the
-agreed change on (they see ⏳ until you reply or resolve), or
-`acknowledged` when nothing is left for you to do (no sign; the thread
-stays open for the user to resolve). Until you answer, the Agree
-awaits you; after it, the thread awaits nobody until the next message
-from either side.
+true`, addressed to you) is the same approval; answer it at once with
+`comment_agent_state`. Say `working` when you take the change on: land
+it, then resolve, and the user sees ⏳ meanwhile. Say `acknowledged`
+when nothing is left to do: the thread stays open for the user to
+resolve, so don't resolve it yourself. Until you answer, the user sees
+👍 and the Agree stays in your `awaiting=agent`; after it, the thread
+awaits nobody until the next message that is not relayed, or a resolve.
+A thread reopened with the Agree still its last word asks you again:
+answer it again.
 
 ## Ending a turn: wait for the next round
 
@@ -180,7 +185,8 @@ have already answered never wakes you twice. The wait's **completion is
 the signal**: `handed_back: true` means the user wants you now, and its
 `awaiting` list (the `awaiting=agent` set plus any live thread holding
 messages you haven't seen, same thread shape as `comment_list`) is your
-to-do list — answer each, then wait again.
+to-do list — answer each, then wait again. An Agree in it is answered
+with `comment_agent_state` (see habit 3).
 
 `handed_back: false` carries a `reason` and nothing else:
 
@@ -283,8 +289,10 @@ you "listening" while your wait is open and "working" until you open the next on
   again, retry with fresh values. Never respond to it by dropping
   `anchor_text` — that trades an honest failure for a comment silently
   pinned to the wrong line. Every 409 carries a `reason`; the others are
-  `not_orphaned` (see Orphans) and the two relay refusals,
-  `deleted_relay` and `relayed_elsewhere` (see Relaying from GitHub).
+  `not_orphaned` (see Orphans), the two relay refusals,
+  `deleted_relay` and `relayed_elsewhere` (see Relaying from GitHub),
+  and `no_agreement` (a `comment_agent_state` on a thread with no Agree
+  of yours to answer).
 
 ## Above the line: file and project threads
 
@@ -351,8 +359,12 @@ words, nothing else:
 - `fyi` — nothing is owed. Typical uses: praise ("this is the right
   boundary — keep it"), code you copied from elsewhere, context, a
   heads-up. If anything should be done or answered, it isn't an fyi. The
-  user owes it only a read; once read, it leaves `awaiting=user`. It
-  ends when the user resolves it — never you. It doesn't block an edit;
+  user owes it only a read; once read, it leaves `awaiting=user`. The
+  user can mark it unread again in the IDE, and it is back in
+  `awaiting=user` until they read it; that changes neither its
+  `updated_at` nor anything `comment_wait` wakes on, so you see it only
+  on your next listing. It ends when the user resolves it — never you.
+  It doesn't block an edit;
   once the user replies to it, it blocks the edit until you have
   answered that reply in-thread (landing whatever they asked for
   first), and it still stays open for the user to resolve. It never gates, so it takes no `severity` (a teaching
@@ -466,7 +478,9 @@ unnamed walkthrough still works and is shown as "Walkthrough". Rules:
   scrolls to that thread.
 - The user walks with next/previous controls and resolves steps as they
   go. A step resolved without a reply is seen-and-approved; a reply is a
-  change request — land the change first, then resolve it. The user can
+  change request — land the change first, then resolve it. An Agree on a
+  step is approval: answer it with `comment_agent_state` (see habit 3).
+  The user can
   also resolve a whole walkthrough in one action; each step it closes
   reads the same way.
 - Steps are listed and walked apart from ordinary threads: the user's
@@ -616,7 +630,7 @@ machine-readable `reason` (see Anchoring).
 | `POST comment_add_batch {items: [comment_add payloads], author_name?, author_id?, project?}` | many notes in one call; the envelope's identity and `project` are per-item defaults, `to` and `relayed` are per item only → `{results: [ …success shape… \| {error, reason?, open_projects?} ], created}` in request order, 200 unless the envelope itself is malformed; `created` leaves out items answered `existing: true` |
 | `POST comment_reply {thread_id, body, to?, relayed?, author_name?, author_id?}` | reply in-thread → `{message_id, thread_id, status}`; `to` (an `author_id`, or `user`) addresses the message — omit it to address everyone; `project` is ignored (the thread names it); a blank `body` is a 400; a relayed comment already in the thread adds nothing → `{message_id, thread_id, status, existing: true}`; one already relayed into another thread → 409 `{error, reason: "relayed_elsewhere", thread_id}`, the root of a thread the user deleted → 409 `reason: "deleted_relay"` |
 | `POST comment_resolve {thread_id, author_name?, author_id?}` | outcome landed / moot → `{thread_id, status}` |
-| `POST comment_agent_state {thread_id, state, author_name?, author_id?}` | answer the Agree that is the thread's last word: `state` is `working` (you take the agreed change on; the user sees ⏳) or `acknowledged` (nothing left to do; no sign) → `{thread_id, status, agent_state}`; either way the thread then awaits nobody until the next message or a resolve, both of which clear it; you may change it while the Agree is still the last word; any other `state` is a teaching 400; no Agree addressed to you as the last word → 409 `reason: "no_agreement"` |
+| `POST comment_agent_state {thread_id, state, author_name?, author_id?}` | answer the Agree that is the thread's last word: `state` is `working` (you take the agreed change on; the user sees ⏳) or `acknowledged` (nothing left to do; no sign) → `{thread_id, status, agent_state}`; either way the thread then awaits nobody until the next message that is not relayed or a resolve, both of which clear it (a thread reopened with the Agree still its last word shows 👍 and awaits you again, so answer it again); you may change it while the Agree is still the last word, and repeating the same answer changes nothing; a missing or other `state` is a teaching 400; a closed thread, or no Agree addressed to you as the last word → 409 `reason: "no_agreement"` |
 | `POST comment_reopen {thread_id}` | resurface a resolved or orphaned thread → `{thread_id, status}`; an orphaned line thread is pinned to whatever now sits on its old line, unverified — rescue orphans with `comment_reanchor` instead |
 | `POST comment_reanchor {thread_id, line, anchor_text?, file?}` | orphan rescue, line threads only (file-level → 400) → `{thread_id, line, status}`; the file is looked up in the thread's own project; `file`, when given, must be the thread's file (cross-file moves → 400); a live thread → 409 `reason: "not_orphaned"` |
 | `POST comment_reanchor_all {file, project?}` | rescue every orphan on one file, searching the whole file by content → `{file, results: [{thread_id, line?, status}], rescued}` |
@@ -652,12 +666,13 @@ open document; for a file no editor has loaded it is the stored
 fingerprint — the most the server honestly knows without forcing the
 file into memory.) `updated_at` moves
 when the conversation does (a message, relayed or not, a resolve, a
-reopen, an orphaning, a rescue, or the user editing a message — they can
-revise one until an agent reads it) and not when it is merely read or
-its line drifts, which is what makes it a usable cursor for
+reopen, an orphaning, a rescue, an agent answering an Agree, or the user
+editing a message — they can revise one until an agent reads it) and not
+when it is merely read, its line drifts, or an agent repeats the answer
+it already gave, which is what makes it a usable cursor for
 `updated_after`. `author` is always an object — `kind` is `agent` or
 `user`, and an agent author carries `id` only when the agent gave one. Thread fields `segment`, `order`,
-`walkthrough`, `severity`, `intent`, `label`, and `resolved_by` appear only when
+`walkthrough`, `severity`, `intent`, `label`, `resolved_by`, and `agent_state` appear only when
 set, and so does a message's `to` — and its `referenced`, on a `ref`
 listing. `relayed` (the object you relayed it with, `comment_id` as a string and `bot` always
 present) marks a message relayed from GitHub; it never takes the turn
@@ -676,8 +691,10 @@ message addressed to another agent is theirs); `user` — an agent spoke
 last unaddressed, anyone addressed `user`, or only relays were said,
 and the user owes one. An Agree you have answered with
 `comment_agent_state` awaits nobody. An fyi is the
-exception: the user owes it only a read, and an agent's further word on
-it owes only a read again — until the user replies; from then on whose
+exception: the user owes it only a read (one they can take back by
+marking it unread, which makes it `user` again until read), and an
+agent's further word on it owes only a read again — until the user
+replies; from then on whose
 turn it is follows the rule above, though it stays the user's to
 resolve. It composes with every other
 filter, and listing still marks seen: awaiting is about *answered*, not

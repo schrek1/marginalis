@@ -38,6 +38,7 @@ object ThreadInlayManager {
 
     fun open(project: Project, editor: Editor, thread: CommentThread, revealing: Message? = null) {
         val panel = openPanel(project, editor, thread, ensureStored = {}) ?: return
+        panel.markReadWhatWasMarkedUnread()
         revealing?.let { ApplicationManager.getApplication().invokeLater { panel.reveal(it) } }
     }
 

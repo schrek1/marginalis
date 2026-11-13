@@ -73,38 +73,52 @@ class CommentThread(
     val resolvedBy: Author?
         get() = (status as? ThreadStatus.Resolved)?.by
 
-    /** The agent's answer to the Agree that is the thread's last word; gone with the next word or a resolve. */
+    private class AnsweredAgreement(val agree: Message, val answer: AgreementAnswer)
+
     @Volatile
-    var agentState: AgentState? = null
-        private set
+    private var answered: AnsweredAgreement? = null
+
+    val agreementAnswer: AgreementAnswer?
+        get() = answerTo(lastSpoken)
+
+    private fun answerTo(lastSpoken: Message?): AgreementAnswer? = answered?.takeIf { it.agree === lastSpoken }?.answer
 
     fun addMessage(message: Message) {
-        synchronized(messagesLock) { _messages.add(message) }
-        if (message.relayed == null) agentState = null
+        synchronized(messagesLock) {
+            _messages.add(message)
+            if (message.relayed == null) answered = null
+        }
         touch()
     }
 
     fun resolve(by: Author) {
-        status = ThreadStatus.Resolved(by)
-        agentState = null
+        synchronized(messagesLock) {
+            status = ThreadStatus.Resolved(by)
+            answered = null
+        }
         touch()
     }
 
     val awaitsAgreementAnswer: Boolean
-        get() = status is ThreadStatus.Open && lastSpoken?.agrees == true && agentState == null
+        get() = status is ThreadStatus.Open && lastSpoken?.agrees == true && agreementAnswer == null
 
     fun canAnswerAgreement(agent: Author.Agent): Boolean =
         status is ThreadStatus.Open && lastSpoken?.let { it.agrees && it.to == Addressee.Agent(agent.receiptKey) } == true
 
-    fun answerAgreement(by: Author.Agent, state: AgentState) {
-        check(canAnswerAgreement(by)) { "only the agent agreed with answers an Agree, and only while it is the last word" }
-        agentState = state
-        touch()
+    fun answerAgreement(by: Author.Agent, answer: AgreementAnswer): AgreementAnswer.Outcome = synchronized(messagesLock) {
+        when {
+            !canAnswerAgreement(by) -> AgreementAnswer.Outcome.REFUSED
+            agreementAnswer == answer -> AgreementAnswer.Outcome.UNCHANGED
+            else -> {
+                answered = AnsweredAgreement(checkNotNull(lastSpoken), answer)
+                touch()
+                AgreementAnswer.Outcome.ANSWERED
+            }
+        }
     }
 
-    /** Rehydration only. */
-    fun restoreAgentState(state: AgentState?) {
-        agentState = state
+    fun restoreAgreementAnswer(answer: AgreementAnswer?) {
+        answered = answer?.let { lastSpoken?.takeIf(Message::agrees)?.let { agree -> AnsweredAgreement(agree, it) } }
     }
 
     fun reopen() {
@@ -148,7 +162,6 @@ class CommentThread(
 
     fun markReadByUser(shown: List<Message> = messages): Boolean = shown.map { it.markReadByUser() }.any { it }
 
-    /** Unread as when it arrived: only the latest message from someone else, so the thread opens folded as before. */
     fun markUnreadByUser(): Boolean = messages.lastOrNull { it.author !is Author.User }?.markUnreadByUser() ?: false
 
     val isRelayedRoot: Boolean
@@ -187,13 +200,15 @@ class CommentThread(
 
     fun turn(): Turn? = turnFor(null)
 
+    fun owedTurn(): Turn? = turn()?.takeUnless { awaitsAgreementAnswer }
+
     fun turnFor(agentKey: String?): Turn? {
         val last = lastSpoken
         val turn = when {
             status !is ThreadStatus.Open -> null
             isReadFyi -> null
             last == null && messages.isNotEmpty() -> Turn.USER_OWES
-            last?.agrees == true && agentState != null -> null
+            answerTo(last) != null -> null
             last?.awaits == Turn.USER_OWES -> Turn.USER_OWES
             else -> Turn.AGENT_OWES
         }

@@ -22,7 +22,7 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.util.concurrency.AppExecutorUtil
 import dev.marginalis.core.Addressee
-import dev.marginalis.core.AgentState
+import dev.marginalis.core.AgreementAnswer
 import dev.marginalis.core.AnchorPolicy
 import dev.marginalis.core.Author
 import dev.marginalis.core.Classification
@@ -520,27 +520,32 @@ class MarginalisRestService : RestService() {
 
     private fun handleAgentState(json: JsonObject, request: FullHttpRequest, context: ChannelHandlerContext) {
         val (project, thread) = lookupThread(json, request, context) ?: return
-        val state = AgentState.parse(json.stringOrNull("state")).getOrElse { return sendBadRequest(it, request, context) }
+        val answer = AgreementAnswer.parse(json.stringOrNull("state")).getOrElse { return sendBadRequest(it, request, context) }
         val agent = agentAuthor(json)
-        if (!thread.canAnswerAgreement(agent)) {
-            return sendError(
-                HttpResponseStatus.CONFLICT,
-                "thread '${thread.id}' has no Agree addressed to '${agent.receiptKey}' as its last word — " +
-                    "agent_state answers an Agree only; reply or resolve instead.",
-                request, context, NO_AGREEMENT,
-            )
+        when (thread.answerAgreement(agent, answer)) {
+            AgreementAnswer.Outcome.REFUSED ->
+                return sendError(HttpResponseStatus.CONFLICT, noAgreementMessage(thread, agent), request, context, NO_AGREEMENT)
+            AgreementAnswer.Outcome.ANSWERED -> MarginalisStore.getInstance(project).threads.notifyChanged(thread)
+            AgreementAnswer.Outcome.UNCHANGED -> Unit
         }
-        thread.answerAgreement(agent, state)
-        MarginalisStore.getInstance(project).threads.notifyChanged(thread)
         sendJson(
             JsonObject().apply {
                 addProperty("thread_id", thread.id)
                 addProperty("status", thread.status.kind.name.lowercase())
-                addProperty("agent_state", state.wireName)
+                addProperty("agent_state", answer.wireName)
             },
             request, context,
         )
     }
+
+    private fun noAgreementMessage(thread: CommentThread, agent: Author.Agent): String =
+        if (thread.status is ThreadStatus.Open) {
+            "thread '${thread.id}' has no Agree addressed to '${agent.receiptKey}' as its last word — " +
+                "agent_state answers an Agree only; reply or resolve instead."
+        } else {
+            "thread '${thread.id}' is ${thread.status.kind.name.lowercase()}, not open — " +
+                "agent_state answers an Agree on an open thread only."
+        }
 
     private fun handleReanchor(json: JsonObject, request: FullHttpRequest, context: ChannelHandlerContext) {
         val (project, thread) = lookupThread(json, request, context) ?: return
@@ -924,7 +929,7 @@ class MarginalisRestService : RestService() {
         thread.intent?.let { addProperty("intent", it.name.lowercase()) }
         thread.label?.let { addProperty("label", it) }
         thread.resolvedBy?.let { addProperty("resolved_by", it.displayName) }
-        thread.agentState?.let { addProperty("agent_state", it.wireName) }
+        thread.agreementAnswer?.let { addProperty("agent_state", it.wireName) }
     }
 
     // Never block here: execute() runs on a Netty I/O thread, so the request is

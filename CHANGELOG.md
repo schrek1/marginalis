@@ -19,18 +19,41 @@ History before 0.1.19 lives in git tags.
   the code reads clean behind you, or keep it open, so every step you
   passed stays in view. Set it under *When stepping to another step* in
   Settings → Tools → Marginalis. Folding stays the default.
-- Mark a thread unread from its context menu in the tool window, so it
-  waits for you like a new message until you open it again. On a thread
-  with something new, the same entry marks it read, and with several
-  threads selected it acts on all of them.
 - Navigate › Select In › Marginalis finds the thread on the caret's line
   in the tool window, from a file or a review diff, and the file when the
   line has none. A balloon says why when nothing can be selected, or when
   the filter had to reset to show the thread.
 - *Select Opened Thread* can take a keyboard shortcut and is in Find
   Action.
+- Mark a thread unread from its menu in the tool window. It waits for
+  you like a new message until you return to it.
+- Mark a thread read from the same menu, without opening it. A thread
+  that is your move drops its ✉ in the tool window.
+- Select several threads in the tool window to mark, resolve or delete
+  them together.
 
 ### Changed
+
+- Agreeing with an agent now shows 👍 on the thread, not ✈. An agreed
+  thread no longer looks like it waits on a reply.
+- The agent tells you what it does with your Agree: ⏳ while it works
+  on the change, or no sign once the thread is yours to resolve.
+- Agreed threads stay out of the agent's-move counts and the Awaiting
+  Agent filter.
+- In the tool window and the Margin tab's title, ✉ now marks only
+  threads with something you have not read, so it points at what is
+  new.
+- A thread you have read but not answered stays yours. It remains in
+  Awaiting You and in the Margin tab's "your move" count, its card
+  keeps the ✉, and its file keeps the ✉ on its editor tab.
+
+### Fixed
+
+- A walkthrough keeps its place when the next step's file will not
+  open, such as an OpenAPI spec whose preview fails to load. The step
+  you are on stays open.
+- When a thread's file cannot be shown, a message names the thread and
+  the reason. A file that is gone from the project is covered too.
 
 ## [0.2.9] - 2026-11-11
 

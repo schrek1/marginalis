@@ -35,9 +35,7 @@ import com.intellij.ui.RowIcon
 import com.intellij.ui.components.JBTextArea
 import com.intellij.util.IconUtil
 import com.intellij.util.ui.UIUtil
-import dev.marginalis.core.AgreementSignal
-import dev.marginalis.core.Turn
-import dev.marginalis.core.TurnSignal
+import dev.marginalis.core.ThreadSignal
 import dev.marginalis.plugin.ui.MarginalisIcons
 import dev.marginalis.plugin.ui.ThreadPanel
 import dev.marginalis.plugin.ui.tab.ConversationCard
@@ -268,6 +266,12 @@ class MarginTab(private val project: Project, private val disposable: Disposable
 
     fun splitInTwo() {
         editors.windows.single().split(SwingConstants.VERTICAL, true, file, false)
+        settle()
+    }
+
+    fun splitTheFileInFront() {
+        val window = editors.currentWindow!!
+        window.split(SwingConstants.VERTICAL, true, window.selectedFile!!, true)
         settle()
     }
 
@@ -523,8 +527,7 @@ class MarginTab(private val project: Project, private val disposable: Disposable
 
     private fun glyphOf(card: ThreadCard, icon: Icon?): String? {
         val mark = MarginalisIcons.markOf(listOf(card.thread))
-        return Turn.entries.firstOrNull { icon === MarginalisIcons.withLeadingTurnSignal(mark, it) }?.let(TurnSignal::glyph)
-            ?: AgreementSignal.entries.firstOrNull { icon === MarginalisIcons.withLeadingTurnSignal(mark, null, it) }?.glyph
+        return ThreadSignal.entries.firstOrNull { icon === MarginalisIcons.withLeadingSignal(mark, it) }?.glyph
     }
 
     private fun heading(card: ThreadCard): JComponent = (card.layout as BorderLayout).getLayoutComponent(BorderLayout.NORTH) as JComponent

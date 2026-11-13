@@ -1,7 +1,5 @@
 package dev.marginalis.plugin.settings
 
-import com.intellij.notification.Notification
-import com.intellij.notification.Notifications
 import com.intellij.openapi.options.ConfigurationException
 import com.intellij.testFramework.PlatformTestUtil
 import com.intellij.util.xmlb.XmlSerializerUtil
@@ -57,19 +55,6 @@ class SettingsPageTest : HttpContractTestCase() {
 
     private fun relayedBy(login: String, body: String = "From GitHub."): String =
         agent.add("file" to SAMPLE, "line" to 5, "anchor_text" to lineText(5), "body" to body, "relayed" to Relays.reviewComment(101, login = login))
-
-    private fun notifications(): List<Notification> {
-        val shown = mutableListOf<Notification>()
-        project.messageBus.connect(testRootDisposable).subscribe(
-            Notifications.TOPIC,
-            object : Notifications {
-                override fun notify(notification: Notification) {
-                    if (notification.groupId == "Marginalis") shown += notification
-                }
-            },
-        )
-        return shown
-    }
 
     fun testThePageIsCalledMarginalisAndOpensUnchangedWithTheSavedSettings() {
         settings.state.navigationEnabled = false
@@ -341,7 +326,7 @@ class SettingsPageTest : HttpContractTestCase() {
     }
 
     fun testTurningNotificationsOffSilencesAgentMessagesInOtherFiles() {
-        val shown = notifications()
+        val shown = user.notifications()
         val page = page()
 
         agent.addOnLine(12, "body" to "Look here.")
@@ -447,6 +432,12 @@ class SettingsPageTest : HttpContractTestCase() {
         assertEquals(ReadWhen.CLICKED_INTO, settings.readWhen)
         assertFalse(settings.state.expandOnYourMove)
         assertFalse(settings.state.groupRelayedConversation)
+    }
+
+    fun testWhatCountsAsReadSaysWhereAReadThreadDropsItsEnvelope() {
+        val page = page()
+
+        assertTrue(page.comments().any { "A thread you've read drops its ✉ in the tool window, its stripe icon and the tab title, and an FYI asks nothing more." in it })
     }
 
     fun testTheLongThreadChoicesOpenWithTheirDefaults() {

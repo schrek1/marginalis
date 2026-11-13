@@ -35,7 +35,7 @@ import com.intellij.ui.SimpleColoredComponent
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.treeStructure.Tree
 import com.intellij.util.ui.UIUtil
-import dev.marginalis.core.AgreementSignal
+import dev.marginalis.core.ThreadSignal
 import dev.marginalis.core.Turn
 import dev.marginalis.core.TurnSignal
 import dev.marginalis.plugin.ui.MarginalisIcons
@@ -193,8 +193,8 @@ class MarginToolWindow(private val project: Project, private val disposable: Dis
 
     private fun turnOf(icon: Icon?): Turn? = Turn.entries.firstOrNull { icon != null && icon === MarginalisIcons.turnSignal(it) }
 
-    private fun glyphOf(icon: Icon?): String? = turnOf(icon)?.let(TurnSignal::glyph)
-        ?: AgreementSignal.entries.firstOrNull { icon != null && icon === MarginalisIcons.agreementSignal(it) }?.glyph
+    private fun glyphOf(icon: Icon?): String? =
+        ThreadSignal.entries.firstOrNull { icon != null && icon === MarginalisIcons.threadSignal(it) }?.glyph
 
     fun rowOf(text: String, under: String? = null): Int {
         settle()

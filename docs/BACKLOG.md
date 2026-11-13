@@ -416,3 +416,17 @@ declined, captured from real use.
   the plugin module gained platform tests against a real in-memory IDE
   (`./gradlew test`, in CI against the 2025.2 floor). Tests that pin a
   known defect carry a FixMe marker naming its issue.
+- **An Agree is answered, not just received** (2026-11-12, #136): the
+  user's Agree shows 👍 until the agent answers it with
+  `comment_agent_state`: `working` (⏳, the agent lands the change and
+  resolves) or `acknowledged` (no sign, the user resolves). An answered
+  Agree awaits nobody until the next message. Agents that never answer
+  see what they saw before. The answer is stored with the Agree it
+  answers, so it cannot outlive it. Extends "approval is a reply".
+- **✉ means unread, except on a Margin tab card** (2026-11-12, #108):
+  in the tool window, on its stripe icon and in the Margin tab's title,
+  ✉ shows only while something you owe is unread. Margin tab cards keep
+  ✉ for every thread that is your move, because a card already carries
+  its own unread dot. Awaiting You, the header's "your move" count, the
+  editor tab badge and `awaiting` over HTTP still count every thread
+  you owe, read or not.

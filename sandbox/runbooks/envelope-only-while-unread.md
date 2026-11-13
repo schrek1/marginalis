@@ -9,7 +9,8 @@
   you have not read. A file row's `✉ N` counts only those threads.
 - The tool window's stripe button keeps its envelope badge only while such a thread exists. A red blocker
   badge still wins.
-- In the Margin tab the title (`✉ N`) and the thread cards follow the same rule.
+- In the Margin tab the title (`✉ N`) follows the same rule. A thread card keeps ✉ for every thread that is your
+  move, read or not: the card's own unread dot tells them apart (upstream MuhammadFarag/marginalis#150).
 - What follows the real turn is unchanged: the editor tab and Project view file badges, the "Awaiting You"
   filter, the Margin tab header's "N your move" count, "Also your move: N threads in files" and the agent
   API's `awaiting`.
@@ -26,7 +27,7 @@ answer, C one you answered, D an FYI you read. Project A and Project B repeat A 
 - tree: the file row counts ✉ 1 and ✈ 1
 - stripe: the envelope badge stays while A is unread
 - Margin tab: the title counts only the unread project thread (✉ 1)
-- Margin tab: Project A's card keeps the envelope, Project B's card shows no envelope
+- Margin tab: both project threads' cards keep the envelope, Project B's although it is read
 - Margin tab: the header still counts both as your move
 - API: B and Project B stay in `awaiting=user`
 - the file's editor-tab badge still follows your move
@@ -50,9 +51,9 @@ before the Margin tab checks.
    count drops by one, and the stripe button turns plain once nothing else is unread. The editor tab's badge
    keeps ✉.
 3. Filter the tree by Awaiting You → the read thread is still listed.
-4. Read an unread project thread in the Margin tab → its card loses ✉ and the tab title's count drops by one
+4. Read an unread project thread in the Margin tab → its unread dot goes, its card keeps ✉, and the tab title's count drops by one
    (or reads "Margin"). The header's "N your move" does not change.
-5. Let the agent reply again on the read thread → ✉ comes back on its row, its card and the stripe button.
+5. Let the agent reply again on the read thread → ✉ comes back on its row and the stripe button.
 
 ## On main
 
