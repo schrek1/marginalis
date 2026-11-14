@@ -1,15 +1,103 @@
 package dev.marginalis.plugin.store
 
 import com.google.gson.JsonObject
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.impl.stores.stateStore
+import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.fileEditor.FileEditorManagerListener
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.project.ProjectCloseListener
+import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.vfs.VirtualFile
+import dev.marginalis.core.MarginTabShows
+import dev.marginalis.plugin.settings.MarginalisSettings
 import dev.marginalis.plugin.testing.Agent
+import dev.marginalis.plugin.testing.MarginTab
 import dev.marginalis.plugin.testing.Relays
 import dev.marginalis.plugin.testing.SavedProjectTestCase
+import dev.marginalis.plugin.ui.tab.MarginFile
 import java.nio.file.Files
 
 class ReopeningTheProjectTest : SavedProjectTestCase() {
 
     private val observer get() = Agent(shop.project, "Observer", "observer")
+
+    fun testShowingTheTabWithSomethingInItTheSavedOpenProjectThreadOpensTheTabWhenTheProjectOpens() {
+        openShop()
+        agent.add("body" to "release plan")
+        waitForSave("release plan")
+        showTheTabWithSomethingInIt()
+
+        reopen()
+
+        assertTrue(FileEditorManager.getInstance(shop.project).isFileOpen(MarginFile.of(shop.project)))
+    }
+
+    private fun showTheTabWithSomethingInIt() {
+        val settings = MarginalisSettings.getInstance()
+        settings.marginTabShows = MarginTabShows.WITH_SOMETHING_IN_IT
+        Disposer.register(testRootDisposable) { settings.marginTabShows = MarginTabShows.ALWAYS }
+    }
+
+    private fun keepTheTabOpen() {
+        val settings = MarginalisSettings.getInstance()
+        val before = settings.marginTabShows
+        settings.marginTabShows = MarginTabShows.ALWAYS
+        Disposer.register(testRootDisposable) { settings.marginTabShows = before }
+    }
+
+    private fun closingWithTheTabOpen(pinned: Boolean = false): List<String> {
+        val tab = MarginTab(shop.project, shop.project).open()
+        if (pinned) tab.pin()
+        val seen = mutableListOf<String>()
+        shop.project.messageBus.connect(testRootDisposable).subscribe(
+            FileEditorManagerListener.FILE_EDITOR_MANAGER,
+            object : FileEditorManagerListener {
+                override fun fileClosed(source: FileEditorManager, file: VirtualFile) {
+                    if (file is MarginFile) seen += "tab closed"
+                }
+            },
+        )
+        ApplicationManager.getApplication().messageBus.connect(testRootDisposable).subscribe(
+            ProjectCloseListener.TOPIC,
+            object : ProjectCloseListener {
+                override fun projectClosing(project: Project) {
+                    seen += "saved and closing"
+                }
+            },
+        )
+        shop.closeProject()
+        return seen.takeWhile { it != "saved and closing" }
+    }
+
+    fun testShowingTheTabWithSomethingInItAnUnpinnedEmptyTabClosesBeforeTheProjectIsSaved() {
+        openShop()
+        showTheTabWithSomethingInIt()
+
+        assertEquals(listOf("tab closed"), closingWithTheTabOpen())
+    }
+
+    fun testShowingTheTabWithSomethingInItAPinnedEmptyTabIsSavedWithTheProject() {
+        openShop()
+        showTheTabWithSomethingInIt()
+
+        assertEquals(emptyList<String>(), closingWithTheTabOpen(pinned = true))
+    }
+
+    fun testShowingTheTabWithSomethingInItATabWithAnOpenProjectThreadIsSavedWithTheProject() {
+        openShop()
+        agent.add("body" to "release plan")
+        showTheTabWithSomethingInIt()
+
+        assertEquals(emptyList<String>(), closingWithTheTabOpen())
+    }
+
+    fun testKeepingTheTabOpenAnUnpinnedEmptyTabIsSavedWithTheProject() {
+        keepTheTabOpen()
+        openShop()
+
+        assertEquals(emptyList<String>(), closingWithTheTabOpen())
+    }
 
     fun testAConversationComesBackExactlyAsItWasLeft() {
         openShop(mapOf(SAMPLE to sampleText(), OTHER to sampleText()))

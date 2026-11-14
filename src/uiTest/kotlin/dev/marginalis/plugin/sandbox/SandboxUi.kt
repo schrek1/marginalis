@@ -1091,8 +1091,7 @@ function messagePane(root, opening) {
         // moment on a desktop and seconds on a CI runner (the plugin side is MARG-96), so wait it out.
         awaitUntil("the Margin tab done opening behind the file in front", Duration.ofSeconds(30)) {
             val state = obj(js(MARGIN + EDITOR_STATE))
-            val opening = state.get("selected").asString == "Margin" && !state.get("marginOpen").asBoolean
-            !opening && !state.get("openBehindQueued").asBoolean
+            !(state.get("selected").asString == "Margin" && !state.get("marginOpen").asBoolean)
         }
         settleEditorSelection()
         println("INFO  before the reveal: ${js(MARGIN + EDITOR_STATE)}")
@@ -1105,9 +1104,7 @@ function messagePane(root, opening) {
     private const val EDITOR_STATE = """
         var editors = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project);
         var files = editors.getSelectedFiles();
-        var tabState = service('dev.marginalis.plugin.ui.tab.ProjectTabState');
-        String(JSON.stringify({ selected: files.length ? String(files[0].getName()) : '', marginOpen: marginTabOpen(),
-                                openBehindQueued: fieldOf(tabState, 'openBehindQueued').get() }))
+        String(JSON.stringify({ selected: files.length ? String(files[0].getName()) : '', marginOpen: marginTabOpen() }))
         """
 
     /** Waits until the editor in front has not changed for `quiet`, at most `limit`. */

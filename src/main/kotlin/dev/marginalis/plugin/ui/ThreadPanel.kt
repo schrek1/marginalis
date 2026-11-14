@@ -71,6 +71,7 @@ import dev.marginalis.plugin.avatars.AvatarsListener
 import dev.marginalis.plugin.settings.MarginalisSettings
 import dev.marginalis.plugin.store.Authors
 import dev.marginalis.plugin.store.MarginalisStore
+import dev.marginalis.plugin.ui.diff.ReviewDiffSteps
 import dev.marginalis.plugin.ui.toolwindow.MarginalisToolWindow
 import java.awt.BorderLayout
 import java.awt.Color
@@ -618,8 +619,10 @@ class ThreadPanel(
         override fun actionPerformed(e: AnActionEvent) {
             val (walk, i) = WalkthroughNavigator.walkFrom(project, thread)
             val destination = target(walk, i) ?: return
-            val folding = MarginalisSettings.getInstance().leavingAStep == LeavingAStep.FOLD
-            stayOrNavigateTo(destination, leaving = if (folding) onClose else ({}))
+            when (MarginalisSettings.getInstance().leavingAStep) {
+                LeavingAStep.FOLD -> stayOrNavigateTo(destination, closeThisPanel = onClose)
+                LeavingAStep.KEEP_OPEN -> stayOrNavigateTo(destination, leaving = null)
+            }
         }
     }
 
@@ -786,8 +789,14 @@ class ThreadPanel(
         stayOrNavigateTo(wider)
     }
 
-    private fun stayOrNavigateTo(target: CommentThread, leaving: () -> Unit = {}) =
-        WalkthroughNavigator.navigateTo(project, target, from = editor, onShown = leaving)
+    private fun stayOrNavigateTo(target: CommentThread, closeThisPanel: () -> Unit = {}, leaving: CommentThread? = thread) {
+        val here = editor
+        val reviewIsLoadingAStep = here != null && ReviewDiffSteps.isLoadingAStepIn(project, here)
+        if (here != null && reviewIsLoadingAStep && ReviewDiffSteps.switchTo(project, here, target, leaving, onShown = closeThisPanel)) return
+        if (here != null && WalkthroughNavigator.navigateWithin(here, project, target, beforeMoving = closeThisPanel)) return
+        if (here != null && !reviewIsLoadingAStep && ReviewDiffSteps.switchTo(project, here, target, leaving, onShown = closeThisPanel)) return
+        WalkthroughNavigator.navigateTo(project, target, onShown = closeThisPanel)
+    }
 
     private fun pickAddressee(atOffset: Int) {
         val composerEditor = replyArea.editor ?: return

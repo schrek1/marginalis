@@ -2,6 +2,7 @@ package dev.marginalis.plugin.testing
 
 import com.intellij.util.ui.UIUtil
 import dev.marginalis.core.ListWhileInFront
+import dev.marginalis.core.MarginTabShows
 import dev.marginalis.core.ReadWhen
 import dev.marginalis.plugin.settings.MarginalisConfigurable
 import dev.marginalis.plugin.settings.MarginalisSettings
@@ -19,8 +20,6 @@ class ProjectTabSettings(private val page: JComponent) {
     fun expandWhenItBecomesYourMove(on: Boolean) = tick("Expand a collapsed thread when it becomes your move", on)
 
     fun groupRelayedConversation(on: Boolean) = tick("Group a pull request's relayed conversation", on)
-
-    fun showTheTabWhenAProjectOpens(on: Boolean) = tick("Show the Margin tab when a project opens", on)
 
     private fun tick(text: String, on: Boolean) {
         UIUtil.findComponentsOfType(page, JCheckBox::class.java).single { it.text == text }.isSelected = on
@@ -51,11 +50,11 @@ class ProjectTabSettings(private val page: JComponent) {
 
         fun restoreDefaults() {
             val settings = MarginalisSettings.getInstance()
+            settings.marginTabShows = MarginTabShows.ALWAYS
             settings.listWhileInFront = ListWhileInFront.LIVE
             settings.readWhen = ReadWhen.EXPANDED_IN_FRONT
             settings.state.expandOnYourMove = true
             settings.state.groupRelayedConversation = true
-            settings.state.showTabOnProjectOpen = false
             settings.state.displayName = ""
         }
     }

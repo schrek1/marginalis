@@ -8,6 +8,7 @@ import dev.marginalis.core.FoldingPrefs
 import dev.marginalis.core.LeavingAStep
 import dev.marginalis.core.ListWhileInFront
 import dev.marginalis.core.LongThreadFolding
+import dev.marginalis.core.MarginTabShows
 import dev.marginalis.core.Message
 import dev.marginalis.core.Mark
 import dev.marginalis.core.MarkSubject
@@ -69,6 +70,7 @@ class SettingsPageTest : HttpContractTestCase() {
         assertEquals("ada-l", page.text("GitHub login:"))
         assertTrue(page.isTicked("Show GitHub avatars when no picture is set"))
         assertTrue(page.isTicked("Jump to the next thread after resolving"))
+        assertFalse(page.isTicked(STEPS_ACROSS_REVIEW_FILES))
         assertTrue(page.isTicked("Notify when the agent posts elsewhere"))
         assertEquals("Auto (system)", page.chosen(TimeFormat.AUTO))
         assertFalse(page.isModified)
@@ -362,6 +364,20 @@ class SettingsPageTest : HttpContractTestCase() {
         assertEquals(25, user.editor().caretModel.logicalPosition.line + 1)
     }
 
+    fun testThePageOffersKeepingStepsInAReviewAcrossFilesAsAnExperimentAndSavesTheChoice() {
+        val page = page()
+
+        page.tick(STEPS_ACROSS_REVIEW_FILES, true)
+        assertTrue(page.isModified)
+        page.apply()
+
+        assertTrue(settings.state.keepStepsInReviewAcrossFiles)
+        assertTrue(page.comments().toString(), page.comments().any { it.startsWith("Relies on a part of the IDE that may change.") })
+        page.tick(STEPS_ACROSS_REVIEW_FILES, false)
+        page.apply()
+        assertFalse(settings.state.keepStepsInReviewAcrossFiles)
+    }
+
     fun testTheSteppingChoiceDecidesWhetherTheStepYouLeaveFolds() {
         val first = agent.addOnLine(5, "order" to 1, "walkthrough" to "tour", "body" to "Step one")
         agent.addOnLine(15, "order" to 2, "walkthrough" to "tour", "body" to "Step two")
@@ -432,6 +448,17 @@ class SettingsPageTest : HttpContractTestCase() {
         assertEquals(ReadWhen.CLICKED_INTO, settings.readWhen)
         assertFalse(settings.state.expandOnYourMove)
         assertFalse(settings.state.groupRelayedConversation)
+    }
+
+    fun testTheMarginTabShowsWithSomethingInItUntilYouChooseToKeepItOpen() {
+        val page = page()
+        assertEquals(listOf("Keep the Margin tab open", "Show it when there's something in it"), page.options(MarginTabShows.ALWAYS))
+        assertEquals("Show it when there's something in it", page.chosen(MarginTabShows.ALWAYS))
+
+        page.choose(MarginTabShows.ALWAYS, "Keep the Margin tab open")
+        page.apply()
+
+        assertEquals(MarginTabShows.ALWAYS, settings.marginTabShows)
     }
 
     fun testWhatCountsAsReadSaysWhereAReadThreadDropsItsEnvelope() {
@@ -505,5 +532,6 @@ class SettingsPageTest : HttpContractTestCase() {
     private companion object {
         const val ALWAYS_FIRST = "Always show the first message"
         const val ASK_FOR_SUMMARY = "Ask agents to open each reply with a one-line summary"
+        const val STEPS_ACROSS_REVIEW_FILES = "Keep walkthrough steps in a pull or merge request review across files (experimental)"
     }
 }

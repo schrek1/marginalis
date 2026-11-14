@@ -16,13 +16,12 @@ class ProjectTabState {
 
     fun takeRequest(): TabRequest? = pending.getAndSet(null)
 
-    private val openBehindQueued = AtomicBoolean()
+    var reveals = 0
+        private set
 
-    fun queueOpenBehind() = openBehindQueued.set(true)
-
-    fun cancelOpenBehind() = openBehindQueued.set(false)
-
-    fun takeOpenBehind(): Boolean = openBehindQueued.getAndSet(false)
+    fun countReveal() {
+        reveals++
+    }
 
     var draft: CommentThread? = null
         private set

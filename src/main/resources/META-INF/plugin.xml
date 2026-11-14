@@ -89,6 +89,8 @@
                   topic="com.intellij.ide.ui.LafManagerListener"/>
         <listener class="dev.marginalis.plugin.ui.tab.MarginFile$ProjectClosed"
                   topic="com.intellij.openapi.project.ProjectCloseListener"/>
+        <listener class="dev.marginalis.plugin.ui.tab.ProjectTab$ClosedWhenEmpty"
+                  topic="com.intellij.openapi.project.ProjectCloseListener"/>
     </applicationListeners>
 
     <projectListeners>
@@ -114,9 +116,10 @@
         <!-- The project tab: project-level threads in an editor tab of their own. -->
         <virtualFileSystem key="marginalis" implementationClass="dev.marginalis.plugin.ui.tab.MarginFileSystem"/>
         <fileEditorProvider implementation="dev.marginalis.plugin.ui.tab.MarginEditorProvider"/>
-        <fileEditorProvider implementation="dev.marginalis.plugin.ui.TextOnlyEditorProvider"/>
         <editorTabTitleProvider implementation="dev.marginalis.plugin.ui.tab.MarginTabTitleProvider" order="first"/>
         <fileIconProvider implementation="dev.marginalis.plugin.ui.tab.MarginTabIconProvider"/>
+        <!-- A thread's file that closes as it opens, such as a failing preview, opens again as plain text. -->
+        <fileEditorProvider implementation="dev.marginalis.plugin.ui.TextOnlyEditorProvider"/>
         <!-- The turn signal's long arm: agent posts in unfocused files. -->
         <notificationGroup id="Marginalis" displayType="BALLOON"/>
         <!-- Navigation consent + display name; app-level, these follow the user. -->

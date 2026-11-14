@@ -480,19 +480,6 @@ class AddingTest : HttpContractTestCase() {
         assertEquals(emptyList<Notification>(), shown)
     }
 
-    fun testAProjectThreadOpensTheClosedMarginTabBehindTheFileYouAreReading() {
-        sample()
-        myFixture.openFileInEditor(myFixture.findFileInTempDir(SAMPLE))
-        val editors = FileEditorManager.getInstance(project)
-        assertFalse(editors.isFileOpen(MarginFile.of(project)))
-
-        agent.add("body" to "Build is slow")
-        PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
-
-        assertTrue(editors.isFileOpen(MarginFile.of(project)))
-        assertEquals(SAMPLE.substringAfterLast('/'), editors.selectedFiles.first().name)
-    }
-
     fun testAnAgentCommentInTheFileTheUserIsReadingDoesNotNotify() {
         sample()
         myFixture.openFileInEditor(myFixture.findFileInTempDir(SAMPLE))

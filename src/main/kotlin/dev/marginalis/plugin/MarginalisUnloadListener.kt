@@ -7,6 +7,7 @@ import com.intellij.openapi.project.ProjectManager
 import dev.marginalis.plugin.store.MarginalisPersistence
 import dev.marginalis.plugin.store.MarginalisStore
 import dev.marginalis.plugin.ui.FileTurn
+import dev.marginalis.plugin.ui.TextOnlyEditorProvider
 import dev.marginalis.plugin.ui.ThreadInlayManager
 import dev.marginalis.plugin.ui.TurnSignalIconPatcher
 import dev.marginalis.plugin.ui.diff.ReviewDiffMarkers
@@ -25,6 +26,7 @@ class MarginalisUnloadListener : DynamicPluginListener {
         for (project in ProjectManager.getInstance().openProjects) {
             if (project.isDisposed) continue
             FileTurn.redrawAll(project)
+            TextOnlyEditorProvider.closeEveryFileShownAsText(project)
             val store = MarginalisStore.getInstance(project)
             store.syncLines()
             MarginalisPersistence.save(project, store.snapshot())

@@ -1,5 +1,6 @@
 package dev.marginalis.plugin.ui.tab
 
+import dev.marginalis.core.MarginTabShows
 import dev.marginalis.plugin.settings.MarginalisSettings
 import dev.marginalis.plugin.testing.Agent
 import dev.marginalis.plugin.testing.LongThreadSettings
@@ -34,7 +35,7 @@ abstract class MarginTabTestCase : HttpContractTestCase() {
     }
 
     protected fun showTheTabWhenAProjectOpens() {
-        MarginalisSettings.getInstance().state.showTabOnProjectOpen = true
+        MarginalisSettings.getInstance().marginTabShows = MarginTabShows.WITH_SOMETHING_IN_IT
     }
 
     protected fun Agent.ask(body: String, vararg fields: Pair<String, Any?>): String = add("body" to body, *fields)
