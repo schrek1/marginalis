@@ -15,6 +15,13 @@ History before 0.1.19 lives in git tags.
   the filter had to reset to show the thread.
 - *Select Opened Thread* can take a keyboard shortcut and is in Find
   Action.
+
+## [0.2.11] - 2026-11-14
+
+Thanks to [@schrek1](https://github.com/schrek1) for the Margin tab choice, the plain-text fallback and the keep-open stepping in this release.
+
+### Added
+
 - Choose when the Margin tab shows. Keep it open as before, or show it
   only when there's something in it: a project opens without an empty
   tab, and the tab comes back behind your file when an agent starts a
