@@ -81,14 +81,14 @@ class SelectOpenedThreadTest : ToolWindowTestCase() {
         assertEquals(listOf("Resolved  1", "src  1", "Sample.kt"), window.selectedPath())
     }
 
-    fun testAStepIsSelectedInItsGuidedSection() {
+    fun testAStepIsSelectedInItsWalkthroughSection() {
         sample()
         agent.addOnLine(5, "order" to 1, "body" to "a step")
         user.openFile(SAMPLE, 5)
 
         window.selectOpenedThread()
 
-        assertEquals("Guided  1", window.selectedPath().first())
+        assertEquals("Walkthrough  1", window.selectedPath().first())
         assertEquals("✉ (1/1)  Sample.kt L5  a step", window.selected())
     }
 
@@ -425,14 +425,14 @@ class SelectOpenedThreadTest : ToolWindowTestCase() {
         assertEquals(listOf("Submit the draft to list it."), window.window.balloons)
     }
 
-    fun testTheHeaderButtonSelectsAStepInItsGuidedSection() {
+    fun testTheHeaderButtonSelectsAStepInItsWalkthroughSection() {
         sample()
         val step = agent.addOnLine(5, "order" to 1, "body" to "a step")
         window.outline()
 
         user.press(user.open(step), "Select in Marginalis")
 
-        assertEquals("Guided  1", window.selectedPath().first())
+        assertEquals("Walkthrough  1", window.selectedPath().first())
         assertEquals("✉ (1/1)  Sample.kt L5  a step", window.selected())
     }
 

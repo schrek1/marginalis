@@ -14,10 +14,10 @@ import java.time.Duration
 import kotlin.io.path.writeText
 
 /**
- * The Margin tab shows only with something in it (MARG-48): a fresh project opens without it, the agent's first
- * project thread brings it, and an empty tab does not come back after a restart. With "Show the Margin tab when a
- * project opens" off, the default (MARG-192), even a project with an open project thread opens without it, until the
- * agent starts the next one. With it on, a tab open when the IDE closes comes back after a restart, pinned if it was.
+ * The Margin tab shows only with something in it, the fork's default for "Margin tab": a fresh project opens without
+ * it, the agent's first project thread brings it, and an empty tab does not come back after a restart. A first open of a
+ * project that already has an open project thread brings it, and a tab open when the IDE closes comes back after a
+ * restart, pinned if it was.
  *
  * The scenario's first start is the fresh project the base class opens.
  */
@@ -60,7 +60,7 @@ class NoEmptyMarginTabTest : SandboxScenario("no_empty_margin_tab") {
 
     @Test
     @Order(4)
-    fun openThreadKeepsTheTabClosedOnOpen() = case("open_thread_keeps_the_tab_closed_on_open") {
+    fun openThreadBringsTheTabOnFirstOpen() = case("open_thread_brings_the_tab_on_first_open") {
         val thread = Agent.agentStartsProjectThread("An open project thread before the project is opened again.")
         awaitOrFail("the open thread on disk") { persistedStatus(thread) == "OPEN" }
         val threadsOnDisk = Sandbox.projectText(THREADS_FILE) ?: error("no $THREADS_FILE in the project")
@@ -71,13 +71,9 @@ class NoEmptyMarginTabTest : SandboxScenario("no_empty_margin_tab") {
             threadsFile.writeText(threadsOnDisk)
         }
         settleAfterStart(threads = 2)
-        settle()
-        shot("4-first-open-with-a-project-thread")
-        check("with the setting off, a project with an open project thread opens without the Margin tab", !marginTab().open, marginTab())
-        Agent.agentStartsProjectThread("A new project thread after the project opened.")
         val tab = marginTabUntilOpen()
-        shot("5-next-project-thread")
-        check("the agent's next project thread opens the Margin tab", tab.open, tab)
+        shot("4-first-open-with-a-project-thread")
+        check("a first open of a project with an open project thread opens the Margin tab", tab.open, tab)
         check("that Margin tab is not pinned", !tab.pinned, tab)
     }
 
@@ -86,11 +82,10 @@ class NoEmptyMarginTabTest : SandboxScenario("no_empty_margin_tab") {
     @Order(5)
     fun openTabComesBackAfterRestart() = case("open_tab_comes_back_after_restart") {
         check("the Margin tab is open and not pinned (precondition)", marginTab() == MarginTab(open = true, pinned = false), marginTab())
-        showTabOnProjectOpen()
         Sandbox.restart(fresh = false)
         val tab = marginTabUntilOpen()
         shot("6-open-tab-after-restart")
-        check("with the setting on, a Margin tab open at shutdown comes back after a restart", tab.open, tab)
+        check("a Margin tab open at shutdown comes back after a restart", tab.open, tab)
         check("a tab that was not pinned comes back unpinned", !tab.pinned, tab)
     }
 
@@ -102,7 +97,7 @@ class NoEmptyMarginTabTest : SandboxScenario("no_empty_margin_tab") {
         Sandbox.restart(fresh = false)
         val tab = marginTabUntilOpen()
         shot("7-pinned-tab-after-restart")
-        check("with the setting on, a pinned Margin tab comes back after a restart", tab.open, tab)
+        check("a pinned Margin tab comes back after a restart", tab.open, tab)
         check("it comes back pinned", tab.pinned, tab)
     }
 
@@ -133,18 +128,6 @@ class NoEmptyMarginTabTest : SandboxScenario("no_empty_margin_tab") {
             SandboxUi.js("String(com.intellij.ide.util.PropertiesComponent.getInstance(project).getBoolean('marginalis.projectTab.introduced'))") == "true"
         }
         awaitOrFail("$threads persisted threads in the store") { SandboxUi.js("String(store.getThreads().all().size())").toInt() >= threads }
-    }
-
-    // The container's app config lasts until the scenario ends, over its restarts.
-    private fun showTabOnProjectOpen() {
-        SandboxUi.js(
-            """
-            var settings = com.intellij.openapi.application.ApplicationManager.getApplication()
-                .getService(pluginLoader.loadClass('dev.marginalis.plugin.settings.MarginalisSettings'));
-            settings.getState().setShowTabOnProjectOpen(true);
-            String(true)
-            """,
-        )
     }
 
     private fun pinMarginTab() {

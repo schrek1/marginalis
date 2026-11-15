@@ -14,9 +14,8 @@ class ToolWindowActionsTest : ToolWindowTestCase() {
     fun testTheTitleBarOffersTheMarginsActionsInOrder() {
         assertEquals(
             listOf(
-                "Comment on Project", "First Step", "Previous Occurrence", "Next Occurrence", "Last Step",
-                "Expand", "Collapse", "Filter", "Guided Layout",
-                "Submit round", "Make every open thread live", "Stop agents", "Resolve All", "Delete All",
+                "Comment on Project", "First Step", "Previous Occurrence", "Next Occurrence", "Last Step", "Expand", "Collapse",
+                "Filter", "Walkthrough Layout", "Submit round", "Make every open thread live", "Stop agents", "Resolve All", "Delete All",
             ),
             window.toolbar(),
         )
@@ -46,10 +45,11 @@ class ToolWindowActionsTest : ToolWindowTestCase() {
         assertEquals(listOf("Open  1", "src  1", "Sample.kt ✈1", "✈ L6  a question"), window.rows())
 
         window.filterBy("Awaiting You")
-        assertEquals(listOf("Guided  1", "✉ (1/1)  Sample.kt L12  a guided step", "Open  3  ·  1 blocker", "src  3", "Sample.kt ✉3"), window.rows().take(5))
+        assertEquals(listOf("Walkthrough  1", "✉ (1/1)  Sample.kt L12  a guided step", "Open  2  ·  1 blocker"), window.rows().take(3))
+        assertEquals(listOf("✉ L3  blocking", "✉ L9  a finding"), window.rows().drop(5))
 
         window.filterBy("Guidance")
-        assertEquals(listOf("Guided  1", "✉ (1/1)  Sample.kt L12  a guided step", "Open  1", "src  1", "Sample.kt ✉1", "✉ L12  a guided step"), window.rows())
+        assertEquals(listOf("Walkthrough  1", "✉ (1/1)  Sample.kt L12  a guided step"), window.rows())
 
         window.filterBy("Findings")
         assertEquals("✉ L9  a finding", window.rows().last())
@@ -65,7 +65,7 @@ class ToolWindowActionsTest : ToolWindowTestCase() {
         assertEquals(4, window.rows().size)
 
         window.filterBy("All")
-        assertEquals("Open  5  ·  1 blocker", window.rows()[2])
+        assertEquals("Open  4  ·  1 blocker", window.rows()[2])
     }
 
     fun testEachFilterHasItsOwnEmptyMessage() {
@@ -258,8 +258,6 @@ class ToolWindowActionsTest : ToolWindowTestCase() {
 
         // WHEN - the user marks the selection unread
         val offered = window.contextMenu("second")
-        window.select("first")
-        window.selectAlso("second")
         window.rebuiltBy { window.chooseFromContextMenu("second", "Mark as Unread") }
 
         // THEN - the menu spoke for both, and both are unread
@@ -292,6 +290,52 @@ class ToolWindowActionsTest : ToolWindowTestCase() {
         window.selectAlso("second")
 
         assertEquals(listOf("Navigate", "Mark as Read", "Resolve", "Delete…"), window.contextMenu("third"))
+    }
+
+    fun testRightClickingAFileRowInsideAThreadSelectionOffersTheFilesMenu() {
+        sample()
+        agent.addOnLine(3, "body" to "first")
+        agent.addOnLine(6, "body" to "second")
+        window.select("first")
+        window.selectAlso("second")
+        window.selectAlso("Sample.kt")
+
+        assertEquals(listOf("Comment on File", "Resolve 2 Open Thread(s)…", "Delete 2 Thread(s)…"), window.contextMenu("Sample.kt"))
+        assertEquals(listOf("Open  2", "src  2", "Sample.kt ✉2"), window.selectedPath())
+    }
+
+    fun testRightClickingAWalkthroughHeaderInsideASelectionStillOffersResolveWalkthrough() {
+        sample()
+        agent.addOnLine(3, "order" to 1, "walkthrough" to "tour", "body" to "Step one")
+        agent.addOnLine(6, "order" to 2, "walkthrough" to "tour", "body" to "Step two")
+        window.select("Step one")
+        window.selectAlso("Step two")
+        window.selectAlso("tour  2")
+
+        assertEquals(listOf("Resolve Walkthrough"), window.contextMenu("tour  2"))
+    }
+
+    fun testAMixedSelectionCountsOnlyOpenThreadsToResolveButAllToDelete() {
+        sample()
+        agent.addOnLine(3, "body" to "first")
+        agent.post("comment_resolve", "thread_id" to agent.addOnLine(6, "body" to "done"))
+        window.toggleFolding("Resolved")
+        window.toggleFolding("src", under = "Resolved")
+        window.toggleFolding("Sample.kt", under = "Resolved")
+        window.select("first")
+        window.selectAlso("done")
+
+        assertEquals(listOf("Mark as Read", "Resolve 1 Open Thread(s)…", "Delete 2 Thread(s)…"), window.contextMenu("done"))
+    }
+
+    fun testASelectionOfOnlyYourOwnThreadsOffersNoReadMark() {
+        sample()
+        user.comment(SAMPLE, 3, "Note to self")
+        user.comment(SAMPLE, 6, "Another note")
+        window.select("Note to self")
+        window.selectAlso("Another note")
+
+        assertEquals(listOf("Resolve 2 Open Thread(s)…", "Delete 2 Thread(s)…"), window.contextMenu("Another note"))
     }
 
     fun testDeletingFromAThreadsContextMenuAsksFirst() {

@@ -5,12 +5,14 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.ide.CopyPasteManager
+import com.intellij.openapi.util.text.StringUtil.unescapeXmlEntities
 import com.intellij.testFramework.PlatformTestUtil
-import dev.marginalis.core.LeavingAStep
 import dev.marginalis.core.Reference
 import dev.marginalis.plugin.settings.MarginalisSettings
 import dev.marginalis.plugin.store.Authors
+import dev.marginalis.plugin.testing.FilesThatWontStayOpen
 import dev.marginalis.plugin.testing.Relays
+import dev.marginalis.plugin.testing.SteppingChoice
 import dev.marginalis.plugin.transport.HttpContractTestCase
 import java.awt.datatransfer.DataFlavor
 
@@ -41,17 +43,6 @@ class ThreadPanelToolbarTest : HttpContractTestCase() {
             test()
         } finally {
             state.walkthroughAutoAdvance = before
-        }
-    }
-
-    private fun leavingAStep(choice: LeavingAStep, test: () -> Unit) {
-        val settings = MarginalisSettings.getInstance()
-        val before = settings.leavingAStep
-        settings.leavingAStep = choice
-        try {
-            test()
-        } finally {
-            settings.leavingAStep = before
         }
     }
 
@@ -106,6 +97,18 @@ class ThreadPanelToolbarTest : HttpContractTestCase() {
         assertEquals("resolved", agent.threads().single { it.id == steps[0] }.string("status"))
         assertTrue(shownIn(user.panel()).contains("Step two"))
         assertEquals(15, caretLine())
+    }
+
+    fun testResolvingACommentMovesOnToTheNextCommentPassingTheStepsBetween() = withAutoAdvance(true) {
+        tour()
+        val first = agent.addOnLine(3, "body" to "First comment")
+        agent.addOnLine(20, "body" to "Second comment")
+        val panel = user.open(first)
+
+        user.press(panel, "Resolve")
+
+        assertTrue(shownIn(user.panel()).contains("Second comment"))
+        assertEquals(20, caretLine())
     }
 
     fun testResolvingTheLastStepInAnotherFileStaysPut() = withAutoAdvance(true) {
@@ -167,6 +170,72 @@ class ThreadPanelToolbarTest : HttpContractTestCase() {
         assertTrue(shownIn(user.panel()).contains("Step one"))
     }
 
+    fun testStepArrowsAcrossFilesFoldTheStepYouLeave() {
+        val steps = tour()
+        val panel = user.open(steps[1])
+        val sampleEditor = user.editor()
+
+        user.press(panel, "Next Step")
+
+        assertEquals("Other.kt", openFileName())
+        assertEquals(emptyList<ThreadPanel>(), user.panels(sampleEditor))
+    }
+
+    fun testNextStepIntoAFileTheIdeClosesKeepsTheCurrentStepOpen() {
+        val steps = tour()
+        FilesThatWontStayOpen(project, testRootDisposable).closeJustAfterOpening(other)
+        val panel = user.open(steps[1])
+        val sampleEditor = user.editor()
+
+        user.press(panel, "Next Step")
+
+        assertTrue(shownIn(user.panel(sampleEditor)).contains("Step two"))
+    }
+
+    fun testNextStepIntoAFileTheIdeClosesAtOnceKeepsTheCurrentStepOpen() {
+        val steps = tour()
+        FilesThatWontStayOpen(project, testRootDisposable).closeOnOpening(other)
+        val panel = user.open(steps[1])
+        val sampleEditor = user.editor()
+        val shown = user.notifications()
+
+        user.press(panel, "Next Step")
+
+        assertTrue(shownIn(user.panel(sampleEditor)).contains("Step two"))
+        assertEquals(1, shown.size)
+    }
+
+    fun testAStepWhoseFileTheIdeClosesIsNamedWithItsFileInOneNotification() {
+        val steps = tour()
+        FilesThatWontStayOpen(project, testRootDisposable).closeJustAfterOpening(other)
+        val shown = user.notifications()
+
+        user.press(user.open(steps[1]), "Next Step")
+
+        assertEquals(
+            listOf("Couldn't show walkthrough step 3/3: the IDE closed src/Other.kt as it opened."),
+            shown.map { unescapeXmlEntities(it.content) },
+        )
+    }
+
+    fun testAStepWhoseFileClosesEvenAsPlainTextLeavesTheWalkthroughOnTheStepYouWereOn() {
+        val steps = tour()
+        FilesThatWontStayOpen(project, testRootDisposable).closeJustAfterOpening(other)
+
+        user.press(user.open(steps[1]), "Next Step")
+
+        assertEquals(steps[1], LastStep.getInstance(project).mark?.threadId)
+    }
+
+    fun testAFailedMoveLeavesTheUnshownStepUnread() {
+        val steps = tour()
+        FilesThatWontStayOpen(project, testRootDisposable).closeJustAfterOpening(other)
+
+        user.press(user.open(steps[1]), "Next Step")
+
+        assertEquals(1, user.thread(steps[2]).unreadByUserCount())
+    }
+
     fun testNextStepFoldsTheStepYouLeaveByDefault() {
         val steps = tour()
 
@@ -175,7 +244,8 @@ class ThreadPanelToolbarTest : HttpContractTestCase() {
         assertEquals(listOf("Step two"), openStepBodies())
     }
 
-    fun testNextStepKeepsTheStepYouLeaveOpenWhenChosen() = leavingAStep(LeavingAStep.KEEP_OPEN) {
+    fun testNextStepKeepsTheStepYouLeaveOpenWhenChosen() {
+        SteppingChoice.keepTheStepYouLeaveOpen(testRootDisposable)
         val steps = tour()
 
         user.press(user.open(steps[0]), "Next Step")
@@ -184,7 +254,8 @@ class ThreadPanelToolbarTest : HttpContractTestCase() {
         assertEquals(15, caretLine())
     }
 
-    fun testAStepInAnotherFileStaysOpenInItsTabWhenYouStepBackFromIt() = leavingAStep(LeavingAStep.KEEP_OPEN) {
+    fun testAStepInAnotherFileStaysOpenInItsTabWhenYouStepBackFromIt() {
+        SteppingChoice.keepTheStepYouLeaveOpen(testRootDisposable)
         val steps = tour()
         user.press(user.open(steps[1]), "Next Step")
         assertEquals("Other.kt", openFileName())
@@ -196,6 +267,27 @@ class ThreadPanelToolbarTest : HttpContractTestCase() {
         assertEquals(listOf("Step three"), openStepBodies(editorOf("Other.kt")))
     }
 
+    fun testNextCommentKeepsThePlainCommentYouLeaveOpenWhenChosen() {
+        SteppingChoice.keepTheStepYouLeaveOpen(testRootDisposable)
+        sample()
+        val first = agent.addOnLine(5, "body" to "First comment")
+        agent.addOnLine(15, "body" to "Second comment")
+
+        user.press(user.open(first), "Next Comment")
+
+        assertEquals(2, user.panels().size)
+        assertEquals(15, caretLine())
+    }
+
+    fun testResolvingAStepStillFoldsItWhenStepsYouLeaveStayOpen() {
+        SteppingChoice.keepTheStepYouLeaveOpen(testRootDisposable)
+        val steps = tour()
+
+        user.press(user.open(steps[0]), "Resolve")
+
+        assertEquals(listOf("Step two"), openStepBodies())
+    }
+
     fun testStepArrowsOnAResolvedThreadStartTheWalkAtTheFirstOpenThread() {
         val steps = tour()
         agent.post("comment_resolve", "thread_id" to steps[1])
@@ -205,6 +297,60 @@ class ThreadPanelToolbarTest : HttpContractTestCase() {
         user.press(panel, "Next Step")
 
         assertTrue(shownIn(user.panel()).contains("Step one"))
+    }
+
+    private fun postUnlabelledSteps(vararg steps: Pair<Int, String>): List<String> {
+        val items = steps.mapIndexed { index, (line, body) ->
+            mapOf("file" to SAMPLE, "line" to line, "anchor_text" to lineText(line), "order" to index + 1, "body" to body)
+        }
+        return agent.post("comment_add_batch", "items" to items).json.getAsJsonArray("results").map { it.asJsonObject.id }
+    }
+
+    fun testTwoUnlabelledWalkthroughsWalkApart() {
+        sample()
+        val first = postUnlabelledSteps(5 to "First one", 15 to "First two")
+        postUnlabelledSteps(10 to "Second one", 20 to "Second two", 30 to "Second three")
+
+        val panel = user.open(first[0])
+        val header = shownIn(panel).lines().single { it.startsWith("<html>open · ") }
+        assertTrue(header, header.startsWith("<html>open · <b>Walkthrough · ") && header.endsWith("</b> (1/2)</html>"))
+        user.press(panel, "Last Step")
+
+        assertTrue(shownIn(user.panel()).contains("First two"))
+        assertEquals(setOf("First Step", "Previous Step"), enabled(user.panel()).filter { it.endsWith("Step") }.toSet())
+        assertEquals(emptyList<String>(), agent.threads().filter { thread -> thread.keySet().any { it.startsWith("walkthrough_") } }.map { it.id })
+    }
+
+    fun testAnOrdinaryCommentsArrowsAreCommentArrows() {
+        tour()
+        val comment = agent.addOnLine(3, "body" to "Comment one")
+        agent.addOnLine(10, "body" to "Comment two")
+
+        val names = user.toolbar(user.open(comment)).keys
+
+        assertTrue(names.containsAll(listOf("First Comment", "Previous Comment", "Next Comment", "Last Comment")))
+        assertEquals(emptyList<String>(), names.filter { it.endsWith("Step") })
+    }
+
+    fun testCommentArrowsWalkTheOpenCommentsPassingStepsBy() {
+        tour()
+        val first = agent.addOnLine(12, "body" to "Comment one", file = other)
+        agent.addOnLine(3, "body" to "Comment two")
+        agent.addOnLine(10, "body" to "Comment three")
+
+        assertEquals(setOf("Next Comment", "Last Comment"), enabled(user.open(first)).filter { it.endsWith("Comment") }.toSet())
+        user.press(user.panel(), "Next Comment")
+        assertEquals("Sample.kt", openFileName())
+        assertEquals(3, caretLine())
+        assertTrue(shownIn(user.panel()).contains("Comment two"))
+
+        user.press(user.panel(), "Next Comment")
+        assertEquals(10, caretLine())
+        assertTrue(shownIn(user.panel()).contains("Comment three"))
+
+        user.press(user.panel(), "First Comment")
+        assertEquals("Other.kt", openFileName())
+        assertTrue(shownIn(user.panel()).contains("Comment one"))
     }
 
     fun testCopyReferenceCopiesTheThreadsShortReference() {

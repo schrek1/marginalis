@@ -117,6 +117,41 @@ class OpeningThreadsTest : ToolWindowTestCase() {
         assertEquals("✉ L23  second", window.selected())
     }
 
+    fun testRevealingAFilePrefersItsOpenCommentToAResolvedStepOfAnOldWalkthrough() {
+        sample()
+        val oldStep = agent.addOnLine(3, "order" to 1, "walkthrough" to "old tour", "body" to "old step")
+        agent.post("comment_resolve", "thread_id" to oldStep)
+        agent.addOnLine(9, "body" to "open comment")
+        window.outline()
+
+        MarginalisToolWindow.reveal(project, ThreadInFront.Found(Opened.File(SAMPLE)), focus = false)
+
+        assertEquals(listOf("Open  1", "src  1", "Sample.kt ✉1"), window.selectedPath())
+    }
+
+    fun testRevealingTheProjectPrefersAnOpenProjectCommentToAResolvedProjectStep() {
+        sample()
+        val oldStep = agent.add("order" to 1, "walkthrough" to "old tour", "body" to "old project step")
+        agent.post("comment_resolve", "thread_id" to oldStep)
+        agent.add("body" to "open project comment")
+        window.outline()
+
+        MarginalisToolWindow.reveal(project, ThreadInFront.Found(Opened.ProjectThreads), focus = false)
+
+        assertEquals(listOf("Open  1", "Project  1"), window.selectedPath())
+    }
+
+    fun testRevealingAFileWhoseOnlyThreadIsAResolvedStepStillSelectsThatStep() {
+        sample()
+        val oldStep = agent.addOnLine(3, "order" to 1, "walkthrough" to "old tour", "body" to "old step")
+        agent.post("comment_resolve", "thread_id" to oldStep)
+        window.outline()
+
+        MarginalisToolWindow.reveal(project, ThreadInFront.Found(Opened.File(SAMPLE)), focus = false)
+
+        assertEquals("(1/1)  Sample.kt L3  old step", window.selected())
+    }
+
     fun testRevealingAFileInTheToolWindowSelectsItsFirstRowOrSaysItHasNoThreads() {
         val steps = interleaved()
         sample()
@@ -124,11 +159,11 @@ class OpeningThreadsTest : ToolWindowTestCase() {
         window.outline()
 
         MarginalisToolWindow.reveal(project, ThreadInFront.Found(Opened.File("acme/backend/shop-orders/src/main/java/com/acme/orders/OrderService.java")), focus = false)
-        assertEquals("OrderService.java  steps 2–3 ✉2", window.selected())
-        assertEquals("Guided SHOP-77  17", window.selectedPath().first())
+        assertEquals("✉ (2/18)  OrderService.java L20  Step 2", window.selected())
+        assertEquals("SHOP-77  18", window.selectedPath().first())
 
         MarginalisToolWindow.reveal(project, ThreadInFront.Found(Opened.File(SAMPLE)), focus = false)
-        assertEquals(listOf("Open  18", "src  1", "Sample.kt ✉1"), window.selectedPath())
+        assertEquals(listOf("Open  1", "src  1", "Sample.kt ✉1"), window.selectedPath())
 
         MarginalisToolWindow.reveal(project, ThreadInFront.Found(Opened.File("src/NoThreads.kt")), focus = false)
         assertEquals("Sample.kt ✉1", window.selected())

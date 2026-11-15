@@ -362,6 +362,19 @@ class ProjectLiveTest : HttpContractTestCase() {
         assertSame(MarginalisIcons.toolWindow(null, projectLive = false), window.window.shownIcon)
     }
 
+    fun testALiveProjectsStripeDropsTheEnvelopeOnceEverythingYouOweIsReadAndMarkingUnreadBringsItBack() {
+        val id = agent.addOnLine(5, "body" to "Which one?")
+        val window = user.openToolWindow()
+        window.turnProjectLive(true)
+        assertSame(MarginalisIcons.toolWindow(StripeBadge.AWAITING_YOU, projectLive = true), window.window.shownIcon)
+
+        window.rebuiltBy { user.read(id) }
+        assertSame(MarginalisIcons.toolWindow(null, projectLive = true), window.window.shownIcon)
+
+        window.rebuiltBy { window.chooseFromContextMenu("Which one?", "Mark as Unread") }
+        assertSame(MarginalisIcons.toolWindow(StripeBadge.AWAITING_YOU, projectLive = true), window.window.shownIcon)
+    }
+
     fun testTheStripeIconFollowsSettingsForAProjectNeverSwitched() {
         val window = user.openToolWindow()
 

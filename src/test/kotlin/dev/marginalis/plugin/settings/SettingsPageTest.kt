@@ -1,24 +1,30 @@
 package dev.marginalis.plugin.settings
 
-import com.intellij.notification.Notification
-import com.intellij.notification.Notifications
 import com.intellij.openapi.options.ConfigurationException
 import com.intellij.testFramework.PlatformTestUtil
 import com.intellij.util.xmlb.XmlSerializerUtil
+import dev.marginalis.core.CommentThread
 import dev.marginalis.core.FoldingPrefs
 import dev.marginalis.core.LeavingAStep
 import dev.marginalis.core.ListWhileInFront
 import dev.marginalis.core.LongThreadFolding
+import dev.marginalis.core.MarginTabShows
+import dev.marginalis.core.Message
 import dev.marginalis.core.Mark
 import dev.marginalis.core.MarkSubject
 import dev.marginalis.core.Intent
 import dev.marginalis.core.People
 import dev.marginalis.core.ReadWhen
+import dev.marginalis.plugin.store.Authors
+import dev.marginalis.plugin.store.MarginalisStore
 import dev.marginalis.plugin.testing.Relays
 import dev.marginalis.plugin.testing.SettingsPage
 import dev.marginalis.plugin.transport.HttpContractTestCase
 import dev.marginalis.plugin.ui.MarginalisIcons
 import dev.marginalis.plugin.ui.ThreadPanel
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
 
 class SettingsPageTest : HttpContractTestCase() {
 
@@ -51,19 +57,6 @@ class SettingsPageTest : HttpContractTestCase() {
     private fun relayedBy(login: String, body: String = "From GitHub."): String =
         agent.add("file" to SAMPLE, "line" to 5, "anchor_text" to lineText(5), "body" to body, "relayed" to Relays.reviewComment(101, login = login))
 
-    private fun notifications(): List<Notification> {
-        val shown = mutableListOf<Notification>()
-        project.messageBus.connect(testRootDisposable).subscribe(
-            Notifications.TOPIC,
-            object : Notifications {
-                override fun notify(notification: Notification) {
-                    if (notification.groupId == "Marginalis") shown += notification
-                }
-            },
-        )
-        return shown
-    }
-
     fun testThePageIsCalledMarginalisAndOpensUnchangedWithTheSavedSettings() {
         settings.state.navigationEnabled = false
         settings.state.displayName = "Ada"
@@ -76,7 +69,8 @@ class SettingsPageTest : HttpContractTestCase() {
         assertEquals("Ada", page.text("Display name:"))
         assertEquals("ada-l", page.text("GitHub login:"))
         assertTrue(page.isTicked("Show GitHub avatars when no picture is set"))
-        assertTrue(page.isTicked("Jump to the next step after resolving"))
+        assertTrue(page.isTicked("Jump to the next thread after resolving"))
+        assertFalse(page.isTicked(STEPS_ACROSS_REVIEW_FILES))
         assertTrue(page.isTicked("Notify when the agent posts elsewhere"))
         assertEquals("Auto (system)", page.chosen(TimeFormat.AUTO))
         assertFalse(page.isModified)
@@ -334,7 +328,7 @@ class SettingsPageTest : HttpContractTestCase() {
     }
 
     fun testTurningNotificationsOffSilencesAgentMessagesInOtherFiles() {
-        val shown = notifications()
+        val shown = user.notifications()
         val page = page()
 
         agent.addOnLine(12, "body" to "Look here.")
@@ -355,19 +349,33 @@ class SettingsPageTest : HttpContractTestCase() {
         agent.addOnLine(25, "order" to 3, "walkthrough" to "tour", "body" to "Step three")
         val page = page()
 
-        page.tick("Jump to the next step after resolving", false)
+        page.tick("Jump to the next thread after resolving", false)
         page.apply()
         user.press(user.open(first), "Resolve")
 
         assertEquals(emptyList<ThreadPanel>(), user.panels())
         assertEquals(5, user.editor().caretModel.logicalPosition.line + 1)
 
-        page.tick("Jump to the next step after resolving", true)
+        page.tick("Jump to the next thread after resolving", true)
         page.apply()
         user.press(user.open(second), "Resolve")
 
         assertTrue(user.shownText(user.panel()).contains("Step three"))
         assertEquals(25, user.editor().caretModel.logicalPosition.line + 1)
+    }
+
+    fun testThePageOffersKeepingStepsInAReviewAcrossFilesAsAnExperimentAndSavesTheChoice() {
+        val page = page()
+
+        page.tick(STEPS_ACROSS_REVIEW_FILES, true)
+        assertTrue(page.isModified)
+        page.apply()
+
+        assertTrue(settings.state.keepStepsInReviewAcrossFiles)
+        assertTrue(page.comments().toString(), page.comments().any { it.startsWith("Relies on a part of the IDE that may change.") })
+        page.tick(STEPS_ACROSS_REVIEW_FILES, false)
+        page.apply()
+        assertFalse(settings.state.keepStepsInReviewAcrossFiles)
     }
 
     fun testTheSteppingChoiceDecidesWhetherTheStepYouLeaveFolds() {
@@ -402,6 +410,28 @@ class SettingsPageTest : HttpContractTestCase() {
         assertEquals(TimeFormat.TWENTY_FOUR_HOUR, settings.timeFormat)
     }
 
+    fun testTheClockChoiceReachesTheWalkthroughTitlesInTheToolWindow() {
+        listOf("morning" to 9, "evening" to 21).forEach { (walkthroughId, hour) ->
+            val step = CommentThread(null, null, null, createdAt = today(hour, 15), order = 1, walkthroughId = walkthroughId)
+            step.addMessage(Message(Authors.user, walkthroughId))
+            MarginalisStore.getInstance(project).threads.add(step)
+        }
+        val window = user.openToolWindow()
+        val page = page()
+
+        page.choose(TimeFormat.AUTO, "24-hour")
+        page.apply()
+        assertEquals(listOf("Walkthrough · 09:15  1", "Walkthrough · 21:15  1"), window.outline().lines().filter { it.startsWith("Walkthrough") })
+
+        page.choose(TimeFormat.AUTO, "12-hour")
+        page.apply()
+        val twelve = window.outline().lines().filter { it.startsWith("Walkthrough") }
+        assertTrue(twelve.toString(), twelve.all { it.matches(Regex("Walkthrough · \\d{1,2}:15\\s?[AaPp]\\.?[Mm]\\.?  1")) })
+    }
+
+    private fun today(hour: Int, minute: Int): Instant =
+        LocalDateTime.now().withHour(hour).withMinute(minute).withSecond(0).atZone(ZoneId.systemDefault()).toInstant()
+
     fun testTheProjectTabChoicesOfferTheirPlainWordLabels() {
         val page = page()
 
@@ -418,6 +448,23 @@ class SettingsPageTest : HttpContractTestCase() {
         assertEquals(ReadWhen.CLICKED_INTO, settings.readWhen)
         assertFalse(settings.state.expandOnYourMove)
         assertFalse(settings.state.groupRelayedConversation)
+    }
+
+    fun testTheMarginTabShowsWithSomethingInItUntilYouChooseToKeepItOpen() {
+        val page = page()
+        assertEquals(listOf("Keep the Margin tab open", "Show it when there's something in it"), page.options(MarginTabShows.ALWAYS))
+        assertEquals("Show it when there's something in it", page.chosen(MarginTabShows.ALWAYS))
+
+        page.choose(MarginTabShows.ALWAYS, "Keep the Margin tab open")
+        page.apply()
+
+        assertEquals(MarginTabShows.ALWAYS, settings.marginTabShows)
+    }
+
+    fun testWhatCountsAsReadSaysWhereAReadThreadDropsItsEnvelope() {
+        val page = page()
+
+        assertTrue(page.comments().any { "A thread you've read drops its ✉ in the tool window, its stripe icon and the tab title, and an FYI asks nothing more." in it })
     }
 
     fun testTheLongThreadChoicesOpenWithTheirDefaults() {
@@ -485,5 +532,6 @@ class SettingsPageTest : HttpContractTestCase() {
     private companion object {
         const val ALWAYS_FIRST = "Always show the first message"
         const val ASK_FOR_SUMMARY = "Ask agents to open each reply with a one-line summary"
+        const val STEPS_ACROSS_REVIEW_FILES = "Keep walkthrough steps in a pull or merge request review across files (experimental)"
     }
 }

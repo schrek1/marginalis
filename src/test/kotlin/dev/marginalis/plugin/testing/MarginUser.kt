@@ -2,6 +2,7 @@ package dev.marginalis.plugin.testing
 
 import com.intellij.ide.DataManager
 import com.intellij.ide.impl.HeadlessDataManager
+import com.intellij.notification.Notification
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionToolbar
@@ -41,11 +42,17 @@ import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBOptionButton
 import com.intellij.ui.popup.PopupFactoryImpl
 import com.intellij.util.ui.UIUtil
+import com.intellij.icons.AllIcons
+import com.intellij.ide.FileIconPatcher
 import dev.marginalis.core.CommentThread
 import dev.marginalis.core.Identity
+import dev.marginalis.core.Turn
+import dev.marginalis.core.TurnSignal
 import dev.marginalis.plugin.store.MarginalisStore
 import dev.marginalis.plugin.ui.AvatarIcon
 import dev.marginalis.plugin.ui.FoldedMessageRow
+import dev.marginalis.plugin.ui.MarginalisIcons
+import dev.marginalis.plugin.ui.TurnSignalIconPatcher
 import dev.marginalis.plugin.ui.StopAgentsGroup
 import dev.marginalis.plugin.ui.SubmitRoundAction
 import dev.marginalis.plugin.ui.ThreadGutterIconRenderer
@@ -81,6 +88,8 @@ class MarginUser(private val project: Project, private val disposable: Disposabl
 
     fun openMarginTab(): MarginTab = MarginTab(project, disposable).open()
 
+    fun notifications(): List<Notification> = ShownNotifications(project, disposable)
+
     fun changeLongThreadSettings(edit: LongThreadSettings.() -> Unit) = LongThreadSettings.change(edit)
 
     fun changeProjectTabSettings(edit: ProjectTabSettings.() -> Unit) {
@@ -102,6 +111,11 @@ class MarginUser(private val project: Project, private val disposable: Disposabl
     fun read(threadId: String) {
         open(threadId).markRead()
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+    }
+
+    fun markUnread(threadId: String) {
+        val window = openToolWindow()
+        window.rebuiltBy { window.chooseFromContextMenu(thread(threadId).messages.first().body, "Mark as Unread") }
     }
 
     fun reply(threadId: String, body: String, to: String? = null) {
@@ -245,6 +259,15 @@ class MarginUser(private val project: Project, private val disposable: Disposabl
             .mapNotNull { it.gutterIconRenderer as? ThreadGutterIconRenderer }
     }
 
+    fun badgeOnFile(file: String): String? {
+        PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+        val vFile = project.guessProjectDir()!!.findFileByRelativePath(file)!!
+        val plain = AllIcons.FileTypes.Text
+        val patcher = FileIconPatcher.EP_NAME.extensionList.filterIsInstance<TurnSignalIconPatcher>().single()
+        val shown = patcher.patchIcon(plain, vFile, 0, project)
+        return Turn.entries.firstOrNull { shown == MarginalisIcons.withTurnBadge(plain, it) }?.let(TurnSignal::glyph)
+    }
+
     fun closePanels() {
         ThreadInlayManager.disposeAll()
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
@@ -374,20 +397,16 @@ class MarginUser(private val project: Project, private val disposable: Disposabl
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
     }
 
-    fun submitLabel(panel: ThreadPanel): String = sendButton(panel).action.getValue(Action.NAME) as String
+    fun submitLabel(panel: ThreadPanel): String = labelAsShown(sendButton(panel).action)
 
-    fun sendOptions(panel: ThreadPanel): List<String> = sendButton(panel).options.orEmpty().map(::shownText)
+    fun sendOptions(panel: ThreadPanel): List<String> = sendButton(panel).options.orEmpty().map(::labelAsShown)
 
     fun sendInstead(panel: ThreadPanel, option: String) {
-        sendButton(panel).options!!.single { shownText(it) == option }.actionPerformed(null)
+        sendButton(panel).options!!.single { labelAsShown(it) == option }.actionPerformed(null)
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
     }
 
-    /**
-     * An option as the send button's popup shows it: through a [Presentation], which reads a `&` in the name as a
-     * mnemonic marker. A headless button has no UI to open the popup itself.
-     */
-    private fun shownText(option: Action): String = Presentation().apply { text = option.getValue(Action.NAME) as String }.text
+    private fun labelAsShown(option: Action): String = Presentation().apply { text = option.getValue(Action.NAME) as String }.text
 
     private fun sendButton(panel: ThreadPanel): JBOptionButton {
         panel.focusReply()
@@ -585,7 +604,6 @@ class MarginUser(private val project: Project, private val disposable: Disposabl
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
     }
 
-    /** A header action updating on the EDT waits for it, so a busy EDT stalls the whole toolbar. */
     fun headerActionsUpdatingOnTheUiThread(panel: ThreadPanel): List<String> = toolbarActions(panel)
         .filter { it !is Separator && it.actionUpdateThread == ActionUpdateThread.EDT }
         .map { it.templatePresentation.text ?: it.javaClass.name }

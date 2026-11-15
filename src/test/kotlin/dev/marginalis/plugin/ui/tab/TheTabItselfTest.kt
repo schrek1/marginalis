@@ -16,6 +16,13 @@ class TheTabItselfTest : MarginTabTestCase() {
         assertEquals(listOf(EMPTY_STATE, NEW_PROJECT_THREAD), shown())
     }
 
+    fun testAProjectStepsCardKeepsTheProjectMarkWithoutAStripe() {
+        agent.ask("Project step", "order" to 1, "walkthrough" to "tour")
+
+        assertSame(MarginalisIcons.ProjectMark, tab.markShown("Project step"))
+        assertEquals(16, tab.markShown("Project step").iconWidth)
+    }
+
     fun testTheTitleShowsWhatWaitsOnYouAndWhatWaitsOnTheAgent() {
         val first = agent.ask("Which release name?")
         agent.ask("Ship on Friday?")

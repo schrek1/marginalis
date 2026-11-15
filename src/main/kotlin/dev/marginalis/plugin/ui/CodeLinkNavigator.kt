@@ -5,6 +5,7 @@ import com.intellij.openapi.editor.Document
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
+import com.intellij.openapi.fileEditor.TextEditor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.util.Computable
@@ -24,9 +25,10 @@ object CodeLinkNavigator {
             is LineLookup.Missing -> return onUnresolved(lookup.problem)
             is LineLookup.Found -> lookup
         }
-        val editor = FileEditorManager.getInstance(project)
-            .openTextEditor(OpenFileDescriptor(project, file, lines.first - 1, 0), true) ?: return
-        if (lines.last > lines.first) editor.selectionModel.setSelection(span.start, span.end)
+        OpenFileDescriptor(project, file, lines.first - 1, 0).navigate(true)
+        if (lines.last == lines.first) return
+        val editor = (FileEditorManager.getInstance(project).getSelectedEditor(file) as? TextEditor)?.editor ?: return
+        editor.selectionModel.setSelection(span.start, span.end)
     }
 
     private sealed interface LineLookup {

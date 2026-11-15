@@ -163,4 +163,21 @@ class ViewHoldTest {
 
         assertNull(ViewHold.viewTopShowingANewLast(setOf("a", "b", "c", "d"), grown, contentHeight = 1600, viewHeight = 400))
     }
+
+    @Test
+    fun `a new member at the end of the last conversation is brought into view, not the conversation around it`() {
+        val conversation = Span("conversation", top = 900, bottom = 1358)
+        val member = Span("m1", top = 940, bottom = 1100)
+        val joining = Span("m2", top = 1100, bottom = 1350)
+        val before = cards.dropLast(1)
+
+        val viewTop = ViewHold.viewTopShowingANewLast(
+            setOf("a", "b", "c", "conversation", "m1"),
+            before + conversation + member + joining,
+            contentHeight = 1358,
+            viewHeight = 400,
+        )
+
+        assertEquals(958, viewTop)
+    }
 }

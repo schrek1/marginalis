@@ -34,6 +34,8 @@ class Pixels private constructor(private val image: BufferedImage) {
     fun sameAs(other: Pixels, at: Collection<Pair<Int, Int>>, tolerance: Int = 3): Boolean =
         at.all { (x, y) -> premultiplied(image.getRGB(x, y)).zip(premultiplied(other.image.getRGB(x, y))).all { (a, b) -> abs(a - b) <= tolerance } }
 
+    fun rightmost(columns: Int): Pixels = Pixels(image.getSubimage(width - columns, 0, columns, height))
+
     fun badgeDotArea(): List<Pair<Int, Int>> = everywhere().filter { (x, y) -> x >= width / 2 && y < height * 3 / 8 }
 
     private fun premultiplied(argb: Int): List<Int> {

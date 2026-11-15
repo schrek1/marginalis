@@ -1,6 +1,5 @@
 package dev.marginalis.plugin.ui
 
-import com.intellij.DynamicBundle
 import com.intellij.icons.AllIcons
 import com.intellij.ide.BrowserUtil
 import com.intellij.ide.SelectInContext
@@ -33,6 +32,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.wm.IdeFrame
 import com.intellij.ui.EditorTextField
 import com.intellij.ui.JBColor
@@ -69,9 +69,9 @@ import dev.marginalis.core.ThreadStatus
 import dev.marginalis.core.WebLink
 import dev.marginalis.plugin.avatars.AvatarsListener
 import dev.marginalis.plugin.settings.MarginalisSettings
-import dev.marginalis.plugin.settings.TimeFormat
 import dev.marginalis.plugin.store.Authors
 import dev.marginalis.plugin.store.MarginalisStore
+import dev.marginalis.plugin.ui.diff.ReviewDiffSteps
 import dev.marginalis.plugin.ui.toolwindow.MarginalisToolWindow
 import java.awt.BorderLayout
 import java.awt.Color
@@ -89,9 +89,7 @@ import java.awt.event.FocusEvent
 import java.awt.event.HierarchyEvent
 import java.awt.event.KeyAdapter
 import java.awt.event.KeyEvent
-import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
 import javax.swing.AbstractAction
 import javax.swing.Action
 import javax.swing.Box
@@ -121,11 +119,6 @@ class ThreadPanel(
 ) : JPanel(BorderLayout()), UiDataProvider {
 
     val threadId: String get() = thread.id
-
-    override fun uiDataSnapshot(sink: DataSink) {
-        sink[MarginalisDataKeys.THREAD] = thread
-        sink.lazy(SelectInContext.DATA_KEY) { ThreadSelectInContext(project, thread) }
-    }
 
     private val messagesBox = Box.createVerticalBox()
     private val messageComponents = mutableMapOf<String, JComponent>()
@@ -226,7 +219,7 @@ class ThreadPanel(
                     }
                     if (e.keyCode == KeyEvent.VK_ESCAPE) {
                         e.consume()
-                        escape()
+                        closeInnermost()
                     }
                 }
             })
@@ -237,10 +230,6 @@ class ThreadPanel(
     private var level = ThreadFolding.Level.DEFAULT
     private val keptOpen = mutableSetOf<String>()
     private val readWhileOpen = mutableSetOf<String>()
-    private val seenRead = thread.messages.filter { it.readByUser }.mapTo(mutableSetOf()) { it.id }
-
-    /** Marked unread elsewhere while shown here: only clicking into the thread, or opening it again, reads it. */
-    private val keptUnread = mutableSetOf<String>()
     private var foldedBy: FoldingPrefs? = null
     private var messagesRendered: Set<String>? = null
     private val openedHere = mutableSetOf<String>()
@@ -249,10 +238,12 @@ class ThreadPanel(
     private var headerToolbar: ActionToolbar? = null
 
     init {
-        val accent = when (thread.severity) {
-            Severity.BLOCKER -> JBColor(Color(0xDB, 0x58, 0x60), Color(0xC7, 0x54, 0x50))
-            Severity.NIT -> JBColor(Color(0xB8, 0xB8, 0xB8), Color(0x5E, 0x61, 0x64))
-            null -> JBColor(Color(0x9C, 0x27, 0xB0), Color(0xCE, 0x93, 0xD8))
+        val walkthroughColour = WalkthroughColours.of(project, listOf(thread))
+        val accent = when {
+            thread.severity == Severity.BLOCKER -> JBColor(Color(0xDB, 0x58, 0x60), Color(0xC7, 0x54, 0x50))
+            walkthroughColour != null -> walkthroughColour
+            thread.severity == Severity.NIT -> JBColor(Color(0xB8, 0xB8, 0xB8), Color(0x5E, 0x61, 0x64))
+            else -> JBColor(Color(0x9C, 0x27, 0xB0), Color(0xCE, 0x93, 0xD8))
         }
         border = JBUI.Borders.compound(
             JBUI.Borders.compound(
@@ -299,15 +290,14 @@ class ThreadPanel(
         })
         // The composer handles its own Esc: its editor consumes key events.
         registerKeyboardAction(
-            { escape() },
+            { closeInnermost() },
             KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
             WHEN_ANCESTOR_OF_FOCUSED_COMPONENT,
         )
         refresh()
     }
 
-    /** Closes the innermost open thing: the reply box first, then the thread. A new comment is only its reply box. */
-    private fun escape() {
+    private fun closeInnermost() {
         if (!composerExpanded || isDraft()) return closeAndRefocus()
         if (editingMessageId != null) cancelEdit() else setComposerExpanded(false)
         // The composer just left the hierarchy; the panel is the focus home for the next Esc.
@@ -315,10 +305,19 @@ class ThreadPanel(
     }
 
     private fun cancelEdit() {
-        editingMessageId = null
-        replyArea.text = ""
-        setComposerExpanded(false)
+        leaveEdit()
         refresh()
+    }
+
+    private fun leaveEdit() {
+        replyArea.text = MarginalisStore.getInstance(project).drafts[thread.id]?.text ?: ""
+        editingMessageId = null
+        setComposerExpanded(false)
+    }
+
+    override fun uiDataSnapshot(sink: DataSink) {
+        sink[MarginalisDataKeys.THREAD] = thread
+        sink.lazy(SelectInContext.DATA_KEY) { ThreadSelectInContext(project, thread) }
     }
 
     private fun closeAndRefocus() {
@@ -378,8 +377,8 @@ class ThreadPanel(
 
     private fun toggleResolved() {
         if (thread.status is ThreadStatus.Open) {
-            // Capture the next step BEFORE resolving: the walk holds only open threads.
-            val next = nextStepIfAutoAdvancing()
+            // Capture the next thread in the walk BEFORE resolving: the walk holds only open threads.
+            val next = nextInWalkIfAutoAdvancing()
             thread.resolve(Authors.user)
             MarginalisStore.getInstance(project).threads.notifyChanged(thread)
             if (next != null) {
@@ -393,32 +392,31 @@ class ThreadPanel(
     }
 
     private fun buildHeaderToolbar(): JComponent {
-        val firstStep = navAction("First Step", AllIcons.Actions.Play_first) { walk, i ->
+        val unit = if (thread.order != null) "Step" else "Comment"
+        val first = navAction("First $unit", AllIcons.Actions.Play_first) { walk, i ->
             walk.firstOrNull().takeIf { i != 0 }
         }
-        val previousStep = navAction("Previous Step", AllIcons.Actions.PreviousOccurence) { walk, i ->
+        val previous = navAction("Previous $unit", AllIcons.Actions.PreviousOccurence) { walk, i ->
             if (i != null && i > 0) walk[i - 1] else null
         }
-        val nextStep = navAction("Next Step", AllIcons.Actions.NextOccurence) { walk, i ->
+        val next = navAction("Next $unit", AllIcons.Actions.NextOccurence) { walk, i ->
             if (i == null) walk.firstOrNull() else walk.getOrNull(i + 1)
         }
-        val lastStep = navAction("Last Step", AllIcons.Actions.Play_last) { walk, i ->
+        val last = navAction("Last $unit", AllIcons.Actions.Play_last) { walk, i ->
             walk.lastOrNull().takeIf { i != walk.size - 1 }
         }
-        // The served skill promises the occurrence shortcuts walk steps
-        // without the tool window.
         val actionManager = ActionManager.getInstance()
-        previousStep.registerCustomShortcutSet(
+        previous.registerCustomShortcutSet(
             actionManager.getAction(IdeActions.ACTION_PREVIOUS_OCCURENCE).shortcutSet, this,
         )
-        nextStep.registerCustomShortcutSet(
+        next.registerCustomShortcutSet(
             actionManager.getAction(IdeActions.ACTION_NEXT_OCCURENCE).shortcutSet, this,
         )
         val group = DefaultActionGroup(
-            firstStep,
-            previousStep,
-            nextStep,
-            lastStep,
+            first,
+            previous,
+            next,
+            last,
             Separator.getInstance(),
             foldAction(),
             expandAction(),
@@ -621,8 +619,10 @@ class ThreadPanel(
         override fun actionPerformed(e: AnActionEvent) {
             val (walk, i) = WalkthroughNavigator.walkFrom(project, thread)
             val destination = target(walk, i) ?: return
-            if (MarginalisSettings.getInstance().leavingAStep == LeavingAStep.FOLD) onClose()
-            stayOrNavigateTo(destination)
+            when (MarginalisSettings.getInstance().leavingAStep) {
+                LeavingAStep.FOLD -> stayOrNavigateTo(destination, closeThisPanel = onClose)
+                LeavingAStep.KEEP_OPEN -> stayOrNavigateTo(destination, leaving = null)
+            }
         }
     }
 
@@ -712,7 +712,6 @@ class ThreadPanel(
 
         val editing = editingMessageId?.let { id -> thread.messages.find { it.id == id } }
         if (editing != null) {
-            editingMessageId = null
             // An agent may have read the original mid-edit; once read, it is record.
             val applied = !editing.seenByAnyAgent
             if (applied) {
@@ -720,8 +719,7 @@ class ThreadPanel(
                 // A Message can't bump its thread; without touch() a cursor sweep misses the revision.
                 thread.touch()
             }
-            replyArea.text = ""
-            setComposerExpanded(false)
+            leaveEdit()
             MarginalisStore.getInstance(project).threads.notifyChanged(thread)
             return editing.takeIf { applied }
         }
@@ -753,31 +751,23 @@ class ThreadPanel(
     }
 
     fun markReadIfSeen() {
-        keepWhatWasMarkedUnread()
         if (!mayMarkRead(false) || !isShowing || visibleRect.isEmpty || !ApplicationManager.getApplication().isActive) return
-        readHere(openMessages.filterNot { it.id in keptUnread })
+        markRead(openMessages.filterNot { it.markedUnreadByUser })
     }
 
     fun markRead() {
-        if (!mayMarkRead(true) || isDraft() || !ApplicationManager.getApplication().isActive) return
-        keptUnread.clear()
-        readHere(openMessages)
+        if (mayMarkReadOnClickingInto()) markRead(openMessages)
     }
 
-    private fun readHere(shown: List<Message>) {
-        shown.mapTo(seenRead) { it.id }
+    fun markReadWhatWasMarkedUnread() {
+        if (mayMarkReadOnClickingInto()) markRead(openMessages.filter { it.markedUnreadByUser })
+    }
+
+    private fun mayMarkReadOnClickingInto(): Boolean =
+        mayMarkRead(true) && !isDraft() && ApplicationManager.getApplication().isActive
+
+    private fun markRead(shown: List<Message>) {
         if (thread.markReadByUser(shown)) MarginalisStore.getInstance(project).threads.notifyChanged(thread)
-    }
-
-    private fun keepWhatWasMarkedUnread() {
-        for (message in thread.messages) {
-            if (message.readByUser) {
-                seenRead += message.id
-                keptUnread -= message.id
-            } else if (message.id in seenRead) {
-                keptUnread += message.id
-            }
-        }
     }
 
     private fun markReadIfSeenLater() {
@@ -799,8 +789,14 @@ class ThreadPanel(
         stayOrNavigateTo(wider)
     }
 
-    private fun stayOrNavigateTo(target: CommentThread) =
-        WalkthroughNavigator.navigateTo(project, target, from = editor)
+    private fun stayOrNavigateTo(target: CommentThread, closeThisPanel: () -> Unit = {}, leaving: CommentThread? = thread) {
+        val here = editor
+        val reviewIsLoadingAStep = here != null && ReviewDiffSteps.isLoadingAStepIn(project, here)
+        if (here != null && reviewIsLoadingAStep && ReviewDiffSteps.switchTo(project, here, target, leaving, onShown = closeThisPanel)) return
+        if (here != null && WalkthroughNavigator.navigateWithin(here, project, target, beforeMoving = closeThisPanel)) return
+        if (here != null && !reviewIsLoadingAStep && ReviewDiffSteps.switchTo(project, here, target, leaving, onShown = closeThisPanel)) return
+        WalkthroughNavigator.navigateTo(project, target, onShown = closeThisPanel)
+    }
 
     private fun pickAddressee(atOffset: Int) {
         val composerEditor = replyArea.editor ?: return
@@ -891,28 +887,26 @@ class ThreadPanel(
         markReadIfSeen()
     }
 
-    private fun nextStepIfAutoAdvancing(): CommentThread? {
+    private fun nextInWalkIfAutoAdvancing(): CommentThread? {
         if (!MarginalisSettings.getInstance().state.walkthroughAutoAdvance) return null
         val (walk, i) = WalkthroughNavigator.walkFrom(project, thread)
         return i?.let { walk.getOrNull(it + 1) }
     }
 
-    private fun messageTimeFormatter(): DateTimeFormatter =
-        when (MarginalisSettings.getInstance().timeFormat) {
-            TimeFormat.TWELVE_HOUR -> DateTimeFormatter.ofPattern("h:mm a", DynamicBundle.getLocale())
-            TimeFormat.TWENTY_FOUR_HOUR -> DateTimeFormatter.ofPattern("HH:mm")
-            TimeFormat.AUTO -> DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
-        }.withZone(ZoneId.systemDefault())
+    private fun messageTimeFormatter(): DateTimeFormatter = MarginalisSettings.getInstance().timeFormat.formatter()
 
-    /** Ordered steps use the stable total so they agree with the tool window's (n/total) as steps resolve. */
-    private fun walkPosition(): String {
-        val order = thread.order
-        if (order != null) {
-            val total = WalkthroughNavigator.stableTotal(project, thread) ?: return ""
-            return " · step $order/$total"
-        }
+    private fun openStatus(): String {
+        if (thread.order != null) return stepStatus("open")
         val (walk, i) = WalkthroughNavigator.walkFrom(project, thread)
-        return if (i != null && walk.size > 1) " · step ${i + 1}/${walk.size}" else ""
+        return if (i != null && walk.size > 1) "open · comment ${i + 1}/${walk.size}" else "open"
+    }
+
+    /** Steps use the stable total so they agree with the tool window's (n/total) as steps resolve. */
+    private fun stepStatus(status: String): String {
+        val order = thread.order ?: return status
+        val title = StringUtil.escapeXmlEntities(WalkthroughNavigator.title(project, thread))
+        val position = WalkthroughNavigator.stableTotal(project, thread)?.let { " ($order/$it)" }.orEmpty()
+        return "<html>${StringUtil.escapeXmlEntities(status)} · <b>$title</b>$position</html>"
     }
 
     private fun refreshSendOptions() {
@@ -962,9 +956,9 @@ class ThreadPanel(
 
     private fun statusText(): String = when {
         isDraft() -> "new comment — unsent"
-        thread.status is ThreadStatus.Open -> "open${walkPosition()}"
-        thread.status is ThreadStatus.Resolved -> "resolved by ${thread.resolvedBy?.displayName ?: "?"}"
-        else -> "orphaned (anchor deleted)"
+        thread.status is ThreadStatus.Open -> openStatus()
+        thread.status is ThreadStatus.Resolved -> stepStatus("resolved by ${thread.resolvedBy?.displayName ?: "?"}")
+        else -> stepStatus("orphaned (anchor deleted)")
     }
 
     override fun addNotify() {

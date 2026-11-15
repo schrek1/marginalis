@@ -57,7 +57,6 @@ class MarginalisStartup : ProjectActivity {
                 persisted.lastOrNull()?.let { store.threads.notifyChanged(it) }
             }
         }
-        // Queued behind the persisted threads: whether the tab opens depends on them.
         ApplicationManager.getApplication().invokeLater {
             if (!project.isDisposed) ProjectTab.openOnStartup(project)
         }
@@ -141,6 +140,7 @@ class MarginalisStartup : ProjectActivity {
                 MarginalisMarkers.attach(project, thread, document)
             }
         }
-        thread.file?.let { MarginalisMarkers.refreshIcons(project, it) }
+        val recoloured = if (store.threads.byId(thread.id) == null && thread.order != null) store.threads.all().mapNotNull { it.file } else emptyList()
+        (listOfNotNull(thread.file) + recoloured).distinct().forEach { MarginalisMarkers.refreshIcons(project, it) }
     }
 }

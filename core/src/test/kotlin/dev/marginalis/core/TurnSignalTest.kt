@@ -2,7 +2,6 @@ package dev.marginalis.core
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
 
 class TurnSignalTest {
 
@@ -13,76 +12,46 @@ class TurnSignalTest {
         CommentThread(file = "a.py", line = 1, anchorText = "x")
             .also { it.addMessage(Message(lastWord, "…")) }
 
-    @Test
-    fun `a tally counts only open threads, each on the side whose move it is`() {
-        val resolved = thread(agent).also { it.resolve(user) }
-        val orphaned = thread(user).also { it.markOrphaned() }
-        val tally = TurnTally.of(listOf(thread(agent), thread(agent), thread(user), resolved, orphaned))
-        assertEquals(TurnTally(user = 2, agent = 1), tally)
-    }
-
     private fun agentReply(read: Boolean) = thread(user).also {
         it.addMessage(Message(agent, "Done."))
         if (read) it.markReadByUser()
     }
 
-    @Test
-    fun `an agent reply you have not read shows your move`() {
-        val unreadReply = agentReply(read = false)
+    private fun agreed() = thread(agent).also { it.addMessage(Message.agreement(by = user, with = agent)) }
 
-        assertEquals(Turn.USER_OWES, TurnSignal.of(unreadReply))
+    @Test
+    fun `a tally counts only open threads, each on the side whose move it is`() {
+        val resolved = thread(agent).also { it.resolve(user) }
+        val orphaned = thread(user).also { it.markOrphaned() }
+        val tally = TurnTally.owed(listOf(thread(agent), thread(agent), thread(user), resolved, orphaned))
+        assertEquals(TurnTally(user = 2, agent = 1), tally)
     }
 
     @Test
-    fun `an agent reply you read but did not answer shows no signal while the turn stays yours`() {
-        val readReply = agentReply(read = true)
-
-        assertNull(TurnSignal.of(readReply))
-        assertEquals(Turn.USER_OWES, readReply.turn())
-    }
-
-    @Test
-    fun `a new agent message on a read thread brings your move back`() {
-        val readReply = agentReply(read = true).also { it.addMessage(Message(agent, "One more thing.")) }
-
-        assertEquals(Turn.USER_OWES, TurnSignal.of(readReply))
-    }
-
-    @Test
-    fun `a thread you answered shows the agent's move`() {
-        val answered = agentReply(read = true).also { it.addMessage(Message(user, "Thanks, go on.")) }
-
-        assertEquals(Turn.AGENT_OWES, TurnSignal.of(answered))
-    }
-
-    @Test
-    fun `a read fyi shows no signal`() {
-        val readFyi = CommentThread(file = "a.py", line = 1, anchorText = "x", intent = Intent.FYI).also {
-            it.addMessage(Message(agent, "FYI."))
-            it.markReadByUser()
-        }
-
-        assertNull(TurnSignal.of(readFyi))
-    }
-
-    @Test
-    fun `a signalled tally leaves out what you have read but the turn tally keeps it`() {
+    fun `a signalled tally leaves out what you have read but the owed tally keeps it`() {
         val threads = listOf(agentReply(read = false), agentReply(read = true), thread(user))
 
         assertEquals(TurnTally(user = 1, agent = 1), TurnTally.signalled(threads))
-        assertEquals(TurnTally(user = 2, agent = 1), TurnTally.of(threads))
+        assertEquals(TurnTally(user = 2, agent = 1), TurnTally.owed(threads))
     }
 
     @Test
-    fun `a signalled tally leaves out an Agree the agent has not answered yet`() {
-        val builder = Author.Agent("Claude · builder", "claude-builder")
-        val agreed = CommentThread(file = "a.py", line = 1, anchorText = "x").also {
-            it.addMessage(Message(builder, "Rename it?"))
-            it.addMessage(Message.agreement(by = user, with = builder))
+    fun `neither tally counts an Agree the agent has not answered, though the real turn is the agent's`() {
+        val agreed = agreed()
+
+        assertEquals(Turn.AGENT_OWES, agreed.turn())
+        assertEquals(TurnTally(user = 0, agent = 0), TurnTally.owed(listOf(agreed)))
+        assertEquals(TurnTally(user = 0, agent = 1), TurnTally.signalled(listOf(agreed, thread(user))))
+    }
+
+    @Test
+    fun `neither tally counts an Agree the agent has answered`() {
+        val answered = AgreementAnswer.entries.map { answer ->
+            agreed().also { it.answerAgreement(by = agent, answer = answer) }
         }
 
-        assertEquals(TurnTally(user = 0, agent = 1), TurnTally.of(listOf(agreed)))
-        assertEquals(TurnTally(user = 0, agent = 1), TurnTally.signalled(listOf(agreed, thread(user))))
+        assertEquals(TurnTally(user = 0, agent = 0), TurnTally.owed(answered))
+        assertEquals(TurnTally(user = 0, agent = 0), TurnTally.signalled(answered))
     }
 
     @Test

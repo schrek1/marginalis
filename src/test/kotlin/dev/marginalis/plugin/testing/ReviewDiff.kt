@@ -43,6 +43,13 @@ class ReviewDiffs(private val project: Project, private val disposable: Disposab
     fun sideBySide(path: String, before: String, after: String): ReviewDiff =
         show(revision(path, before), revision(path, after)) { context, request -> SimpleDiffViewer(context, request) }
 
+    fun sideBySideDiffedOnTheEdt(path: String, before: String, after: String): ReviewDiff =
+        show(revision(path, before), revision(path, after)) { context, request ->
+            object : SimpleDiffViewer(context, request) {
+                override fun forceRediffSynchronously() = true
+            }
+        }
+
     fun unified(path: String, before: String, after: String): ReviewDiff =
         show(revision(path, before), revision(path, after)) { context, request -> UnifiedDiffViewer(context, request) }
 
@@ -107,17 +114,29 @@ class ReviewDiffs(private val project: Project, private val disposable: Disposab
             override fun requestFocusInWindow() {}
         }
         val request = SimpleDiffRequest("Review", before, after, "Base", "Pull request")
+        return build(context, request, viewerOf, inBackground = false)
+    }
+
+    private fun build(
+        context: DiffContext,
+        request: SimpleDiffRequest,
+        viewerOf: (DiffContext, SimpleDiffRequest) -> DiffViewerBase,
+        inBackground: Boolean,
+    ): ReviewDiff {
         val viewer = viewerOf(context, request)
         ReviewDiffMarkers().onViewerCreated(viewer, context, request)
-        return ReviewDiff(project, viewer).also { diff ->
-            Disposer.register(disposable) { diff.close() }
-            viewer.init()
-            diff.rediff()
-        }
+        val diff = ReviewDiff(project, viewer) { background -> build(context, request, viewerOf, background) }
+        Disposer.register(disposable) { diff.close() }
+        if (!inBackground) diff.broughtToFront()
+        return diff
     }
 }
 
-class ReviewDiff(private val project: Project, val viewer: DiffViewerBase) {
+class ReviewDiff(
+    private val project: Project,
+    val viewer: DiffViewerBase,
+    private val buildAnotherViewer: ((inBackground: Boolean) -> ReviewDiff)? = null,
+) {
 
     private var rediffs = 0
     private var closed = false
@@ -146,12 +165,26 @@ class ReviewDiff(private val project: Project, val viewer: DiffViewerBase) {
 
     val baseEditor: EditorEx get() = (viewer as SimpleDiffViewer).getEditor(Side.LEFT)
 
-    fun clickBaseIcon(row: Int) {
-        val document = baseEditor.document
+    fun rebuilt(inBackground: Boolean = false): ReviewDiff {
+        close()
+        return checkNotNull(buildAnotherViewer) { "this diff cannot build another viewer" }(inBackground)
+    }
+
+    fun broughtToFront() {
+        viewer.init()
+        rediff()
+    }
+
+    fun clickBaseIcon(row: Int) = clickDocumentIcon(baseEditor, row)
+
+    fun clickProjectFileIcon(row: Int) = clickDocumentIcon(editor, row)
+
+    private fun clickDocumentIcon(on: EditorEx, row: Int) {
+        val document = on.document
         val click = DocumentMarkupModel.forDocument(document, project, false)!!.allHighlighters
             .filter { it.isValid && document.getLineNumber(it.startOffset) == row - 1 }
             .firstNotNullOf { it.gutterIconRenderer as? ThreadGutterIconRenderer }.clickAction
-        click.actionPerformed(TestActionEvent.createTestEvent(click, editorContext(baseEditor)))
+        click.actionPerformed(TestActionEvent.createTestEvent(click, editorContext(on)))
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
     }
 
@@ -180,6 +213,13 @@ class ReviewDiff(private val project: Project, val viewer: DiffViewerBase) {
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
     }
 
+    fun broughtToFrontBeforeAnythingLaterRuns() {
+        val before = rediffs
+        viewer.init()
+        viewer.rediff(true)
+        check(rediffs > before) { "the diff did not land within the call" }
+    }
+
     fun iconRows(): List<Int> = icons().map { it.first }.sorted()
 
     fun textOfRow(row: Int): String {
@@ -192,6 +232,7 @@ class ReviewDiff(private val project: Project, val viewer: DiffViewerBase) {
     fun tooltipAt(row: Int): String = icons().single { it.first == row }.second.tooltipText
 
     fun clickIcon(row: Int) {
+        PlatformTestUtil.waitWithEventsDispatching("the diff never painted an icon on row $row", { icons().any { it.first == row } }, 10)
         val click = icons().single { it.first == row }.second.clickAction
         click.actionPerformed(TestActionEvent.createTestEvent(click, editorContext()))
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()

@@ -26,6 +26,21 @@ class FileTurnsTest {
     }
 
     @Test
+    fun `an Agree the agent answered, either way, puts no badge on its file`() {
+        AgreementAnswer.entries.forEach { answer ->
+            val turns = FileTurns()
+            val answered = thread("a.py", agent).also {
+                it.addMessage(Message.agreement(by = user, with = agent))
+                it.answerAgreement(by = agent, answer = answer)
+            }
+
+            turns.track("a.py", listOf(answered))
+
+            assertNull(turns.of("a.py"), "answered $answer")
+        }
+    }
+
+    @Test
     fun `nothing tracked means an empty snapshot`() {
         val turns = FileTurns()
         assertTrue(turns.isEmpty())

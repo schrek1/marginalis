@@ -34,6 +34,7 @@ import dev.marginalis.core.Intent
 import dev.marginalis.core.LeavingAStep
 import dev.marginalis.core.ListWhileInFront
 import dev.marginalis.core.LongThreadFolding
+import dev.marginalis.core.MarginTabShows
 import dev.marginalis.core.Mark
 import dev.marginalis.core.MarkSubject
 import dev.marginalis.core.People
@@ -286,17 +287,22 @@ class MarginalisConfigurable : Configurable {
                 }
             }
             row {
-                checkBox("Jump to the next step after resolving")
-                    .comment("While walking a guided walkthrough, resolving a step opens the next one.")
+                checkBox("Jump to the next thread after resolving")
+                    .comment("Resolving a step opens the next step of its walkthrough; resolving a comment opens the next open comment.")
                     .bindSelected(state::walkthroughAutoAdvance)
             }
             row("When stepping to another step:") {
                 comboBox(LeavingAStep.entries, textListCellRenderer { it?.let(::labelOf) })
-                    .comment("A thread's own Next, Previous, First and Last Step, in a file's editor and in a review.")
+                    .comment("A thread's Next, Previous, First and Last arrows, in a file's editor and in a review. Resolving a thread always folds it.")
                     .bindItem(
                         { settings.leavingAStep },
                         { settings.leavingAStep = it ?: LeavingAStep.FOLD },
                     )
+            }
+            row {
+                checkBox("Keep walkthrough steps in a pull or merge request review across files (experimental)")
+                    .comment("Relies on a part of the IDE that may change. If it stops working, steps open in the file's own tab.")
+                    .bindSelected(state::keepStepsInReviewAcrossFiles)
             }
             row {
                 checkBox("Notify when the agent posts elsewhere")
@@ -344,16 +350,19 @@ class MarginalisConfigurable : Configurable {
                 }
             }
             group("Project Tab") {
-                row {
-                    checkBox("Show the Margin tab when a project opens")
-                        .comment("When off, the tab opens once an agent starts a project thread, or when you open it.")
-                        .bindSelected(state::showTabOnProjectOpen)
+                row("Margin tab:") {
+                    comboBox(MarginTabShows.entries, textListCellRenderer { it?.let(::labelOf) })
+                        .comment("When it shows only with something in it, an agent's new project thread opens it behind your file. A tab you pin always stays.")
+                        .bindItem(
+                            { settings.marginTabShows },
+                            { settings.marginTabShows = it ?: MarginTabShows.ALWAYS },
+                        )
                 }
                 row("List while the tab is in front:") {
                     comboBox(ListWhileInFront.entries, textListCellRenderer { it?.let(::labelOf) })
                         .comment(
-                            "Live keeps the latest activity on top. Hold still keeps everything in place " +
-                                "while you read, and new threads wait behind a pill.",
+                            "Live keeps the list in its sort order as threads change. " +
+                                "Hold still keeps everything in place while you read, and new threads wait behind a pill.",
                         )
                         .bindItem(
                             { settings.listWhileInFront },
@@ -367,7 +376,7 @@ class MarginalisConfigurable : Configurable {
                 }
                 row("What counts as read:") {
                     comboBox(ReadWhen.entries, textListCellRenderer { it?.let(::labelOf) })
-                        .comment("Matters most for an FYI: its ✉ clears once you've read it.")
+                        .comment("A thread you've read drops its ✉ in the tool window, its stripe icon and the tab title, and an FYI asks nothing more.")
                         .bindItem(
                             { settings.readWhen },
                             { settings.readWhen = it ?: ReadWhen.EXPANDED_IN_FRONT },
@@ -415,6 +424,7 @@ class MarginalisConfigurable : Configurable {
         val settings = MarginalisSettings.getInstance()
         val bylinesBefore = bylineSettings()
         val foldingBefore = settings.foldingPrefs
+        val timeFormatBefore = settings.timeFormat
         val tabBefore = settings.projectTabPrefs
         val liveByDefaultBefore = settings.state.liveByDefault
         panel?.apply()
@@ -422,7 +432,7 @@ class MarginalisConfigurable : Configurable {
         settings.state.userPicture = userPicture
         Pictures.deleteUnreferenced(edited, userPicture)
         resetPeople()
-        if (bylineSettings() != bylinesBefore || settings.foldingPrefs != foldingBefore) refreshThreads()
+        if (bylineSettings() != bylinesBefore || settings.foldingPrefs != foldingBefore || settings.timeFormat != timeFormatBefore) refreshThreads()
         if (settings.projectTabPrefs != tabBefore) ProjectTab.applyPrefs()
         if (settings.state.liveByDefault != liveByDefaultBefore) MarginalisStore.liveByDefaultChanged(settingsWasLive = liveByDefaultBefore)
     }
@@ -495,6 +505,11 @@ class MarginalisConfigurable : Configurable {
         fun labelOf(leaving: LeavingAStep): String = when (leaving) {
             LeavingAStep.FOLD -> "Fold the step you leave"
             LeavingAStep.KEEP_OPEN -> "Keep it open"
+        }
+
+        fun labelOf(shows: MarginTabShows): String = when (shows) {
+            MarginTabShows.ALWAYS -> "Keep the Margin tab open"
+            MarginTabShows.WITH_SOMETHING_IN_IT -> "Show it when there's something in it"
         }
 
         fun labelOf(list: ListWhileInFront): String = when (list) {

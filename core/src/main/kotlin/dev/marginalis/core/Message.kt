@@ -54,16 +54,21 @@ class Message(
     var readByUser: Boolean = readByUser || author is Author.User
         private set
 
+    @Volatile
+    var markedUnreadByUser: Boolean = false
+        private set
+
     fun markReadByUser(): Boolean {
+        markedUnreadByUser = false
         if (readByUser) return false
         readByUser = true
         return true
     }
 
-    /** The user's own words are always read; only someone else's message can be unread again. */
     fun markUnreadByUser(): Boolean {
         if (!readByUser || author is Author.User) return false
         readByUser = false
+        markedUnreadByUser = true
         return true
     }
 

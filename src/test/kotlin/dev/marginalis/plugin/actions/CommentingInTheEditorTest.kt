@@ -118,6 +118,19 @@ class CommentingInTheEditorTest : HttpContractTestCase() {
         assertTrue(shown().contains("first thought"))
     }
 
+    fun testChoosingAnOpenThreadAgainFromCommentingFoldsIt() {
+        sample()
+        agent.addOnLine(7, "body" to "first thought")
+        reviewer.addOnLine(7, "body" to "second thought")
+        user.choose(mutableListOf(), "first thought")
+        val editor = user.comment(SAMPLE, 7)
+        user.choose(mutableListOf(), "first thought")
+
+        user.invoke(addComment, editor)
+
+        assertEquals(emptyList<ThreadPanel>(), user.panels(editor))
+    }
+
     fun testCommentingOnALineWhoseThreadIsResolvedStartsAFreshDraft() {
         sample()
         val id = agent.addOnLine(7, "body" to "Done with.")

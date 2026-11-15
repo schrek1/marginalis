@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test
 /**
  * Everything the user left in the margin survives a real stop and start of the IDE process (MARG-105): line, file and
  * project threads with their replies, what the user has read, a resolved thread, and the project's own settings (Sort,
- * a live project, Guided layout). After the start the markers sit on their lines, and the Margin tab and the tool
+ * a live project, walkthrough layout). After the start the markers sit on their lines, and the Margin tab and the tool
  * window hold the same threads.
  */
 @Tag("core")
@@ -52,7 +52,7 @@ class ThreadsSurviveRestartTest : SandboxScenario("threads_survive_restart") {
         SandboxUi.chooseMarginSort("Newest first")
         // Making the project live needs a listening agent.
         Agent.listensWhile { ToolWindowUi.toggleProjectLive() }
-        ToolWindowUi.chooseGuidedLayout("By file")
+        ToolWindowUi.chooseWalkthroughLayout("By File")
 
         before = snapshot()
         check("before the restart: five threads, one resolved", before.statuses.size == 5 && before.statuses[resolved] == "resolved", before.statuses)
@@ -75,7 +75,7 @@ class ThreadsSurviveRestartTest : SandboxScenario("threads_survive_restart") {
         check("every thread keeps its messages", after.messages == before.messages, "${after.messages} vs ${before.messages}")
         check("what the user had read stays read, and what not, unread", after.unreadByUser == before.unreadByUser,
             "${after.unreadByUser} vs ${before.unreadByUser}")
-        check("the project's settings survive: Sort, a live project, Guided layout", after.settings == before.settings,
+        check("the project's settings survive: Sort, a live project, walkthrough layout", after.settings == before.settings,
             "${after.settings} vs ${before.settings}")
 
         SandboxUi.openInEditor(GREETING)
@@ -116,7 +116,7 @@ class ThreadsSurviveRestartTest : SandboxScenario("threads_survive_restart") {
             statuses = threads.mapValues { (_, thread) -> status(thread) },
             messages = threads.mapValues { (_, thread) -> thread.get("messages").asInt },
             unreadByUser = unreadByUser,
-            settings = listOf(SandboxUi.marginSort(), SandboxUi.projectLive().toString(), ToolWindowUi.guidedLayout()),
+            settings = listOf(SandboxUi.marginSort(), SandboxUi.projectLive().toString(), ToolWindowUi.walkthroughLayout()),
         )
     }
 

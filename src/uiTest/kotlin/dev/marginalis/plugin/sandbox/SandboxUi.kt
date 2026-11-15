@@ -1091,8 +1091,7 @@ function messagePane(root, opening) {
         // moment on a desktop and seconds on a CI runner (the plugin side is MARG-96), so wait it out.
         awaitUntil("the Margin tab done opening behind the file in front", Duration.ofSeconds(30)) {
             val state = obj(js(MARGIN + EDITOR_STATE))
-            val opening = state.get("selected").asString == "Margin" && !state.get("marginOpen").asBoolean
-            !opening && !state.get("openBehindQueued").asBoolean
+            !(state.get("selected").asString == "Margin" && !state.get("marginOpen").asBoolean)
         }
         settleEditorSelection()
         println("INFO  before the reveal: ${js(MARGIN + EDITOR_STATE)}")
@@ -1105,9 +1104,7 @@ function messagePane(root, opening) {
     private const val EDITOR_STATE = """
         var editors = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project);
         var files = editors.getSelectedFiles();
-        var tabState = service('dev.marginalis.plugin.ui.tab.ProjectTabState');
-        String(JSON.stringify({ selected: files.length ? String(files[0].getName()) : '', marginOpen: marginTabOpen(),
-                                openBehindQueued: fieldOf(tabState, 'openBehindQueued').get() }))
+        String(JSON.stringify({ selected: files.length ? String(files[0].getName()) : '', marginOpen: marginTabOpen() }))
         """
 
     /** Waits until the editor in front has not changed for `quiet`, at most `limit`. */
@@ -1232,7 +1229,7 @@ function sortButton() {
         )
     }
 
-    fun marginSort(): String = js("String(service('dev.marginalis.plugin.ui.tab.ProjectTabSort').getOrder().getStored())")
+    fun marginSort(): String = js("String(service('dev.marginalis.plugin.ui.tab.ProjectTabSort').getOrder().name())")
 
     /** Forced save of the project's workspace.xml, off the EDT: non-forced saves skip recently loaded components. */
     fun saveProjectState() {
@@ -1244,4 +1241,95 @@ function sortButton() {
     fun obj(raw: String): JsonObject = JsonParser.parseString(raw).asJsonObject
 
     fun stringList(raw: String): List<String> = JsonParser.parseString(raw).asJsonArray.map { it.asString }
+
+    // --- balloons ---------------------------------------------------------------------------------------------------
+
+    fun expireBalloons() {
+        js(
+            """
+            var shown = com.intellij.notification.NotificationsManager.getNotificationsManager()
+                .getNotificationsOfType(com.intellij.notification.Notification, project);
+            for (var i = 0; i < shown.length; i++) shown[i].expire();
+            'ok'
+            """,
+        )
+    }
+
+    /** The content of every Marginalis notification still shown in the project. */
+    fun marginalisBalloons(): List<String> = stringList(
+        js(
+            """
+            var shown = com.intellij.notification.NotificationsManager.getNotificationsManager()
+                .getNotificationsOfType(com.intellij.notification.Notification, project);
+            var texts = [];
+            for (var i = 0; i < shown.length; i++) {
+                if (String(shown[i].getGroupId()) == 'Marginalis') texts.push(String(shown[i].getContent()));
+            }
+            String(JSON.stringify(texts))
+            """,
+        ),
+    )
+
+    /** The names [closeOnOpen] and [previewFailsOn] have closed so far, in order. */
+    fun closedOnOpen(): List<String> =
+        js("String(java.lang.System.getProperty('marginalis.sandbox.closeOnOpen.closed', ''))").split(' ').filter { it.isNotEmpty() }
+
+    /**
+     * From now on the IDE closes a file named [fileName] the moment it opens, even as plain text; null stops that.
+     */
+    fun closeOnOpen(fileName: String?) = closeOpening("marginalis.sandbox.closeOnOpen", fileName)
+
+    /**
+     * From now on the IDE closes a file named [fileName] the moment it opens with any editor besides Marginalis's
+     * text-only one, as it does when the file's preview editor fails to build (an OpenAPI spec whose Swagger preview
+     * crashes in JCEF); null stops that.
+     */
+    fun previewFailsOn(fileName: String?) = closeOpening("marginalis.sandbox.previewFailsOn", fileName)
+
+    private fun closeOpening(property: String, fileName: String?) {
+        js(
+            """
+            var props = java.lang.System.getProperties();
+            if (${lit(fileName ?: "")} == '') props.remove(${lit(property)});
+            else props.put(${lit(property)}, ${lit(fileName ?: "")});
+            if (props.get('marginalis.sandbox.closeOnOpen.installed') == null) {
+                props.put('marginalis.sandbox.closeOnOpen.installed', 'yes');
+                // A plain Proxy: Rhino's interface adapters implement only abstract methods, and every method of this
+                // listener is a default one, so they would never be called.
+                var listenerType = com.intellij.openapi.fileEditor.FileEditorManagerListener;
+                var platformLoader = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).getClass().getClassLoader();
+                var interfaces = java.lang.reflect.Array.newInstance(java.lang.Class, 1);
+                interfaces[0] = java.lang.Class.forName('com.intellij.openapi.fileEditor.FileEditorManagerListener', false, platformLoader);
+                var listener = java.lang.reflect.Proxy.newProxyInstance(
+                    platformLoader,
+                    interfaces,
+                    new java.lang.reflect.InvocationHandler({
+                        invoke: function (proxy, method, args) {
+                            var name = String(method.getName());
+                            var opened = name == 'fileOpened' ? String(args[1].getName()) : null;
+                            var withPreview = function () {
+                                var providers = args[0].getComposite(args[1]).getAllProviders();
+                                for (var i = 0; i < providers.size(); i++) {
+                                    if (String(providers.get(i).getEditorTypeId()) != 'marginalis-text-only') return true;
+                                }
+                                return false;
+                            };
+                            if (opened != null && (opened == String(java.lang.System.getProperty('marginalis.sandbox.closeOnOpen'))
+                                || opened == String(java.lang.System.getProperty('marginalis.sandbox.previewFailsOn')) && withPreview())) {
+                                args[0].closeFile(args[1]);
+                                java.lang.System.setProperty('marginalis.sandbox.closeOnOpen.closed',
+                                    java.lang.System.getProperty('marginalis.sandbox.closeOnOpen.closed', '') + ' ' + args[1].getName());
+                            }
+                            if (name == 'hashCode') return java.lang.Integer.valueOf(java.lang.System.identityHashCode(proxy));
+                            if (name == 'equals') return java.lang.Boolean.valueOf(proxy === args[0]);
+                            if (name == 'toString') return 'sandbox close-on-open listener';
+                            return null;
+                        }
+                    }));
+                project.getMessageBus().connect().subscribe(listenerType.FILE_EDITOR_MANAGER, listener);
+            }
+            'ok'
+            """,
+        )
+    }
 }

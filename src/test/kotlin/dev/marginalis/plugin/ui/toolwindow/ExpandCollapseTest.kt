@@ -8,11 +8,13 @@ class ExpandCollapseTest : ToolWindowTestCase() {
     override fun setUp() {
         super.setUp()
         deep()
-        window.layOutGuided("By folder")
+        sample()
+        agent.addOnLine(3, "body" to "a plain comment")
+        window.layOutWalkthroughsBy("By Folder")
     }
 
     fun testCollapseFoldsOneLevelFurtherOutWithEachPressUpToTheSection() {
-        window.click("Step 16", under = GUIDED)
+        window.click("Step 16", under = WALKTHROUGH)
 
         val foldedPressByPress = LEVELS_FROM_STEP_16.map {
             press(COLLAPSE)
@@ -20,21 +22,21 @@ class ExpandCollapseTest : ToolWindowTestCase() {
         }
 
         assertEquals(LEVELS_FROM_STEP_16, foldedPressByPress)
-        assertFalse(window.isExpanded(GUIDED))
+        assertFalse(window.isExpanded(WALKTHROUGH))
         assertTrue(window.isExpanded("Open"))
     }
 
     fun testCollapseFoldsEverythingInsideTheSectionAsIntelliJDoes() {
-        window.click("Step 16", under = GUIDED)
+        window.click("Step 16", under = WALKTHROUGH)
         repeat(LEVELS_FROM_STEP_16.size) { press(COLLAPSE) }
 
-        window.toggleFolding(GUIDED)
+        window.toggleFolding(WALKTHROUGH)
 
-        assertEquals(emptyList<String>(), foldersReopeningAsLeftInside(GUIDED))
+        assertEquals(emptyList<String>(), foldersReopeningAsLeftInside(WALKTHROUGH))
     }
 
     fun testPastTheSectionCollapseFoldsEverySection() {
-        window.click(GUIDED)
+        window.click(WALKTHROUGH)
 
         press(COLLAPSE)
         press(COLLAPSE)
@@ -47,7 +49,7 @@ class ExpandCollapseTest : ToolWindowTestCase() {
 
         press(EXPAND)
 
-        assertEquals(emptyList<String>(), foldedFoldersUnder(GUIDED))
+        assertEquals(emptyList<String>(), foldedFoldersUnder(WALKTHROUGH))
         assertFalse(window.isExpanded("Open"))
     }
 
@@ -61,16 +63,16 @@ class ExpandCollapseTest : ToolWindowTestCase() {
     }
 
     fun testExpandOnAFoldedFolderOpensThatFolder() {
-        window.toggleFolding(ORDERS, under = GUIDED)
-        window.click(ORDERS, under = GUIDED)
+        window.toggleFolding(ORDERS, under = WALKTHROUGH)
+        window.click(ORDERS, under = WALKTHROUGH)
 
         press(EXPAND)
 
-        assertTrue(window.isExpanded(ORDERS, under = GUIDED))
+        assertTrue(window.isExpanded(ORDERS, under = WALKTHROUGH))
     }
 
     private fun foldEverySection() {
-        window.click(GUIDED)
+        window.click(WALKTHROUGH)
         press(COLLAPSE)
         press(COLLAPSE)
     }
@@ -118,10 +120,10 @@ class ExpandCollapseTest : ToolWindowTestCase() {
     private fun name(path: TreePath): String = (path.lastPathComponent as DefaultMutableTreeNode).userObject.toString()
 
     private companion object {
-        const val GUIDED = "Guided SHOP-42"
+        const val WALKTHROUGH = "SHOP-42"
         const val ORDERS = "shop-orders/src"
         val LEVELS_FROM_STEP_16 = listOf(
-            "api", "customer/settings", "main/java/com/acme/backend/common", "shop-common/src", "backend", "acme", GUIDED,
+            "api", "customer/settings", "main/java/com/acme/backend/common", "shop-common/src", "backend", "acme", WALKTHROUGH,
         )
         val COLLAPSE = listOf("Collapse Folder", "Collapse Section", "Collapse All Sections", "Collapse")
         val EXPAND = listOf("Expand Folder", "Expand Section", "Expand All Sections", "Expand")

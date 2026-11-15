@@ -13,7 +13,7 @@ class ThreadsCodecTest {
     fun `full round trip preserves everything`() {
         val agent = Author.Agent("Claude", id = "claude-1")
         val user = Author.User("Muhammad")
-        val t = CommentThread("src/a.py", 7, "def f():", order = 2, walkthrough = "A")
+        val t = CommentThread("src/a.py", 7, "def f():", order = 2, walkthrough = "A", walkthroughId = "w-7")
         t.addMessage(Message(agent, "**bold** question"))
         t.addMessage(Message(user, "answer"))
         t.resolve(user)
@@ -26,6 +26,7 @@ class ThreadsCodecTest {
         assertEquals("def f():", decoded.anchorText)
         assertEquals(2, decoded.order)
         assertEquals("A", decoded.walkthrough)
+        assertEquals("w-7", decoded.walkthroughId)
         assertEquals(t.createdAt, decoded.createdAt)
         val status = decoded.status
         assertIs<ThreadStatus.Resolved>(status)
@@ -82,6 +83,33 @@ class ThreadsCodecTest {
             }]}
         """.trimIndent()
         assertEquals("B", ThreadsCodec.decode(legacy).single().walkthrough)
+    }
+
+    @Test
+    fun `steps saved before walkthroughs had identities split where a step number repeats`() {
+        fun step(id: String, order: Int, second: Int) =
+            """{"id":"$id","file":"a.py","line":$order,"anchor_text":"x","order":$order,"walkthrough":"A",
+              "status":"RESOLVED","resolved_by":{"kind":"USER","name":"M"},
+              "created_at":"2026-07-18T12:00:${"%02d".format(second)}Z","messages":[]}"""
+        val legacy = """{"version":1,"threads":[${listOf(step("n1", 1, 3), step("o2", 2, 1), step("o1", 1, 0), step("n2", 2, 4)).joinToString(",")}]}"""
+
+        val walkthroughOf = ThreadsCodec.decode(legacy).associate { it.id to it.walkthroughId }
+
+        assertEquals(walkthroughOf["o1"], walkthroughOf["o2"])
+        assertEquals(walkthroughOf["n1"], walkthroughOf["n2"])
+        assertTrue(walkthroughOf["o1"] != null && walkthroughOf["o1"] != walkthroughOf["n1"])
+    }
+
+    @Test
+    fun `a replayed walkthrough identity is written back on the next save`() {
+        val legacy = """
+            {"version":1,"threads":[{
+              "id":"t2","file":"a.py","line":3,"anchor_text":"x = 1","order":1,
+              "status":"OPEN","created_at":"2026-07-18T12:00:00Z","messages":[]
+            }]}
+        """.trimIndent()
+        val loaded = ThreadsCodec.decode(legacy).single()
+        assertEquals(loaded.walkthroughId, ThreadsCodec.decode(ThreadsCodec.encode(listOf(loaded))).single().walkthroughId)
     }
 
     @Test
@@ -362,13 +390,13 @@ class ThreadsCodecTest {
         val answered = CommentThread("a.py", 1, "x")
         answered.addMessage(Message(agent, "Rename it?"))
         answered.addMessage(Message.agreement(by = Author.User("Muhammad"), with = agent))
-        answered.answerAgreement(by = agent, state = AgentState.WORKING)
+        answered.answerAgreement(by = agent, answer = AgreementAnswer.WORKING)
         val unanswered = CommentThread("a.py", 2, "y").also { it.addMessage(Message(agent, "Hm?")) }
 
         val encoded = ThreadsCodec.encode(listOf(answered, unanswered))
         val decoded = ThreadsCodec.decode(encoded)
 
-        assertEquals(listOf(AgentState.WORKING, null), decoded.map { it.agentState })
+        assertEquals(listOf(AgreementAnswer.WORKING, null), decoded.map { it.agreementAnswer })
         assertEquals(1, Regex("\"agent_state\"").findAll(encoded).count())
     }
 
@@ -379,7 +407,40 @@ class ThreadsCodecTest {
               "created_at": "2026-01-01T00:00:00Z", "agent_state": "pondering", "messages": []}]}
         """.trimIndent()
 
-        assertEquals(null, ThreadsCodec.decode(stored).single().agentState)
+        assertEquals(null, ThreadsCodec.decode(stored).single().agreementAnswer)
+    }
+
+    @Test
+    fun `a file without agent states loads every open Agree as unanswered`() {
+        val stored = """
+            {"threads": [{"id": "t1", "file": "a.py", "line": 1, "anchor_text": "x", "status": "OPEN",
+              "created_at": "2026-01-01T00:00:00Z", "messages": [
+                {"id": "m1", "author": {"kind": "AGENT", "name": "Claude", "id": "claude-main"}, "body": "Rename it?",
+                 "created_at": "2026-01-01T00:00:00Z"},
+                {"id": "m2", "author": {"kind": "USER", "name": "Muhammad"}, "body": "Agreed.", "to": "claude-main",
+                 "agrees": true, "created_at": "2026-01-01T00:01:00Z"}
+              ]}]}
+        """.trimIndent()
+
+        val decoded = ThreadsCodec.decode(stored).single()
+
+        assertEquals(null, decoded.agreementAnswer)
+        assertTrue(decoded.awaitsAgreementAnswer)
+    }
+
+    @Test
+    fun `a stored answer whose Agree is no longer the last word loads as none`() {
+        val stored = """
+            {"threads": [{"id": "t1", "file": "a.py", "line": 1, "anchor_text": "x", "status": "OPEN",
+              "created_at": "2026-01-01T00:00:00Z", "agent_state": "working", "messages": [
+                {"id": "m1", "author": {"kind": "AGENT", "name": "Claude", "id": "claude-main"}, "body": "Rename it?",
+                 "created_at": "2026-01-01T00:00:00Z"},
+                {"id": "m2", "author": {"kind": "USER", "name": "Muhammad"}, "body": "Actually, wait.",
+                 "created_at": "2026-01-01T00:01:00Z"}
+              ]}]}
+        """.trimIndent()
+
+        assertEquals(null, ThreadsCodec.decode(stored).single().agreementAnswer)
     }
 
     @Test

@@ -40,6 +40,12 @@ abstract class HttpContractTestCase : MarginalisTestCase() {
         return response
     }
 
+    protected fun Agent.answerAgreement(threadId: String, state: String): Agent.Response {
+        val response = post("comment_agent_state", "thread_id" to threadId, "state" to state)
+        assertEquals(response.body, 200, response.status)
+        return response
+    }
+
     protected fun Agent.threads(vararg params: Pair<String, Any?>): List<JsonObject> {
         val response = get("comment_list", *params)
         assertEquals(response.body, 200, response.status)

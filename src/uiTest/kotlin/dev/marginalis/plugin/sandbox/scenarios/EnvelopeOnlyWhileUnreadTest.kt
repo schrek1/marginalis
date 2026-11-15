@@ -78,10 +78,11 @@ class EnvelopeOnlyWhileUnreadTest : SandboxScenario("envelope_only_while_unread"
         val title = marginTabTitleUntil("✉ 1")
         check("Margin tab: the title counts only the unread project thread (✉ 1)", title == "✉ 1", title)
         val cards = readUntil("the Margin tab cards' turn signals", read = { marginCardSignals() }) { cards ->
-            cards[id("Project A")] == "you" && cards[id("Project B")] == "none"
+            cards[id("Project A")] == "you" && cards[id("Project B")] == "you"
         }
         check("Margin tab: Project A's card keeps the envelope", cards[id("Project A")] == "you", cards)
-        check("Margin tab: Project B's card shows no envelope", cards[id("Project B")] == "none", cards)
+        // A card keeps ✉ for every thread that is your move: its own unread dot tells read from unread.
+        check("Margin tab: Project B's card keeps the envelope although read", cards[id("Project B")] == "you", cards)
         val counts = readUntil("the Margin tab header's counts", read = { marginCounts() }) { "2 your move" in it }
         check("Margin tab: the header still counts both as your move", "2 your move" in counts, counts)
     }

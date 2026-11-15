@@ -9,7 +9,7 @@ import dev.marginalis.plugin.sandbox.readUntil
 import org.junit.jupiter.api.Test
 
 /**
- * Walking the Guided section with the tool window's arrows on a review-sized walkthrough (the deep walkthrough
+ * Walking a walkthrough section with the tool window's arrows on a review-sized walkthrough (the deep walkthrough
  * fixture). Records what each press selects, so a jump back to the first node or an order that ignores step numbers
  * shows up.
  */
@@ -19,10 +19,10 @@ class ToolwindowStepNavigationTest : SandboxScenario("toolwindow_step_navigation
     fun arrowsWalkTheSteps() = case("run") {
         SandboxUi.showToolWindow()
         postWalkthrough(DeepWalkthrough)
-        val shown = readUntil("every open step in the Guided section", read = { ToolWindowUi.treeSteps() }) { it.sorted() == OPEN_STEPS }
-        report("INFO  Guided in tree order: $shown")
-        // Step navigation in Guided follows the step numbers, not the folder-and-file order the tree shows.
-        val tree = shown.sorted()
+        val shown = readUntil("every open step in the walkthrough section", read = { ToolWindowUi.treeSteps() }) { it.sorted() == ALL_STEPS }
+        report("INFO  walkthrough in tree order: $shown")
+        // The arrows walk the open steps by number; resolved steps keep their place in the tree but are passed by.
+        val tree = OPEN_STEPS
         ToolWindowUi.screenshotToolWindow(shots.resolve("tree.png"))
 
         val expectedDown = tree.drop(tree.indexOf(16)).take(9)
@@ -49,13 +49,6 @@ class ToolwindowStepNavigationTest : SandboxScenario("toolwindow_step_navigation
         val last = stepSelectedUntil(tree.last())
         check("Last Step lands on the highest open step", last?.order == tree.last(), last)
 
-        val openTree = ToolWindowUi.treeSteps("Open")
-        report("INFO  Open in tree order: $openTree")
-        val inOpen = walk("next-in-open", NEXT, openTree.take(5), section = "Open")
-        val sections = setOfNotNull(ToolWindowUi.selectedStep()?.section)
-        check("in Open, Next follows the tree, not the numbers", inOpen == openTree.take(5), "got $inOpen, tree says ${openTree.take(5)}")
-        check("in Open, Next stays in Open", sections == setOf("Open"), sections)
-
         ToolWindowUi.selectStep(10)
         humanPause()
         ToolWindowUi.pressToolWindowAction(*NEXT)
@@ -69,7 +62,7 @@ class ToolwindowStepNavigationTest : SandboxScenario("toolwindow_step_navigation
     }
 
     /** Selects `expected`'s first step and presses `buttons` once per further step; returns the step each press selected. */
-    private fun walk(label: String, buttons: Array<String>, expected: List<Int>, section: String = "Guided"): List<Int?> {
+    private fun walk(label: String, buttons: Array<String>, expected: List<Int>, section: String = ToolWindowUi.ANY_WALKTHROUGH): List<Int?> {
         val start = expected.first()
         ToolWindowUi.selectStep(start, section)
         val seen = mutableListOf(stepSelectedUntil(start))
@@ -93,7 +86,8 @@ class ToolwindowStepNavigationTest : SandboxScenario("toolwindow_step_navigation
         readUntil("step $order selected", read = { ToolWindowUi.selectedStep() }) { it?.order == order }
 
     private companion object {
-        val OPEN_STEPS = DeepWalkthrough.steps.map { it.order }.filter { it !in DeepWalkthrough.resolved }.sorted()
+        val ALL_STEPS = DeepWalkthrough.steps.map { it.order }.sorted()
+        val OPEN_STEPS = ALL_STEPS.filter { it !in DeepWalkthrough.resolved }
         val NEXT = arrayOf("Next Step", "Next Occurrence")
         val PREVIOUS = arrayOf("Previous Step", "Previous Occurrence")
 

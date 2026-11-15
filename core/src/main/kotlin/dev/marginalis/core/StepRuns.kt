@@ -1,6 +1,5 @@
 package dev.marginalis.core
 
-/** Splits steps already in step order into runs of consecutive steps in the same file, or with no file at all. */
 object StepRuns {
 
     fun <T> of(steps: List<T>, fileOf: (T) -> String?): List<List<T>> {

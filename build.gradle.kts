@@ -6,6 +6,7 @@ import java.nio.file.StandardOpenOption
 import java.security.MessageDigest
 import java.time.Duration
 import java.time.Instant
+import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 
 plugins {
     // Kotlin 2.3.x: first line with official Gradle 9 support (we run Gradle 9.1
@@ -19,7 +20,7 @@ plugins {
 }
 
 group = "dev.marginalis"
-version = "0.2.7"
+version = "0.2.11"
 
 // Stamp the build version into a resource ping can serve: the platform's
 // plugin-manager lookups (PluginManagerCore.getPlugin AND
@@ -90,10 +91,11 @@ dependencies {
         // as a real plugin dependency instead of bundling our own copy of an
         // IDE package, per the Marketplace verifier.
         bundledPlugin("org.intellij.plugins.markdown")
-        // The review diff's file list (ReviewDiffFileList.java): compiled against, so the Plugin
-        // Verifier checks those calls on every IDE; the IDE provides both modules at runtime.
-        bundledModule("intellij.platform.collaborationTools")
-        bundledModule("intellij.platform.vcs.impl")
+        // A pull request review's file list (ReviewDiffFileList.java, behind an
+        // opt-in setting). Compiled against so the Plugin Verifier checks those
+        // calls; at runtime the IDE adds both modules to every third-party
+        // plugin when it has them, so plugin.xml declares nothing.
+        bundledModules("intellij.platform.collaborationTools", "intellij.platform.vcs.impl")
         // Default: compile against the oldest supported target (the honest
         // floor; CI uses this). Environments that can't reach the JetBrains
         // CDN — like the tenant sandbox — set `marginalis.localIde` in their
@@ -510,10 +512,11 @@ tasks.withType<JavaCompile>().configureEach {
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
     compilerOptions.jvmTarget = JvmTarget.JVM_21
-    // The plugin runs on the IDE's own Kotlin stdlib, on the floor (2025.2) a 2.2 one: code built for 2.3 crashed every
-    // resume of a plugin coroutine there (debug metadata 2 vs 1), and newer stdlib calls would fail at runtime.
-    compilerOptions.apiVersion = org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_2
-    compilerOptions.languageVersion = org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_2
+    // The plugin runs on the IDE's own Kotlin stdlib, which is 2.2 on the
+    // 2025.2 floor: code compiled for a newer one crashes there when a
+    // coroutine resumes, and newer stdlib calls fail at runtime.
+    compilerOptions.apiVersion = KotlinVersion.KOTLIN_2_2
+    compilerOptions.languageVersion = KotlinVersion.KOTLIN_2_2
 }
 
 pitest {

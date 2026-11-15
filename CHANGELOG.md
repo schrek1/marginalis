@@ -9,20 +9,6 @@ History before 0.1.19 lives in git tags.
 
 ### Added
 
-- The Margin tab no longer opens with the project, after a restart
-  included. It comes by itself once an agent starts a project thread,
-  and you can open it any time. To have it open with the project as
-  before, tick *Show the Margin tab when a project opens* in Settings →
-  Tools → Marginalis → Project Tab.
-- Choose what happens to the step you leave when you walk a walkthrough
-  with a thread's own Next, Previous, First and Last Step: fold it, so
-  the code reads clean behind you, or keep it open, so every step you
-  passed stays in view. Set it under *When stepping to another step* in
-  Settings → Tools → Marginalis. Folding stays the default.
-- Mark a thread unread from its context menu in the tool window, so it
-  waits for you like a new message until you open it again. On a thread
-  with something new, the same entry marks it read, and with several
-  threads selected it acts on all of them.
 - Navigate › Select In › Marginalis finds the thread on the caret's line
   in the tool window, from a file or a review diff, and the file when the
   line has none. A balloon says why when nothing can be selected, or when
@@ -30,8 +16,107 @@ History before 0.1.19 lives in git tags.
 - *Select Opened Thread* can take a keyboard shortcut and is in Find
   Action.
 
+## [0.2.11] - 2026-11-14
+
+Thanks to [@schrek1](https://github.com/schrek1) for the Margin tab choice, the plain-text fallback and the keep-open stepping in this release.
+
+### Added
+
+- Choose when the Margin tab shows. Keep it open as before, or show it
+  only when there's something in it: a project opens without an empty
+  tab, and the tab comes back behind your file when an agent starts a
+  project thread. A tab you pin always stays. Set it under Project Tab
+  in Settings › Tools › Marginalis.
+- Choose what happens to the thread you leave when you step with Next,
+  Previous, First or Last: fold it, so the code reads clean behind you,
+  or keep it open, so every step you passed stays in view. This works in
+  the editor and in pull or merge request reviews. Set it under *When
+  stepping to another step* in Settings › Tools › Marginalis. Folding
+  stays the default.
+
 ### Changed
 
+- When you go to a thread whose file will not open, such as an OpenAPI
+  spec whose preview fails to load, the file now opens as plain text,
+  so you still see the thread and a walkthrough goes on. Only when
+  plain text fails too do you get a message, and a walkthrough stays
+  on your step.
+
+## [0.2.10] - 2026-11-13
+
+Thanks to [@schrek1](https://github.com/schrek1) for the unread marks, the Agree signals and the review diff work in this release.
+
+### Added
+
+- Mark a thread unread from its menu in the tool window. It waits for
+  you like a new message until you return to it.
+- Mark a thread read from the same menu, without opening it. A thread
+  that is your move drops its ✉ in the tool window.
+- Select several threads in the tool window to mark, resolve or delete
+  them together.
+- Threads you leave open in a diff, such as a pull or merge request
+  review, stay open when the diff refreshes and open again when you come
+  back to their file. Threads you closed or resolved stay closed.
+- Walkthrough steps can now stay in a pull or merge request review
+  when a step is in another file: the review moves to that file. This
+  is experimental and off by default. Turn it on in Settings › Tools ›
+  Marginalis.
+
+### Changed
+
+- Agreeing with an agent now shows 👍 on the thread, not ✈. An agreed
+  thread no longer looks like it waits on a reply.
+- The agent tells you what it does with your Agree: ⏳ while it works
+  on the change, or no sign once the thread is yours to resolve.
+- Agreed threads stay out of the agent's-move counts and the Awaiting
+  Agent filter.
+- In the tool window and the Margin tab's title, ✉ now marks only
+  threads with something you have not read, so it points at what is
+  new.
+- A thread you have read but not answered stays yours. It remains in
+  Awaiting You and in the Margin tab's "your move" count, its card
+  keeps the ✉, and its file keeps the ✉ on its editor tab.
+- Walkthrough steps stay in the diff you are reading when the step is
+  in the file it shows. This includes a pull or merge request review
+  whose branch is not checked out.
+
+### Fixed
+
+- A walkthrough keeps its place when the next step's file will not
+  open, such as an OpenAPI spec whose preview fails to load. The step
+  you are on stays open.
+- When a thread's file cannot be shown, a message names the thread and
+  the reason. A file that is gone from the project is covered too.
+
+## [0.2.9] - 2026-11-11
+
+Thanks to [@schrek1](https://github.com/schrek1) for the walkthrough layouts and the Margin tab sort in this release.
+
+### Changed
+
+- Walkthroughs now stand apart from ordinary comments. The Open list
+  holds comments only, and each walkthrough keeps its steps together.
+- Resolved and orphaned steps sit under their walkthrough, so a finished
+  walkthrough reads as one group you can look back on.
+- A walkthrough now reads in step order in the tool window, and each
+  step names its file. A new Walkthrough Layout menu in the tool
+  window's header switches to by folder or by file. Each project
+  remembers its choice.
+  - In step order, "Group Consecutive Steps by File" folds neighbouring
+    steps in one file under that file.
+- A walkthrough moves to Resolved as one group once every step is
+  resolved. Reopen any step and the walkthrough returns.
+- Right-click a walkthrough to resolve all of it in one step.
+- Previous and Next on a comment move between comments and pass steps
+  by. A comment's header reads "comment 3/12".
+- You can tell a step from a comment at a glance. A step wears a
+  signpost in the gutter, and each walkthrough has its own colour, shown
+  as a line beside the mark and on the edge of the thread.
+- A step's header names its walkthrough, as in "Tour (2/12)". The tool
+  window uses the same name, and an unnamed walkthrough is called
+  "Walkthrough".
+- Resolving a comment with "Jump to the next thread after resolving" on
+  opens the next open comment.
 - The Margin tab now reads top to bottom, oldest thread first, the same
   way messages read inside a thread. A reply no longer makes a thread
   jump, and a walkthrough's steps read 1, 2, 3.
@@ -77,22 +162,12 @@ History before 0.1.19 lives in git tags.
   without project threads opens without it, and an agent's new project
   thread opens a closed tab behind the file you are reading. It no
   longer pins itself on a project's first open.
-- The reply composer's send menu reads "Submit & send round" again,
-  instead of losing the ampersand to an underlined letter.
-- On a line with several threads, choosing an open thread in the
-  chooser folds it again, just as clicking the icon of a single thread
-  does.
-- The buttons in a thread's header and the Margin tab's Sort menu no
-  longer wait for a busy IDE, so they stop holding up the editor while
-  the IDE is under load.
-- A code block with lines wider than the thread scrolls sideways in its
-  own pane, so its end is no longer cut off at the panel's edge.
+- The Margin tab's Sort menu no longer waits for a busy IDE, so it
+  stops holding up the editor while the IDE is under load.
 - The step you move to in a pull or merge request review stays open.
   The review rebuilds a file's view whenever its data refreshes, and that
   folded the thread you had just stepped to, leaving only its gutter icon;
   threads open in the review now open again with it.
-- Escape in a reply box now closes just the reply box: the thread stays
-  open with your draft kept, and a second Escape folds the thread.
 - Updating Marginalis without restarting the IDE no longer logs an
   error while the tool window repaints during the update.
 - The 12-hour clock on messages speaks the IDE's language. On a system
@@ -108,6 +183,47 @@ History before 0.1.19 lives in git tags.
   `legacy_helper` no longer reads "legacyhelper" in the tool window, the
   notification or the Margin tab; only the Markdown markers around words
   go.
+- A walkthrough keeps its place when the next step's file won't open,
+  such as an OpenAPI spec whose Swagger preview fails to load. The step
+  you are on stays open, and a balloon names the step and the file it
+  could not show.
+- A walkthrough step in a file whose preview fails to load, such as an
+  OpenAPI spec whose Swagger preview crashes, now opens in that file as
+  plain text instead of stopping the walk. The file keeps opening as
+  plain text until the IDE restarts. The balloon is left for a file the
+  IDE won't keep open even so.
+
+### Fixed
+
+- Two walkthroughs with the same name, or none, no longer merge into
+  one. When their titles match, each shows when it started.
+- The tool window's step arrows keep your place. Resolving or filtering
+  away the step you are on no longer sends Next back to the first step.
+- With a filter on, the tool window's step arrows visit every open step,
+  the same as the arrows in a thread's header.
+
+## [0.2.8] - 2026-11-11
+
+Thanks to [@schrek1](https://github.com/schrek1) for the fixes in this release.
+
+### Changed
+
+- Escape in a reply box now closes just the reply box: the thread stays
+  open with your draft kept, and a second Escape folds the thread.
+
+### Fixed
+
+- The reply composer's send menu reads "Submit & send round" in full,
+  instead of losing the ampersand to an underlined letter.
+- The buttons in a thread's header no longer wait for a busy IDE, so
+  they stop holding up the editor while the IDE is under load.
+- Editing one of your messages no longer discards a reply you had
+  started. Your unsent reply is back when you save or cancel the edit.
+- On a line with several threads, choosing an open thread in the
+  chooser folds it again, just as clicking the icon of a single thread
+  does.
+- A code block with lines wider than the thread scrolls sideways in its
+  own pane, so its end is no longer cut off at the panel's edge.
 
 ## [0.2.7] - 2026-10-22
 

@@ -6,12 +6,13 @@ import com.intellij.ui.LayeredIcon
 import com.intellij.ui.RowIcon
 import com.intellij.util.ui.EmptyIcon
 import dev.marginalis.core.AggregateState
-import dev.marginalis.core.AgreementSignal
 import dev.marginalis.core.CommentThread
 import dev.marginalis.core.Mark
 import dev.marginalis.core.MarkSubject
 import dev.marginalis.core.StripeBadge
+import dev.marginalis.core.ThreadSignal
 import dev.marginalis.core.Turn
+import java.awt.Color
 import java.util.concurrent.ConcurrentHashMap
 import javax.swing.Icon
 import javax.swing.SwingConstants
@@ -21,7 +22,8 @@ object MarginalisIcons {
     val Agree = load("agree")
 
     private val marks: Map<Mark, Icon> = Mark.all().associateWith { mark ->
-        load("mark_${mark.subject.name.lowercase()}_${mark.intent?.name?.lowercase() ?: "none"}")
+        val shape = if (mark.step) "step" else mark.subject.name.lowercase()
+        load("mark_${shape}_${mark.intent?.name?.lowercase() ?: "none"}")
     }
     private val orphanFrame = load("markOrphanFrame")
     private val markInState = ConcurrentHashMap<Triple<Mark, AggregateState, Boolean>, Icon>()
@@ -29,12 +31,17 @@ object MarginalisIcons {
     val LineMark = marks.getValue(Mark(MarkSubject.LINE, null))
     val ProjectMark = marks.getValue(Mark(MarkSubject.PROJECT, null))
 
-    private val turnSignals = mapOf(Turn.USER_OWES to load("turnYou"), Turn.AGENT_OWES to load("turnAgent"))
+    private val threadSignals = mapOf(
+        ThreadSignal.YOUR_MOVE to load("turnYou"),
+        ThreadSignal.AGENTS_MOVE to load("turnAgent"),
+        ThreadSignal.AGREED to load("turnAgreed"),
+        ThreadSignal.AGENT_ON_IT to load("turnWorking"),
+    )
     private val turnBadges = mapOf(Turn.USER_OWES to load("turnYouBadge"), Turn.AGENT_OWES to load("turnAgentBadge"))
-    private val agreementSignals = mapOf(AgreementSignal.AGREED to load("turnAgreed"), AgreementSignal.AGENT_ON_IT to load("turnWorking"))
-    private val turnSignalGap = EmptyIcon.create(3, 16)
-    private val noTurnSignal = EmptyIcon.create(16)
-    private val markWithTurn = ConcurrentHashMap<Triple<Icon, Turn?, AgreementSignal?>, Icon>()
+    private val signalGap = EmptyIcon.create(3, 16)
+    private val noSignal = EmptyIcon.create(16)
+    private val markWithSignal = ConcurrentHashMap<Pair<Icon, ThreadSignal?>, Icon>()
+    private val markWithStripe = ConcurrentHashMap<Pair<Icon, Color>, Icon>()
 
     val Brand = load("marginalisToolWindow")
     private val toolWindowBadged = mapOf(
@@ -56,15 +63,17 @@ object MarginalisIcons {
 
     fun mark(mark: Mark): Icon = marks.getValue(mark)
 
-    fun turnSignal(turn: Turn): Icon = turnSignals.getValue(turn)
+    fun turnSignal(turn: Turn): Icon = threadSignal(ThreadSignal.forTurn(turn))
 
-    fun agreementSignal(signal: AgreementSignal): Icon = agreementSignals.getValue(signal)
+    fun threadSignal(signal: ThreadSignal): Icon = threadSignals.getValue(signal)
 
-    fun withLeadingTurnSignal(mark: Icon, turn: Turn?, agreement: AgreementSignal? = null): Icon =
-        markWithTurn.computeIfAbsent(Triple(mark, turn, agreement)) {
-            val signal = turn?.let(turnSignals::getValue) ?: agreement?.let(agreementSignals::getValue) ?: noTurnSignal
-            RowIcon(mark, turnSignalGap, signal)
+    fun withLeadingSignal(mark: Icon, signal: ThreadSignal?): Icon =
+        markWithSignal.computeIfAbsent(mark to signal) {
+            RowIcon(mark, signalGap, signal?.let(threadSignals::getValue) ?: noSignal)
         }
+
+    fun withWalkthroughStripe(mark: Icon, stripe: Color): Icon =
+        markWithStripe.computeIfAbsent(mark to stripe) { WalkthroughStripeIcon(mark, stripe) }
 
     fun withTurnBadge(fileIcon: Icon, turn: Turn): Icon = badged(fileIcon, turnBadges.getValue(turn))
 

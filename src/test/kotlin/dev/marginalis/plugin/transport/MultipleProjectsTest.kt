@@ -66,6 +66,22 @@ class MultipleProjectsTest : HttpContractTestCase() {
         }
     }
 
+    fun testABatchSpanningTwoProjectsChoosesEachProjectsWalkthroughApart() {
+        sample()
+        twin().use { second ->
+            val there = Agent(second.project, "Claude", "claude-main").addOnLine(5, "order" to 1, "walkthrough" to "tour")
+            val step = { line: Int, order: Int, inProject: String ->
+                mapOf("file" to SAMPLE, "line" to line, "anchor_text" to lineText(line), "order" to order, "walkthrough" to "tour", "body" to "b", "project" to inProject)
+            }
+
+            val results = agent.post("comment_add_batch", "items" to listOf(step(5, 1, project.name), step(7, 2, second.name)))
+                .json.getAsJsonArray("results").map { it.asJsonObject.string("thread_id")!! }
+
+            val secondThreads = MarginalisStore.getInstance(second.project).threads
+            assertEquals(secondThreads.byId(there)!!.walkthroughId, secondThreads.byId(results[1])!!.walkthroughId)
+        }
+    }
+
     fun testAProjectThreadNeedsAProjectWhenSeveralAreOpen() {
         twin().use { second ->
             val refused = agent.post("comment_add", "body" to "b", "project" to null)

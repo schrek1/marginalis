@@ -30,8 +30,8 @@ class FyiTest {
 
         assertNull(noted.turn())
         assertNull(noted.turnFor("claude-main"))
-        assertNull(Turn.of(listOf(noted)))
-        assertEquals(TurnTally(user = 0, agent = 0), TurnTally.of(listOf(noted)))
+        assertNull(Turn.owed(listOf(noted)))
+        assertEquals(TurnTally(user = 0, agent = 0), TurnTally.owed(listOf(noted)))
     }
 
     @Test

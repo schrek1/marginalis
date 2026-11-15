@@ -9,6 +9,21 @@ import java.time.Instant
 
 class ListingTest : HttpContractTestCase() {
 
+    fun testAnFyiMarkedUnreadAwaitsTheUserAgainWithoutChangingWhenItLastChanged() {
+        sample()
+        val fyi = agent.addOnLine(14, "intent" to "fyi", "body" to "Nice split")
+        user.read(fyi)
+        val readUpdatedAt = agent.summaryOf(fyi).string("updated_at")
+        assertNull(agent.summaryOf(fyi).string("awaiting"))
+        assertEquals(emptyList<String>(), agent.ids("awaiting" to "user"))
+
+        user.markUnread(fyi)
+
+        assertEquals("user", agent.summaryOf(fyi).string("awaiting"))
+        assertEquals(listOf(fyi), agent.ids("awaiting" to "user"))
+        assertEquals(readUpdatedAt, agent.summaryOf(fyi).string("updated_at"))
+    }
+
     fun testAThreadListsEveryDocumentedField() {
         sample()
         val id = agent.addOnLine(12, "body" to "Why `compute` here?")
@@ -351,6 +366,27 @@ class ListingTest : HttpContractTestCase() {
         user.reply(moving, "Moved on.")
         assertEquals(listOf(moving), agent.ids("updated_after" to cursor))
         assertEquals(listOf(quiet, moving), agent.ids())
+    }
+
+    fun testAnsweringAnAgreeShowsInAnUpdatedAfterSweep() {
+        sample()
+        val id = agent.addOnLine(5, "body" to "Shall I extract it?")
+        user.agree(id)
+        val cursor = Instant.parse(agent.summaryOf(id).string("updated_at"))
+        Thread.sleep(5)
+
+        agent.post("comment_agent_state", "thread_id" to id, "state" to "acknowledged")
+
+        assertEquals("acknowledged", agent.threads("updated_after" to cursor).single().string("agent_state"))
+    }
+
+    fun testAwaitingUserStillListsAThreadTheUserHasRead() {
+        sample()
+        val id = agent.addOnLine(5, "body" to "Why this way?", "intent" to "question")
+
+        user.read(id)
+
+        assertEquals(listOf(id), agent.ids("awaiting" to "user"))
     }
 
     fun testUpdatedAfterIncludesAThreadTheUserResolved() {

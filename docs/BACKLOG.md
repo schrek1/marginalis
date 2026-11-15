@@ -416,3 +416,41 @@ declined, captured from real use.
   the plugin module gained platform tests against a real in-memory IDE
   (`./gradlew test`, in CI against the 2025.2 floor). Tests that pin a
   known defect carry a FixMe marker naming its issue.
+- **An Agree is answered, not just received** (2026-11-12, #136): the
+  user's Agree shows 👍 until the agent answers it with
+  `comment_agent_state`: `working` (⏳, the agent lands the change and
+  resolves) or `acknowledged` (no sign, the user resolves). An answered
+  Agree awaits nobody until the next message. Agents that never answer
+  see what they saw before. The answer is stored with the Agree it
+  answers, so it cannot outlive it. Extends "approval is a reply".
+- **✉ means unread, except on a Margin tab card** (2026-11-12, #108):
+  in the tool window, on its stripe icon and in the Margin tab's title,
+  ✉ shows only while something you owe is unread. Margin tab cards keep
+  ✉ for every thread that is your move, because a card already carries
+  its own unread dot. Awaiting You, the header's "your move" count, the
+  editor tab badge and `awaiting` over HTTP still count every thread
+  you owe, read or not.
+- **Experimental platform API behind an opt-in seam** (2026-11-13,
+  #90): walkthrough steps follow a pull or merge request review into
+  another file only through the platform's review diff processor, a
+  Kotlin-`internal` class in an `@ApiStatus.Experimental` package with
+  no public alternative. We accept it as a contained exception: an
+  opt-in setting, off by default and marked experimental; one Java
+  class implementing our own interface (`ExperimentalApiSeamTest`
+  guards it); a full fallback to the step's file tab on any failure;
+  and the Plugin Verifier on the newest released IDE. Known risk: the
+  verifier has a check for Kotlin-`internal` usage that is switched off
+  today. If a future release enables it, CI and Marketplace
+  verification fail on the seam, and the cross-file switch comes out
+  while the rest stays.
+- **The Margin tab stays a home base by default** (2026-11-13, #110,
+  #123): the "exists even when empty" decision from #37 stands as the
+  default. A setting offers the opposite as an opt-in: the tab shows
+  only with an open project thread, an empty unpinned tab closes when
+  the project closes so the IDE has nothing to restore, and an agent's
+  new project thread opens a closed tab behind the file you read. A tab
+  the user pinned always stays. Rejected: hiding the tab's address so
+  the platform skips restoring it, because the same lookup serves pinned
+  tabs and editor history all session; and closing a late-restored tab
+  on a timer, because the platform gives no signal that its restore is
+  over.

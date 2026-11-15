@@ -1,7 +1,6 @@
 package dev.marginalis.plugin.transport
 
 import com.intellij.notification.Notification
-import com.intellij.notification.Notifications
 import com.intellij.openapi.application.WriteAction
 import com.intellij.openapi.editor.impl.DocumentMarkupModel
 import com.intellij.openapi.fileEditor.FileEditorManager
@@ -346,6 +345,46 @@ class AddingTest : HttpContractTestCase() {
         assertEquals(listOf(results[0].id, results[5].id).sorted(), agent.ids().sorted())
     }
 
+    private fun batchOfSteps(vararg steps: Pair<Int, String>): List<String?> =
+        agent.post(
+            "comment_add_batch",
+            "items" to steps.map { (order, anchor) ->
+                mapOf("file" to SAMPLE, "line" to 10 + order, "anchor_text" to anchor, "order" to order, "walkthrough" to "tour", "body" to "step $order")
+            },
+        ).json.getAsJsonArray("results").map { it.asJsonObject["thread_id"]?.asString }
+
+    fun testABatchRepeatingAStepNumberStartsASecondWalkthroughAsSeparateCallsWould() {
+        sample()
+        val ids = batchOfSteps(1 to lineText(11), 2 to lineText(12), 1 to lineText(11), 2 to lineText(12)).map { it!! }
+
+        val walkthroughs = ids.map { user.thread(it).walkthroughId }
+        assertEquals(walkthroughs[0], walkthroughs[1])
+        assertEquals(walkthroughs[2], walkthroughs[3])
+        assertFalse(walkthroughs[0] == walkthroughs[2])
+    }
+
+    fun testABatchStepWhoseNumberTheJoinedWalkthroughAlreadyHasStartsTheNext() {
+        sample()
+        val open = agent.addOnLine(11, "order" to 1, "walkthrough" to "tour")
+        val done = agent.addOnLine(13, "order" to 3, "walkthrough" to "tour")
+        agent.post("comment_resolve", "thread_id" to done)
+
+        val (two, three) = batchOfSteps(2 to lineText(12), 3 to lineText(13)).map { it!! }
+
+        assertEquals(user.thread(open).walkthroughId, user.thread(two).walkthroughId)
+        assertFalse(user.thread(open).walkthroughId == user.thread(three).walkthroughId)
+    }
+
+    fun testABatchStepThatFailsLeavesTheNextStepToJoinTheOpenWalkthrough() {
+        sample()
+        val open = agent.addOnLine(11, "order" to 1, "walkthrough" to "tour")
+
+        val ids = batchOfSteps(1 to "nowhere to be found", 2 to lineText(12))
+
+        assertNull(ids[0])
+        assertEquals(user.thread(open).walkthroughId, user.thread(ids[1]!!).walkthroughId)
+    }
+
     fun testABatchEnvelopeLendsIdentityAndProjectToItsItems() {
         sample()
         val response = agent.post(
@@ -397,7 +436,7 @@ class AddingTest : HttpContractTestCase() {
 
     fun testAnAgentCommentInAFileOutOfSightNotifiesTheUser() {
         sample()
-        val shown = notifications()
+        val shown = user.notifications()
 
         agent.addOnLine(12, "body" to "Look **here**")
 
@@ -409,7 +448,7 @@ class AddingTest : HttpContractTestCase() {
 
     fun testTheNotificationOpensTheThread() {
         sample()
-        val shown = notifications()
+        val shown = user.notifications()
         agent.addOnLine(12)
         val notification = shown.single()
 
@@ -424,7 +463,7 @@ class AddingTest : HttpContractTestCase() {
     fun testAProjectThreadNotifiesWithTheProjectNameWhenTheMarginTabIsNotInFront() {
         sample()
         myFixture.openFileInEditor(myFixture.findFileInTempDir(SAMPLE))
-        val shown = notifications()
+        val shown = user.notifications()
 
         agent.add("body" to "Build is slow")
 
@@ -434,30 +473,17 @@ class AddingTest : HttpContractTestCase() {
     fun testAProjectThreadDoesNotNotifyWhileTheMarginTabIsInFront() {
         FileEditorManager.getInstance(project).openFile(MarginFile.of(project), true)
         assertTrue(ProjectTab.isInFront(project))
-        val shown = notifications()
+        val shown = user.notifications()
 
         agent.add("body" to "Build is slow")
 
         assertEquals(emptyList<Notification>(), shown)
     }
 
-    fun testAProjectThreadOpensTheClosedMarginTabBehindTheFileYouAreReading() {
-        sample()
-        myFixture.openFileInEditor(myFixture.findFileInTempDir(SAMPLE))
-        val editors = FileEditorManager.getInstance(project)
-        assertFalse(editors.isFileOpen(MarginFile.of(project)))
-
-        agent.add("body" to "Build is slow")
-        PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
-
-        assertTrue(editors.isFileOpen(MarginFile.of(project)))
-        assertEquals(SAMPLE.substringAfterLast('/'), editors.selectedFiles.first().name)
-    }
-
     fun testAnAgentCommentInTheFileTheUserIsReadingDoesNotNotify() {
         sample()
         myFixture.openFileInEditor(myFixture.findFileInTempDir(SAMPLE))
-        val shown = notifications()
+        val shown = user.notifications()
 
         agent.addOnLine(12)
 
@@ -469,7 +495,7 @@ class AddingTest : HttpContractTestCase() {
         val settings = MarginalisSettings.getInstance().state
         settings.notifyOnAgentReply = false
         try {
-            val shown = notifications()
+            val shown = user.notifications()
             agent.addOnLine(12)
             assertEquals(emptyList<Notification>(), shown)
         } finally {
@@ -479,7 +505,7 @@ class AddingTest : HttpContractTestCase() {
 
     fun testARelayedCommentNeverNotifies() {
         sample()
-        val shown = notifications()
+        val shown = user.notifications()
 
         agent.add("file" to SAMPLE, "relayed" to Relays.reviewComment(42))
 
@@ -489,31 +515,10 @@ class AddingTest : HttpContractTestCase() {
     fun testAnAgentReplyNotifiesTheUser() {
         sample()
         val id = agent.addOnLine(12)
-        val shown = notifications()
+        val shown = user.notifications()
 
         agent.reply(id, "One more thing")
 
         assertEquals("One more thing", shown.single().content)
-    }
-
-    private fun notifications(): List<Notification> {
-        PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
-        val shown = mutableListOf<Notification>()
-        project.messageBus.connect(testRootDisposable).subscribe(
-            Notifications.TOPIC,
-            object : Notifications {
-                override fun notify(notification: Notification) {
-                    if (notification.groupId == "Marginalis") shown += notification
-                }
-            },
-        )
-        return object : AbstractList<Notification>() {
-            override val size: Int get() = settle().size
-            override fun get(index: Int): Notification = settle()[index]
-            private fun settle(): List<Notification> {
-                PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
-                return shown
-            }
-        }
     }
 }

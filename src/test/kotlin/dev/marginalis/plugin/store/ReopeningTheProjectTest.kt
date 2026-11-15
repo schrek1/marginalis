@@ -1,15 +1,103 @@
 package dev.marginalis.plugin.store
 
 import com.google.gson.JsonObject
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.impl.stores.stateStore
+import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.fileEditor.FileEditorManagerListener
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.project.ProjectCloseListener
+import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.vfs.VirtualFile
+import dev.marginalis.core.MarginTabShows
+import dev.marginalis.plugin.settings.MarginalisSettings
 import dev.marginalis.plugin.testing.Agent
+import dev.marginalis.plugin.testing.MarginTab
 import dev.marginalis.plugin.testing.Relays
 import dev.marginalis.plugin.testing.SavedProjectTestCase
+import dev.marginalis.plugin.ui.tab.MarginFile
 import java.nio.file.Files
 
 class ReopeningTheProjectTest : SavedProjectTestCase() {
 
     private val observer get() = Agent(shop.project, "Observer", "observer")
+
+    fun testShowingTheTabWithSomethingInItTheSavedOpenProjectThreadOpensTheTabWhenTheProjectOpens() {
+        openShop()
+        agent.add("body" to "release plan")
+        waitForSave("release plan")
+        showTheTabWithSomethingInIt()
+
+        reopen()
+
+        assertTrue(FileEditorManager.getInstance(shop.project).isFileOpen(MarginFile.of(shop.project)))
+    }
+
+    private fun showTheTabWithSomethingInIt() {
+        val settings = MarginalisSettings.getInstance()
+        settings.marginTabShows = MarginTabShows.WITH_SOMETHING_IN_IT
+        Disposer.register(testRootDisposable) { settings.marginTabShows = MarginTabShows.ALWAYS }
+    }
+
+    private fun keepTheTabOpen() {
+        val settings = MarginalisSettings.getInstance()
+        val before = settings.marginTabShows
+        settings.marginTabShows = MarginTabShows.ALWAYS
+        Disposer.register(testRootDisposable) { settings.marginTabShows = before }
+    }
+
+    private fun closingWithTheTabOpen(pinned: Boolean = false): List<String> {
+        val tab = MarginTab(shop.project, shop.project).open()
+        if (pinned) tab.pin()
+        val seen = mutableListOf<String>()
+        shop.project.messageBus.connect(testRootDisposable).subscribe(
+            FileEditorManagerListener.FILE_EDITOR_MANAGER,
+            object : FileEditorManagerListener {
+                override fun fileClosed(source: FileEditorManager, file: VirtualFile) {
+                    if (file is MarginFile) seen += "tab closed"
+                }
+            },
+        )
+        ApplicationManager.getApplication().messageBus.connect(testRootDisposable).subscribe(
+            ProjectCloseListener.TOPIC,
+            object : ProjectCloseListener {
+                override fun projectClosing(project: Project) {
+                    seen += "saved and closing"
+                }
+            },
+        )
+        shop.closeProject()
+        return seen.takeWhile { it != "saved and closing" }
+    }
+
+    fun testShowingTheTabWithSomethingInItAnUnpinnedEmptyTabClosesBeforeTheProjectIsSaved() {
+        openShop()
+        showTheTabWithSomethingInIt()
+
+        assertEquals(listOf("tab closed"), closingWithTheTabOpen())
+    }
+
+    fun testShowingTheTabWithSomethingInItAPinnedEmptyTabIsSavedWithTheProject() {
+        openShop()
+        showTheTabWithSomethingInIt()
+
+        assertEquals(emptyList<String>(), closingWithTheTabOpen(pinned = true))
+    }
+
+    fun testShowingTheTabWithSomethingInItATabWithAnOpenProjectThreadIsSavedWithTheProject() {
+        openShop()
+        agent.add("body" to "release plan")
+        showTheTabWithSomethingInIt()
+
+        assertEquals(emptyList<String>(), closingWithTheTabOpen())
+    }
+
+    fun testKeepingTheTabOpenAnUnpinnedEmptyTabIsSavedWithTheProject() {
+        keepTheTabOpen()
+        openShop()
+
+        assertEquals(emptyList<String>(), closingWithTheTabOpen())
+    }
 
     fun testAConversationComesBackExactlyAsItWasLeft() {
         openShop(mapOf(SAMPLE to sampleText(), OTHER to sampleText()))
@@ -109,6 +197,58 @@ class ReopeningTheProjectTest : SavedProjectTestCase() {
         assertNull(agent.summaryOf(fyi).string("awaiting"))
         assertEquals("user", agent.summaryOf(question).string("awaiting"))
         assertEquals(listOf(0, 0), listOf(fyi, question).map { storedThread(it).unreadByUserCount() })
+    }
+
+    fun testAnUnreadMarkSurvivesReopening() {
+        openShop()
+        val fyi = agent.addOnLine(5, "body" to "for your information", "intent" to "fyi")
+        user.read(fyi)
+        waitForSave("read_by_user")
+        user.markUnread(fyi)
+        waitUntil("the unread mark is saved") { !Files.readString(shop.savedThreads).contains("read_by_user") }
+
+        reopen()
+
+        assertEquals("user", agent.summaryOf(fyi).string("awaiting"))
+        assertEquals(1, storedThread(fyi).unreadByUserCount())
+    }
+
+    fun testAnAnsweredAgreeStaysAnsweredAfterReopening() {
+        openShop()
+        val id = agent.addOnLine(5, "body" to "Shall I extract it?")
+        user.agree(id)
+        agent.post("comment_agent_state", "thread_id" to id, "state" to "working")
+        waitForSave("agent_state")
+
+        reopen()
+
+        assertEquals("working", agent.summaryOf(id).string("agent_state"))
+        assertNull(agent.summaryOf(id).string("awaiting"))
+    }
+
+    fun testAnAcknowledgedAgreeStaysAcknowledgedAfterReopening() {
+        openShop()
+        val id = agent.addOnLine(5, "body" to "Shall I extract it?")
+        user.agree(id)
+        agent.post("comment_agent_state", "thread_id" to id, "state" to "acknowledged")
+        waitForSave("acknowledged")
+
+        reopen()
+
+        assertEquals("acknowledged", agent.summaryOf(id).string("agent_state"))
+        assertNull(agent.summaryOf(id).string("awaiting"))
+    }
+
+    fun testAnUnansweredAgreeStillAwaitsTheAgentAfterReopening() {
+        openShop()
+        val id = agent.addOnLine(5, "body" to "Shall I extract it?")
+        user.agree(id)
+        waitForSave("agrees")
+
+        reopen()
+
+        assertEquals("agent", agent.summaryOf(id).string("awaiting"))
+        assertNull(agent.summaryOf(id).string("agent_state"))
     }
 
     fun testTheLastRoundSurvivesReopening() {

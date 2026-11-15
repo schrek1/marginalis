@@ -2,6 +2,7 @@ package dev.marginalis.plugin.ui.tab
 
 import com.intellij.testFramework.PlatformTestUtil
 import dev.marginalis.plugin.testing.Relays
+import dev.marginalis.plugin.ui.ThreadPanel
 
 class ReadingTest : TabInFrontTestCase() {
 
@@ -88,6 +89,45 @@ class ReadingTest : TabInFrontTestCase() {
         assertEquals("✉ 1", tab.title())
     }
 
+    fun testACardYouHaveReadKeepsItsEnvelopeWhileItIsYourMoveButTheTitleShowsNone() {
+        val id = agent.ask("Which release name?")
+
+        tab.openFileInFront(sample())
+        tab.bringToFront()
+
+        assertEquals(0, user.thread(id).unreadByUserCount())
+        assertEquals(listOf("✉ Which release name? [expanded]"), shown())
+        assertEquals("1 open · 1 your move · 0 agent's move", tab.counts())
+        assertEquals("Margin", tab.title())
+    }
+
+    fun testAThreadMarkedUnreadShowsItsEnvelopeOnTheCardAndInTheTitle() {
+        val id = agent.ask("Which release name?")
+        tab.openFileInFront(sample())
+        tab.bringToFront()
+        assertEquals(0, user.thread(id).unreadByUserCount())
+        val window = user.openToolWindow()
+
+        window.rebuiltBy { window.chooseFromContextMenu("Which release name?", "Mark as Unread") }
+
+        assertEquals(listOf("✉ Which release name? ● [expanded]"), shown())
+        assertEquals("✉ 1", tab.title())
+    }
+
+    fun testWhenOnlyClickingCountsAQuestionKeepsItsEnvelopeOnceClickedWhileTheTitleLetsGo() {
+        user.changeProjectTabSettings { whatCountsAsRead("Only when you click into the thread") }
+
+        agent.ask("Which release name?")
+        assertEquals(listOf("✉ Which release name? ● [expanded]"), shown())
+        assertEquals("✉ 1", tab.title())
+
+        tab.click("Which release name?")
+        tab.click("Which release name?")
+
+        assertEquals(listOf("✉ Which release name? [expanded]"), shown())
+        assertEquals("Margin", tab.title())
+    }
+
     fun testWhenOnlyClickingCountsAnOpenThreadStaysUnreadUntilYouClickIntoIt() {
         user.changeProjectTabSettings { whatCountsAsRead("Only when you click into the thread") }
 
@@ -124,7 +164,7 @@ class ReadingTest : TabInFrontTestCase() {
 
         tab.click("Which release name?")
 
-        assertEquals(listOf("Which release name? [expanded]"), shown())
+        assertEquals(listOf("✉ Which release name? [expanded]"), shown())
         assertEquals("1 open · 1 your move · 0 agent's move", tab.counts())
     }
 
@@ -166,6 +206,84 @@ class ReadingTest : TabInFrontTestCase() {
         tab.click("Heads-up")
         tab.click("Heads-up")
         assertEquals(listOf("Heads-up: CI moved [expanded]"), shown())
+    }
+
+    fun testACollapsedFyiMarkedUnreadStaysUnreadWhenItExpandsForYourMove() {
+        agent.ask("Heads-up: CI moved", "intent" to "fyi")
+        tab.click("Heads-up")
+        assertEquals(listOf("Heads-up: CI moved"), shown())
+        val window = user.openToolWindow()
+
+        window.rebuiltBy { window.chooseFromContextMenu("Heads-up: CI moved", "Mark as Unread") }
+
+        assertEquals(listOf("✉ Heads-up: CI moved ● [expanded]"), shown())
+        assertEquals("1 open · 1 your move · 0 agent's move · 1 new", tab.counts())
+    }
+
+    fun testAnEditorPanelKeepsAThreadMarkedUnreadUntilYouClickIntoTheReply() {
+        sample()
+        val id = agent.addOnLine(5, "body" to "Why this cap?")
+        val panel = user.open(id)
+        assertEquals(0, user.thread(id).unreadByUserCount())
+        val window = user.openToolWindow()
+
+        window.rebuiltBy { window.chooseFromContextMenu("Why this cap?", "Mark as Unread") }
+        tab.switchToAnotherApp()
+        tab.switchToTheIde()
+        assertEquals(1, user.thread(id).unreadByUserCount())
+
+        user.fireComposerFocusGained(panel)
+        assertEquals(0, user.thread(id).unreadByUserCount())
+    }
+
+    fun testNavigatingToAThreadMarkedUnreadReadsItInItsOpenEditorPanel() {
+        sample()
+        val id = agent.addOnLine(5, "body" to "Why this cap?")
+        user.open(id)
+        val window = user.openToolWindow()
+        window.rebuiltBy { window.chooseFromContextMenu("Why this cap?", "Mark as Unread") }
+        assertEquals(1, user.thread(id).unreadByUserCount())
+
+        window.chooseFromContextMenu("Why this cap?", "Navigate")
+        PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+
+        assertEquals(0, user.thread(id).unreadByUserCount())
+    }
+
+    fun testTwoPanelsOnOneThreadBothKeepTheUnreadMark() {
+        sample()
+        val id = agent.addOnLine(5, "body" to "Why this cap?")
+        val first = user.open(id)
+        val window = user.openToolWindow()
+        window.rebuiltBy { window.chooseFromContextMenu("Why this cap?", "Mark as Unread") }
+
+        tab.splitTheFileInFront()
+        user.clickGutter(SAMPLE, 5)
+        tab.switchToAnotherApp()
+        tab.switchToTheIde()
+
+        assertTrue(first.isShowing)
+        assertTrue(user.panel().isShowing)
+        assertNotSame(first, user.panel())
+        assertEquals(1, user.thread(id).unreadByUserCount())
+    }
+
+    // FixMe: Known issue - #93 any change to a resolved thread closes its open editor panel, a read mark included
+    fun testMarkingAResolvedThreadUnreadClosesItsOpenEditorPanel() {
+        sample()
+        val id = agent.addOnLine(5, "body" to "Why this cap?")
+        user.read(id)
+        agent.post("comment_resolve", "thread_id" to id)
+        tab.settle()
+        user.open(id)
+        val window = user.openToolWindow()
+        window.toggleFolding("Resolved")
+        window.toggleFolding("src", under = "Resolved")
+        window.toggleFolding("Sample.kt", under = "Resolved")
+
+        window.rebuiltBy { window.chooseFromContextMenu("Why this cap?", "Mark as Unread") }
+
+        assertEquals(emptyList<ThreadPanel>(), user.panels())
     }
 
     fun testOpenThreadsFollowTheWidthOfTheTab() {

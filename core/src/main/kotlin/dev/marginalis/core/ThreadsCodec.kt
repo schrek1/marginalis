@@ -33,8 +33,11 @@ object ThreadsCodec {
 
     fun decodeDocument(text: String): Document {
         val root = JsonParser.parseString(text).asJsonObject
+        val threads = root.getAsJsonArray("threads").mapNotNull { runCatching { thread(it.asJsonObject) }.getOrNull() }
+        val replayed = Walkthrough.replay(threads)
+        threads.forEach { thread -> replayed[thread.id]?.let(thread::restoreWalkthroughId) }
         return Document(
-            threads = root.getAsJsonArray("threads").mapNotNull { runCatching { thread(it.asJsonObject) }.getOrNull() },
+            threads = threads,
             handedBackAt = root.get("handed_back_at")?.takeIf { it.isJsonPrimitive }?.asString?.let(::instantOrNull),
             deletedRelays = root.get("deleted_relays")?.takeIf { it.isJsonArray }?.asJsonArray
                 ?.mapNotNull { it.takeIf { key -> key.isJsonObject }?.asJsonObject?.let(::relayKey) }?.toSet()
@@ -76,6 +79,7 @@ object ThreadsCodec {
         }
         thread.order?.let { addProperty("order", it) }
         thread.walkthrough?.let { addProperty("walkthrough", it) }
+        thread.walkthroughId?.let { addProperty("walkthrough_id", it) }
         thread.severity?.let { addProperty("severity", it.name) }
         thread.intent?.let { addProperty("intent", it.name) }
         thread.label?.let { addProperty("label", it) }
@@ -83,7 +87,7 @@ object ThreadsCodec {
         addProperty("created_at", thread.createdAt.toString())
         addProperty("updated_at", thread.updatedAt.toString())
         thread.resolvedBy?.let { add("resolved_by", authorJson(it)) }
-        thread.agentState?.let { addProperty("agent_state", it.wireName) }
+        thread.agreementAnswer?.let { addProperty("agent_state", it.wireName) }
         add(
             "messages",
             JsonArray().apply {
@@ -121,6 +125,7 @@ object ThreadsCodec {
             // Legacy files wrote "tour".
             walkthrough = (json.get("walkthrough") ?: json.get("tour"))
                 ?.takeIf { it.isJsonPrimitive }?.asString,
+            walkthroughId = json.get("walkthrough_id")?.takeIf { it.isJsonPrimitive }?.asString,
             segment = json.get("segment")?.takeIf { it.isJsonObject }?.asJsonObject?.let { seg ->
                 seg.get("exact")?.takeIf { it.isJsonPrimitive }?.asString?.let { exact ->
                     Segment(
@@ -139,7 +144,7 @@ object ThreadsCodec {
             runCatching { message(m.asJsonObject) }.getOrNull()?.let(thread::addMessage)
         }
         // Must follow the messages, which each count as a change while being added back.
-        thread.restoreAgentState(AgentState.parseLenient(json.get("agent_state")?.takeIf { it.isJsonPrimitive }?.asString))
+        thread.restoreAgreementAnswer(AgreementAnswer.parseLenient(json.get("agent_state")?.takeIf { it.isJsonPrimitive }?.asString))
         thread.restoreUpdatedAt(
             json.get("updated_at")?.takeIf { it.isJsonPrimitive }?.asString?.let { Instant.parse(it) }
                 ?: thread.messages.maxOfOrNull { it.createdAt }

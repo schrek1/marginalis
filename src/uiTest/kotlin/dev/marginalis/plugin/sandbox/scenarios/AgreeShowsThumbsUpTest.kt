@@ -292,12 +292,11 @@ class AgreeShowsThumbsUpTest : SandboxScenario("agree_shows_thumbs_up") {
 
         const val SIGNALS = """
 var icons = pluginLoader.loadClass('dev.marginalis.plugin.ui.MarginalisIcons').getField('INSTANCE').get(null);
-var turns = pluginLoader.loadClass('dev.marginalis.core.Turn');
-var agreements = pluginLoader.loadClass('dev.marginalis.core.AgreementSignal');
-var yourMoveIcon = icons.turnSignal(turns.getField('USER_OWES').get(null));
-var agentsMoveIcon = icons.turnSignal(turns.getField('AGENT_OWES').get(null));
-var agreedIcon = icons.agreementSignal(agreements.getField('AGREED').get(null));
-var workingIcon = icons.agreementSignal(agreements.getField('AGENT_ON_IT').get(null));
+var signals = pluginLoader.loadClass('dev.marginalis.core.ThreadSignal');
+var yourMoveIcon = icons.threadSignal(signals.getField('YOUR_MOVE').get(null));
+var agentsMoveIcon = icons.threadSignal(signals.getField('AGENTS_MOVE').get(null));
+var agreedIcon = icons.threadSignal(signals.getField('AGREED').get(null));
+var workingIcon = icons.threadSignal(signals.getField('AGENT_ON_IT').get(null));
 function signalOf(icon) {
     if (icon === yourMoveIcon) return 'you';
     if (icon === agentsMoveIcon) return 'agent';

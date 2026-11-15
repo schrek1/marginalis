@@ -81,4 +81,80 @@ class MarkUnreadTest {
 
         assertEquals(1, reloaded.unreadByUserCount())
     }
+
+    @Test
+    fun `marking an ordinary thread unread leaves whose move it is`() {
+        val asked = thread(Message(agent, "Why this cap?")).also { it.markReadByUser() }
+        val answered = thread(Message(agent, "Why this cap?"), Message(user, "Memory.")).also { it.markReadByUser() }
+
+        asked.markUnreadByUser()
+        answered.markUnreadByUser()
+
+        assertEquals(Turn.USER_OWES, asked.turn())
+        assertEquals(Turn.AGENT_OWES, answered.turn())
+    }
+
+    @Test
+    fun `an fyi the user replied to stays on the reply's turn when marked unread`() {
+        val replied = thread(Message(agent, "Lovely."), Message(user, "Thanks!"), intent = Intent.FYI).also { it.markReadByUser() }
+
+        replied.markUnreadByUser()
+
+        assertEquals(Turn.AGENT_OWES, replied.turn())
+    }
+
+    @Test
+    fun `a resolved thread marked unread owes nothing`() {
+        val resolved = thread(Message(agent, "Why this cap?")).also {
+            it.markReadByUser()
+            it.resolve(user)
+        }
+
+        assertTrue(resolved.markUnreadByUser())
+
+        assertNull(resolved.turn())
+        assertEquals(1, resolved.unreadByUserCount())
+    }
+
+    @Test
+    fun `a relayed message can be the one marked unread`() {
+        val relayed = Message(agent, "Please rename.", relayed = Relayed(Relayed.Source.GITHUB, "1", "https://github.com/o/r/pull/1#discussion_r1", "Mona", "octocat"))
+        val conversation = thread(Message(agent, "Why this cap?"), relayed).also { it.markReadByUser() }
+
+        conversation.markUnreadByUser()
+
+        assertFalse(relayed.readByUser)
+        assertEquals(1, conversation.unreadByUserCount())
+    }
+
+    @Test
+    fun `marking unread leaves when the thread last changed alone`() {
+        val read = thread(Message(agent, "Why this cap?")).also { it.markReadByUser() }
+        val before = read.updatedAt
+
+        read.markUnreadByUser()
+
+        assertEquals(before, read.updatedAt)
+    }
+
+    @Test
+    fun `a message marked unread stays marked until it is read`() {
+        val latest = Message(agent, "Why this cap?")
+        val read = thread(latest).also { it.markReadByUser() }
+
+        read.markUnreadByUser()
+        val markedBeforeReading = latest.markedUnreadByUser
+        read.markReadByUser()
+
+        assertTrue(markedBeforeReading)
+        assertFalse(latest.markedUnreadByUser)
+    }
+
+    @Test
+    fun `a message that simply arrived is unread without being marked unread`() {
+        val arrived = Message(agent, "Why this cap?")
+
+        assertFalse(arrived.readByUser)
+        assertFalse(arrived.markedUnreadByUser)
+    }
 }

@@ -6,8 +6,8 @@ enum class Turn(val wireName: String) {
 
     companion object {
         /** What the user owes outranks what the agent owes: the user is the one looking at the surface. */
-        fun of(threads: List<CommentThread>): Turn? {
-            val turns = threads.mapNotNull { it.turn() }
+        fun owed(threads: List<CommentThread>): Turn? {
+            val turns = threads.mapNotNull { it.owedTurn() }
             return when {
                 turns.isEmpty() -> null
                 USER_OWES in turns -> USER_OWES

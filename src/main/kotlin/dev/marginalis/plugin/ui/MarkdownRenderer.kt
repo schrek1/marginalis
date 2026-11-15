@@ -60,8 +60,9 @@ import javax.swing.text.html.StyleSheet
 /**
  * GitHub-flavoured, with images as placeholders and raw HTML reduced to
  * what the Markdown itself produces: each extra construct carries its own
- * Swing sizing tax. A top-level table pays it in its own pane at natural
- * width, scrolling sideways, so the prose around it keeps wrapping.
+ * Swing sizing tax. A top-level table and a fenced code block each pay it
+ * in their own pane at natural width, scrolling sideways, so the prose
+ * around them keeps wrapping.
  */
 object MarkdownRenderer {
 
@@ -347,7 +348,12 @@ object MarkdownRenderer {
 
     private fun follow(project: Project, reference: Reference, click: HyperlinkEvent) {
         val problem = when (val resolution = reference.resolveIn(MarginalisStore.getInstance(project).threads.all())) {
-            is Resolution.Found -> return WalkthroughNavigator.navigateTo(project, resolution.referent.thread, revealing = resolution.referent.message)
+            is Resolution.Found -> return WalkthroughNavigator.navigateTo(
+                project,
+                resolution.referent.thread,
+                revealing = resolution.referent.message,
+                onNotShown = { warn(it, click) },
+            )
             is Resolution.Ambiguous -> "${resolution.summary} in this project"
             Resolution.Unknown -> "$reference names no thread or message in this project"
         }

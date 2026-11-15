@@ -19,23 +19,23 @@ class TurnTest {
     fun `no open threads means no one's turn — concluded and orphaned threads ask nothing`() {
         val resolved = thread(agent).also { it.resolve(user) }
         val orphaned = thread(agent).also { it.markOrphaned() }
-        assertNull(Turn.of(emptyList()))
-        assertNull(Turn.of(listOf(resolved, orphaned)))
+        assertNull(Turn.owed(emptyList()))
+        assertNull(Turn.owed(listOf(resolved, orphaned)))
     }
 
     @Test
     fun `an open thread where the agent spoke last is the user's turn`() {
-        assertEquals(Turn.USER_OWES, Turn.of(listOf(thread(agent))))
+        assertEquals(Turn.USER_OWES, Turn.owed(listOf(thread(agent))))
     }
 
     @Test
     fun `open threads where the user spoke last are the agent's turn`() {
-        assertEquals(Turn.AGENT_OWES, Turn.of(listOf(thread(user), thread(user))))
+        assertEquals(Turn.AGENT_OWES, Turn.owed(listOf(thread(user), thread(user))))
     }
 
     @Test
     fun `what the user owes outranks what the agent owes`() {
-        assertEquals(Turn.USER_OWES, Turn.of(listOf(thread(user), thread(agent), thread(user))))
+        assertEquals(Turn.USER_OWES, Turn.owed(listOf(thread(user), thread(agent), thread(user))))
     }
 
     @Test

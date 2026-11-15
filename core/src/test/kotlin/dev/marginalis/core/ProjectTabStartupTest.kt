@@ -1,6 +1,7 @@
 package dev.marginalis.core
 
 import dev.marginalis.core.ProjectTabStartup.Outcome
+import dev.marginalis.core.ProjectTabStartup.TabState
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -16,61 +17,72 @@ class ProjectTabStartupTest {
     private fun fileThread() =
         CommentThread(file = "src/a.py", line = null, anchorText = null).also { it.addMessage(Message(agent, "…")) }
 
-    @Test
-    fun `a project's first open without project threads leaves the tab closed`() {
-        val outcome = ProjectTabStartup.outcome(emptyList(), wasOpen = false, wasPinned = false, firstOpen = true, showOnOpen = true)
+    private fun outcome(
+        shows: MarginTabShows,
+        threads: List<CommentThread> = emptyList(),
+        firstOpen: Boolean = false,
+        beforeReload: TabState = TabState.CLOSED,
+        restored: TabState = TabState.CLOSED,
+    ) = ProjectTabStartup.outcome(shows, threads, firstOpen, beforeReload, restored)
 
-        assertEquals(Outcome.STAY_CLOSED, outcome)
+    @Test
+    fun `keeping the tab open, a project's first open opens it pinned even with nothing in it`() {
+        assertEquals(Outcome.OPEN_PINNED, outcome(MarginTabShows.ALWAYS, firstOpen = true))
     }
 
     @Test
-    fun `a project's first open with only resolved project threads and file threads leaves the tab closed`() {
+    fun `keeping the tab open, a plugin reload brings the tab back as it was`() {
+        assertEquals(Outcome.OPEN_PINNED, outcome(MarginTabShows.ALWAYS, beforeReload = TabState.PINNED))
+        assertEquals(Outcome.OPEN, outcome(MarginTabShows.ALWAYS, beforeReload = TabState.OPEN))
+    }
+
+    @Test
+    fun `keeping the tab open, a later open leaves a restored empty tab where the platform put it`() {
+        assertEquals(Outcome.LEAVE, outcome(MarginTabShows.ALWAYS, restored = TabState.OPEN))
+        assertEquals(Outcome.LEAVE, outcome(MarginTabShows.ALWAYS))
+    }
+
+    @Test
+    fun `showing it with something in it, a project's first open without project threads leaves the tab closed`() {
+        assertEquals(Outcome.LEAVE, outcome(MarginTabShows.WITH_SOMETHING_IN_IT, firstOpen = true))
+    }
+
+    @Test
+    fun `showing it with something in it, resolved project threads and file threads do not count`() {
         val threads = listOf(resolvedProjectThread(), fileThread())
 
-        val outcome = ProjectTabStartup.outcome(threads, wasOpen = false, wasPinned = false, firstOpen = true, showOnOpen = true)
-
-        assertEquals(Outcome.STAY_CLOSED, outcome)
+        assertEquals(Outcome.LEAVE, outcome(MarginTabShows.WITH_SOMETHING_IN_IT, threads, firstOpen = true))
+        assertEquals(Outcome.CLOSE, outcome(MarginTabShows.WITH_SOMETHING_IN_IT, threads, restored = TabState.OPEN))
     }
 
     @Test
-    fun `a project's first open with an open project thread opens the tab unpinned`() {
-        val outcome = ProjectTabStartup.outcome(listOf(projectThread()), wasOpen = false, wasPinned = false, firstOpen = true, showOnOpen = true)
-
-        assertEquals(Outcome.OPEN, outcome)
+    fun `showing it with something in it, a project's first open with an open project thread opens the tab unpinned`() {
+        assertEquals(Outcome.OPEN, outcome(MarginTabShows.WITH_SOMETHING_IN_IT, listOf(projectThread()), firstOpen = true))
     }
 
     @Test
-    fun `a tab open and pinned before a plugin reload comes back pinned, even with nothing in it`() {
-        val outcome = ProjectTabStartup.outcome(emptyList(), wasOpen = true, wasPinned = true, firstOpen = false, showOnOpen = true)
-
-        assertEquals(Outcome.OPEN_PINNED, outcome)
+    fun `showing it with something in it, a restored unpinned tab with nothing in it closes`() {
+        assertEquals(Outcome.CLOSE, outcome(MarginTabShows.WITH_SOMETHING_IN_IT, restored = TabState.OPEN))
     }
 
     @Test
-    fun `a tab open before a plugin reload comes back unpinned when it was not pinned`() {
-        val outcome = ProjectTabStartup.outcome(listOf(projectThread()), wasOpen = true, wasPinned = false, firstOpen = false, showOnOpen = true)
-
-        assertEquals(Outcome.OPEN, outcome)
+    fun `showing it with something in it, a restored tab stays when it has an open project thread`() {
+        assertEquals(Outcome.LEAVE, outcome(MarginTabShows.WITH_SOMETHING_IN_IT, listOf(projectThread()), restored = TabState.OPEN))
     }
 
     @Test
-    fun `a later open leaves the tab to the platform, even with open project threads`() {
-        val outcome = ProjectTabStartup.outcome(listOf(projectThread()), wasOpen = false, wasPinned = false, firstOpen = false, showOnOpen = true)
-
-        assertEquals(Outcome.STAY_CLOSED, outcome)
+    fun `showing it with something in it, a restored tab the user pinned stays even with nothing in it`() {
+        assertEquals(Outcome.LEAVE, outcome(MarginTabShows.WITH_SOMETHING_IN_IT, restored = TabState.PINNED))
     }
 
     @Test
-    fun `with the tab not shown on open, a project's first open with an open project thread leaves the tab closed`() {
-        val outcome = ProjectTabStartup.outcome(listOf(projectThread()), wasOpen = false, wasPinned = false, firstOpen = true, showOnOpen = false)
-
-        assertEquals(Outcome.STAY_CLOSED, outcome)
+    fun `showing it with something in it, a plugin reload brings the tab back as it was`() {
+        assertEquals(Outcome.OPEN_PINNED, outcome(MarginTabShows.WITH_SOMETHING_IN_IT, beforeReload = TabState.PINNED))
+        assertEquals(Outcome.OPEN, outcome(MarginTabShows.WITH_SOMETHING_IN_IT, beforeReload = TabState.OPEN))
     }
 
     @Test
-    fun `with the tab not shown on open, a tab open and pinned before a plugin reload still comes back pinned`() {
-        val outcome = ProjectTabStartup.outcome(emptyList(), wasOpen = true, wasPinned = true, firstOpen = false, showOnOpen = false)
-
-        assertEquals(Outcome.OPEN_PINNED, outcome)
+    fun `showing it with something in it, a later open leaves a closed tab closed even with open project threads`() {
+        assertEquals(Outcome.LEAVE, outcome(MarginTabShows.WITH_SOMETHING_IN_IT, listOf(projectThread())))
     }
 }

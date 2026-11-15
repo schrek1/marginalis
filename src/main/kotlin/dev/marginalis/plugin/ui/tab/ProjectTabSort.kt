@@ -9,7 +9,6 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import dev.marginalis.core.ProjectTabOrder
 
-// Per project and kept out of VCS: how to read a project's threads is a habit of this checkout, not of the team.
 @Service(Service.Level.PROJECT)
 @State(name = "MarginalisProjectTabSort", storages = [Storage(StoragePathMacros.WORKSPACE_FILE)])
 class ProjectTabSort : PersistentStateComponent<ProjectTabSort.State> {
@@ -29,7 +28,7 @@ class ProjectTabSort : PersistentStateComponent<ProjectTabSort.State> {
     var order: ProjectTabOrder
         get() = ProjectTabOrder.fromStored(state.order)
         set(value) {
-            state.order = value.stored
+            state.order = value.name
         }
 
     companion object {

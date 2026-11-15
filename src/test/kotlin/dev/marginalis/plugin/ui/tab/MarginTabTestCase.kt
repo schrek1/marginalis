@@ -1,5 +1,6 @@
 package dev.marginalis.plugin.ui.tab
 
+import dev.marginalis.core.MarginTabShows
 import dev.marginalis.plugin.settings.MarginalisSettings
 import dev.marginalis.plugin.testing.Agent
 import dev.marginalis.plugin.testing.LongThreadSettings
@@ -15,6 +16,10 @@ abstract class MarginTabTestCase : HttpContractTestCase() {
     protected lateinit var tab: MarginTab
 
     private val marginFileEditors = MarginFileEditors()
+
+    // Upstream writes these tests for "Keep the Margin tab open", where startup opens the tab pinned. Started from the
+    // fork's default instead, the unpinned tab's reply boxes moved in CI on a slow runner (MARG-270).
+    override val marginTabShows: MarginTabShows = MarginTabShows.ALWAYS
 
     override fun setUp() {
         super.setUp()
@@ -34,7 +39,7 @@ abstract class MarginTabTestCase : HttpContractTestCase() {
     }
 
     protected fun showTheTabWhenAProjectOpens() {
-        MarginalisSettings.getInstance().state.showTabOnProjectOpen = true
+        MarginalisSettings.getInstance().marginTabShows = MarginTabShows.WITH_SOMETHING_IN_IT
     }
 
     protected fun Agent.ask(body: String, vararg fields: Pair<String, Any?>): String = add("body" to body, *fields)

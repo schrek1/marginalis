@@ -877,10 +877,10 @@ def reload_plugin() -> dict:
     return json.loads(raw)
 
 
-# --- Guided layout (fork MARG-10) ----------------------------------------------------------------------------
+# --- Walkthrough layout (upstream) -----------------------------------------------------------------------------
 
-def choose_guided_layout(label: str) -> None:
-    """Picks an entry of the tool window header's Guided Layout menu through the button's own action group (the
+def choose_walkthrough_layout(label: str) -> None:
+    """Picks an entry of the tool window header's Walkthrough Layout menu through the button's own action group (the
     header paints its buttons only on hover, see press_tool_window_action)."""
     escaped = json.dumps(label)
     for attempt in range(HEADER_ATTEMPTS):
@@ -894,14 +894,14 @@ def choose_guided_layout(label: str) -> None:
                 var button = find(root, function (c) {{
                     if (!(c instanceof com.intellij.openapi.actionSystem.impl.ActionButton)) return false;
                     seen.push(String(c.getAction().getClass().getSimpleName()));
-                    return String(c.getAction().getClass().getSimpleName()) == 'GuidedLayoutMenuAction';
+                    return String(c.getAction().getClass().getSimpleName()) == 'WalkthroughLayoutMenuAction';
                 }});
-                if (button == null) throw 'no tool window button Guided Layout; root ' + root.getClass().getSimpleName()
+                if (button == null) throw 'no tool window button Walkthrough Layout; root ' + root.getClass().getSimpleName()
                     + ', visible ' + window.isVisible() + ', buttons [' + seen.join(', ') + ']';
                 var children = button.getAction().getChildActionsOrStubs();
                 var picked = null;
                 for (var i = 0; i < children.length; i++) if (children[i].getTemplatePresentation().getText() == {escaped}) picked = children[i];
-                if (picked == null) throw 'no Guided Layout entry ' + {escaped};
+                if (picked == null) throw 'no Walkthrough Layout entry ' + {escaped};
                 var event = com.intellij.openapi.actionSystem.AnActionEvent.createEvent(
                     picked, com.intellij.ide.DataManager.getInstance().getDataContext(button),
                     picked.getTemplatePresentation().clone(), 'MarginalisSandbox',
@@ -916,12 +916,12 @@ def choose_guided_layout(label: str) -> None:
             time.sleep(1)
 
 
-def guided_layout() -> str:
-    return js("String(service('dev.marginalis.plugin.ui.toolwindow.GuidedLayoutSetting').getLayout().getStored())")
+def walkthrough_layout() -> str:
+    return js("String(service('dev.marginalis.plugin.store.ProjectWalkthroughLayout').getLayout().name())")
 
 
-def guided_shape(section_prefix: str = "Guided") -> list[dict]:
-    """The Guided section's direct children: kind, name (folder/file) and step numbers beneath, in tree order."""
+def guided_shape(section_prefix: str) -> list[dict]:
+    """A walkthrough section's direct children: kind, name (folder/file) and step numbers beneath, in tree order."""
     raw = js(_TREE + f"""
         var root = marginalisTree().getModel().getRoot();
         var shape = [];

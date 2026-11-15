@@ -26,6 +26,16 @@ class HeaderTest : MarginTabTestCase() {
         assertNull(tab.alsoYourMove())
     }
 
+    fun testTheLinkStillCountsAThreadInAFileYouHaveRead() {
+        sample()
+        val five = agent.addOnLine(5, "body" to "Line five")
+
+        user.read(five)
+
+        assertEquals(0, user.thread(five).unreadByUserCount())
+        assertEquals("Also your move: 1 thread in files ›", tab.alsoYourMove())
+    }
+
     fun testSubmitRoundIsOffWhileNoAgentListensAndWakesTheListenerWithYourReplies() {
         val alpha = agent.ask("Which release name?")
         assertEquals(listOf("Submit round", "Stop agents", "Sort: Oldest first"), tab.toolbar())

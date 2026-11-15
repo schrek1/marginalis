@@ -34,6 +34,7 @@ import dev.marginalis.plugin.settings.MarginalisSettings
 import dev.marginalis.plugin.store.MarginalisStore
 import dev.marginalis.plugin.ui.AgentPresenceGroup
 import dev.marginalis.plugin.ui.CoalescedEdtRunner
+import dev.marginalis.plugin.ui.LastStep
 import dev.marginalis.plugin.ui.MarginalisPalette
 import dev.marginalis.plugin.ui.StopAgentsGroup
 import dev.marginalis.plugin.ui.SubmitRoundAction
@@ -162,7 +163,7 @@ class ProjectTabPanel(private val project: Project) : Disposable {
     }
 
     private val toolbar = ActionManager.getInstance()
-        .createActionToolbar("MarginalisProjectTab", DefaultActionGroup(AgentPresenceGroup(), SubmitRoundAction(), StopAgentsGroup(), ProjectTabSortMenu(::sortChanged)), true)
+        .createActionToolbar("MarginalisProjectTab", DefaultActionGroup(AgentPresenceGroup(), SubmitRoundAction(), StopAgentsGroup(), ProjectTabSortMenu()), true)
         .also {
             it.targetComponent = root
             it.component.isOpaque = false
@@ -238,9 +239,10 @@ class ProjectTabPanel(private val project: Project) : Disposable {
         reading.request()
     }
 
-    private fun sortChanged() {
+    fun sortChanged() {
         holdStill.release()
-        applyPrefs()
+        refresh(keepDraftsInPlace = false)
+        reading.request()
     }
 
     override fun dispose() {
@@ -276,13 +278,13 @@ class ProjectTabPanel(private val project: Project) : Disposable {
         }
     }
 
-    private fun refresh() {
+    private fun refresh(keepDraftsInPlace: Boolean = true) {
         if (disposed) return
         val prefs = settings.projectTabPrefs
         val order = sort.order
         val people = settings.people
         val threads = store.threads.all()
-        val live = ProjectTabLayout.arrange(threads, shownEntries, ::holdsDraft, prefs.groupRelayed, order)
+        val live = ProjectTabLayout.arrange(threads, shownEntries, ::holdsDraft, prefs.groupRelayed, order, keepDraftsInPlace)
         val view = if (prefs.list == ListWhileInFront.HOLD_STILL) {
             holdStill.update(live, inFront, order.newOnTop)
         } else {
@@ -427,7 +429,12 @@ class ProjectTabPanel(private val project: Project) : Disposable {
         }
         viewKeeper.keepingClickedInPlace(id, ::refresh)
         val opened = card.panel
-        if (opened != null) opened.markRead() else newTags.endLook(id)
+        if (opened != null) {
+            opened.markRead()
+            LastStep.getInstance(project).landedOn(card.thread)
+        } else {
+            newTags.endLook(id)
+        }
     }
 
     private fun heldOpenByDraft(threadId: String): Boolean =

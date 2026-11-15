@@ -77,7 +77,7 @@ class DiscoveryAndErrorsTest : HttpContractTestCase() {
     fun testWriteEndpointsRefuseGetWith405() {
         listOf(
             "comment_add", "comment_add_batch", "comment_reply", "comment_resolve", "comment_reopen", "comment_resolve_all",
-            "comment_reanchor", "comment_reanchor_all", "comment_clear_all", "navigate",
+            "comment_reanchor", "comment_reanchor_all", "comment_clear_all", "comment_agent_state", "navigate",
         ).forEach { assertRefused(agent.get(it), 405, "POST") }
     }
 

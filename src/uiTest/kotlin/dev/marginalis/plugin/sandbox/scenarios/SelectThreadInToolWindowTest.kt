@@ -42,17 +42,17 @@ class SelectThreadInToolWindowTest : SandboxScenario("select_thread_in_tool_wind
 
     @Test
     @Order(1)
-    fun headerButtonSelectsAStepInItsGuidedSection() = case("header_button_selects_a_step_in_its_guided_section") {
+    fun headerButtonSelectsAStepInItsWalkthroughSection() = case("header_button_selects_a_step_in_its_guided_section") {
         val order = 27
         val file = DeepWalkthrough.steps.single { it.order == order }.file
         SandboxUi.openInEditor(file)
         SandboxUi.openThreadInEditor(steps.getValue(order), file)
         pause()
         SandboxUi.pressPanelAction(steps.getValue(order), SELECT_IN_MARGINALIS)
-        val got = selectedUntil { it?.thread == steps.getValue(order) && it.section.startsWith("Guided") }
+        val got = selectedUntil { it?.thread == steps.getValue(order) && it.section == DeepWalkthrough.label }
         ToolWindowUi.screenshotToolWindow(shots.resolve("1-step.png"))
         check("Select in Marginalis selects the step", got?.thread == steps.getValue(order), got)
-        check("…in its Guided section", got?.section.orEmpty().startsWith("Guided"), got)
+        check("…in its walkthrough's section", got?.section == DeepWalkthrough.label, got)
     }
 
     @Test
@@ -107,7 +107,7 @@ class SelectThreadInToolWindowTest : SandboxScenario("select_thread_in_tool_wind
         val got = selectedUntil { it?.thread == firstLine }
         ToolWindowUi.screenshotToolWindow(shots.resolve("3-caret-elsewhere.png"))
         check("Select in Marginalis selects its step, not the file under the caret", got?.thread == firstLine, got)
-        check("…in its Guided section", got?.section == "Guided $FIRST_LINE_WALK", got)
+        check("…in its walkthrough's section", got?.section == FIRST_LINE_WALK, got)
     }
 
     @Test
@@ -125,7 +125,7 @@ class SelectThreadInToolWindowTest : SandboxScenario("select_thread_in_tool_wind
         SandboxUi.pressPanelAction(total, SELECT_IN_MARGINALIS)
         val got = selectedUntil { it?.thread == total }
         check("Select in Marginalis in a review diff selects its step", got?.thread == total, got)
-        check("…in its Guided section", got?.section == "Guided review", got)
+        check("…in its walkthrough's section", got?.section == "review", got)
     }
 
     @Test

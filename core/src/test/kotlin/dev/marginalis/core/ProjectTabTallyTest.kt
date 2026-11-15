@@ -36,6 +36,19 @@ class ProjectTabTallyTest {
     }
 
     @Test
+    fun `a project thread the user agreed with is left out of the header's agent's move`() {
+        val agreed = project(agent).also { it.addMessage(Message.agreement(by = user, with = agent)) }
+        val answered = project(agent).also {
+            it.addMessage(Message.agreement(by = user, with = agent))
+            it.answerAgreement(by = agent, answer = AgreementAnswer.WORKING)
+        }
+
+        val tally = ProjectTabTally.of(listOf(agreed, answered, project(user)))
+
+        assertEquals(TurnTally(user = 0, agent = 1), tally.turns)
+    }
+
+    @Test
     fun `counts open, your move and agent's move over open project threads only`() {
         val tally = ProjectTabTally.of(
             listOf(
@@ -68,7 +81,7 @@ class ProjectTabTallyTest {
     }
 
     @Test
-    fun `a thread you read but did not answer leaves the title and stays in your move`() {
+    fun `the title counts only unread moves while the header counts all your moves`() {
         val unread = project(agent)
         val readNotAnswered = project(agent).also { it.markReadByUser() }
 

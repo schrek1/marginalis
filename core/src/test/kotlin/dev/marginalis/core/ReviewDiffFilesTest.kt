@@ -41,9 +41,17 @@ class ReviewDiffFilesTest {
     }
 
     @Test
-    fun `Windows separators and a trailing slash on the root still match`() {
-        val windowsDiff = listOf("D:\\work\\shop-api\\src\\Cart.kt", "D:\\work\\shop-api\\src\\Order.kt")
+    fun `a file the diff cannot name is never a target, and the files after it keep their place`() {
+        val unnamed = listOf("/work/shop-api/src/Cart.kt", null, "/work/shop-api/src/Order.kt")
 
-        assertEquals(1, ReviewDiffFiles.switchTarget("src/Order.kt", "D:/work/shop-api/", windowsDiff, shownIndex = 0))
+        assertEquals(2, ReviewDiffFiles.switchTarget("src/Order.kt", root, unnamed, shownIndex = 0))
+        assertNull(ReviewDiffFiles.switchTarget("src/Invoice.kt", root, unnamed, shownIndex = 0))
+    }
+
+    @Test
+    fun `the index of a step's file is found even when the diff already shows it`() {
+        assertEquals(0, ReviewDiffFiles.indexOf("src/Cart.kt", root, diff))
+        assertEquals(1, ReviewDiffFiles.indexOf("src/Order.kt", root, diff))
+        assertNull(ReviewDiffFiles.indexOf("src/Invoice.kt", root, diff))
     }
 }

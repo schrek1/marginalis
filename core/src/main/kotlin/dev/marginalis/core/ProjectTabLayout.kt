@@ -40,33 +40,37 @@ object ProjectTabLayout {
         holdsDraft: (String) -> Boolean = { false },
         groupRelayed: Boolean = true,
         order: ProjectTabOrder = ProjectTabOrder.DEFAULT,
+        keepDraftsInPlace: Boolean = true,
     ): Layout {
         val previouslyActive = previous.flatMapTo(HashSet()) { entry -> entry.threads.map { it.id } }
-        val (open, folded) = stepsInStepOrder(threads.filter { it.isProjectLevel }.sortedWith(order.comparator))
+        val (open, folded) = threads.filter { it.isProjectLevel }.sortedWith(order.comparator)
             .partition { it.status !is ThreadStatus.Resolved || (holdsDraft(it.id) && it.id in previouslyActive) }
+            .let { (open, folded) -> open to stepsInStepOrder(folded) { it } }
         val entries = if (groupRelayed) grouped(open) else open.map { Entry.Single(it) }
         val previousIndex = previous.withIndex().associate { (index, entry) -> entry.key to index }
-        val (held, free) = entries.partition { entry -> entry.key in previousIndex && entry.threads.any { holdsDraft(it.id) } }
+        val (held, free) = entries.partition { entry ->
+            keepDraftsInPlace && entry.key in previousIndex && entry.threads.any { holdsDraft(it.id) }
+        }
         val active = free.toMutableList()
         held.map { previousIndex.getValue(it.key) to it }.sortedBy { it.first }
             .forEach { (index, entry) -> active.add(index.coerceAtMost(active.size), entry) }
-        return Layout(active = active, resolved = folded)
+        return Layout(active = stepsInStepOrder(active) { (it as? Entry.Single)?.thread }, resolved = folded)
     }
 
-    /** A walkthrough's steps keep the slots the order gave them, refilled in step order, so they read 1, 2, 3 in any order. */
-    private fun stepsInStepOrder(sorted: List<CommentThread>): List<CommentThread> {
+    private fun <T> stepsInStepOrder(sorted: List<T>, stepOf: (T) -> CommentThread?): List<T> {
         val result = sorted.toMutableList()
         sorted.withIndex()
-            .filter { (_, thread) -> thread.order != null }
-            .groupBy { (_, thread) -> thread.walkthrough ?: "" }
+            .mapNotNull { (slot, item) -> stepOf(item)?.takeIf { it.order != null }?.let { SlottedStep(slot, item, it) } }
+            .groupBy { it.step.walkthroughId }
             .values
             .forEach { steps ->
-                val slots = steps.map { it.index }
-                val inStepOrder = steps.map { it.value }.sortedWith(compareBy({ it.order }, { it.createdAt }))
-                slots.zip(inStepOrder).forEach { (slot, step) -> result[slot] = step }
+                val inStepOrder = steps.sortedWith(compareBy(Walkthrough.byStepNumber) { it.step })
+                steps.map { it.slot }.zip(inStepOrder).forEach { (slot, step) -> result[slot] = step.item }
             }
         return result
     }
+
+    private data class SlottedStep<T>(val slot: Int, val item: T, val step: CommentThread)
 
     private fun grouped(orderedActive: List<CommentThread>): List<Entry> {
         val byDiscussion = orderedActive.groupBy { it.discussion }

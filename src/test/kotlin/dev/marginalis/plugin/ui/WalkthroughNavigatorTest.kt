@@ -6,7 +6,9 @@ import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.testFramework.PlatformTestUtil
 import dev.marginalis.plugin.ui.tab.MarginFile
 import com.intellij.openapi.fileEditor.ex.IdeDocumentHistory
+import dev.marginalis.plugin.testing.MarginUser
 import dev.marginalis.plugin.testing.MarginalisTestCase
+import com.intellij.openapi.util.text.StringUtil.unescapeXmlEntities
 import com.intellij.util.ui.UIUtil
 import dev.marginalis.core.CommentThread
 
@@ -21,6 +23,8 @@ class WalkthroughNavigatorTest : MarginalisTestCase() {
 
     private fun step(line: Int?, file: String = "Sample.kt") =
         CommentThread(file, line, anchorText = line?.let { "val line${it + 1} = ${it + 1}" })
+
+    private val user by lazy { MarginUser(project, testRootDisposable) }
 
     private val caretLine get() = myFixture.editor.caretModel.logicalPosition.line
 
@@ -88,12 +92,23 @@ class WalkthroughNavigatorTest : MarginalisTestCase() {
         assertNotNull(UIUtil.findComponentOfType(editor.contentComponent, ThreadPanel::class.java))
     }
 
-    fun testAThreadWhoseFileIsGoneGoesNowhere() {
+    fun testAThreadWhoseFileIsGoneGoesNowhereAndSaysWhy() {
+        val shown = user.notifications()
+
         WalkthroughNavigator.navigateTo(project, CommentThread("Gone.kt", 4, anchorText = "x"))
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
 
         assertEquals("Sample.kt", FileEditorManager.getInstance(project).selectedFiles.single().name)
         assertNull(UIUtil.findComponentOfType(myFixture.editor.contentComponent, ThreadPanel::class.java))
+        assertEquals(listOf("Couldn't show the thread: Gone.kt is no longer in the project."), shown.map { unescapeXmlEntities(it.content) })
+    }
+
+    fun testAProjectLevelStepFoldsTheStepYouLeave() {
+        var leftBehind = true
+
+        WalkthroughNavigator.navigateTo(project, CommentThread(null, null, anchorText = null, order = 2), onShown = { leftBehind = false })
+
+        assertFalse(leftBehind)
     }
 
     fun testAProjectThreadIsShownInTheMarginTab() {

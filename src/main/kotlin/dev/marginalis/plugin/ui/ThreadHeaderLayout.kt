@@ -1,5 +1,6 @@
 package dev.marginalis.plugin.ui
 
+import com.intellij.openapi.util.text.StringUtil
 import com.intellij.ui.components.JBLabel
 import java.awt.Component
 import java.awt.Container
@@ -44,9 +45,13 @@ internal class ThreadHeaderLayout(private val status: JComponent, private val bu
 /** A thread's status line, which in a narrow header shortens to its first word ("open…"), never to nothing. */
 internal class ThreadStatusLabel : JBLabel() {
 
+    // An HTML label (a step's status) has no maximum width, so the header's BoxLayout would stretch it over the row.
+    override fun getMaximumSize(): Dimension = preferredSize
+
     override fun getMinimumSize(): Dimension {
-        val firstWord = text.orEmpty().substringBefore(" · ")
-        if (firstWord == text.orEmpty()) return preferredSize
+        val plain = StringUtil.removeHtmlTags(text.orEmpty())
+        val firstWord = plain.substringBefore(" · ")
+        if (firstWord == plain) return preferredSize
         val insets = insets
         return Dimension(
             getFontMetrics(font).stringWidth("$firstWord...") + insets.left + insets.right,

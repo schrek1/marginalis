@@ -8,7 +8,7 @@ import com.intellij.openapi.actionSystem.ToggleAction
 import com.intellij.openapi.project.DumbAware
 import dev.marginalis.core.ProjectTabOrder
 
-internal class ProjectTabSortMenu(private val onChanged: () -> Unit) :
+internal class ProjectTabSortMenu :
     DefaultActionGroup("Sort", "Choose how project threads are ordered", AllIcons.ObjectBrowser.Sorted), DumbAware {
     init {
         isPopup = true
@@ -24,7 +24,7 @@ internal class ProjectTabSortMenu(private val onChanged: () -> Unit) :
                     val project = e.project ?: return
                     if (!state) return
                     ProjectTabSort.getInstance(project).order = order
-                    onChanged()
+                    ProjectTab.sortChanged(project)
                 }
             })
         }

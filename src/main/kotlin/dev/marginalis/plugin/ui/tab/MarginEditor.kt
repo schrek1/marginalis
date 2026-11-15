@@ -21,6 +21,8 @@ class MarginEditor(private val project: Project, private val file: MarginFile) :
 
     fun applyPrefs() = content.applyPrefs()
 
+    fun sortChanged() = content.sortChanged()
+
     override fun selectNotify() {
         // The platform also notifies an editor that arrives after its tab went behind another file.
         if (file !in FileEditorManager.getInstance(project).selectedFiles) return
