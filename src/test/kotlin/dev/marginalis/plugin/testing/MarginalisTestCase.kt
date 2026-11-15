@@ -24,9 +24,11 @@ abstract class MarginalisTestCase : BasePlatformTestCase() {
 
     // Settings are app-wide, so a test class that changes "Margin tab" would carry its choice into the next one: every
     // test starts from the fork's default. Steps in a review across files are off, as upstream's tests are written.
+    protected open val marginTabShows: MarginTabShows = MarginTabShows.WITH_SOMETHING_IN_IT
+
     private fun startFromKnownSettings() {
         val settings = MarginalisSettings.getInstance()
-        settings.marginTabShows = MarginTabShows.WITH_SOMETHING_IN_IT
+        settings.marginTabShows = marginTabShows
         settings.state.keepStepsInReviewAcrossFiles = false
     }
 

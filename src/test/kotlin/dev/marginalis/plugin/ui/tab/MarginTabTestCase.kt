@@ -17,6 +17,9 @@ abstract class MarginTabTestCase : HttpContractTestCase() {
 
     private val marginFileEditors = MarginFileEditors()
 
+    // EXPERIMENT: upstream writes the tab tests with the tab kept open, opened pinned at startup.
+    override val marginTabShows: MarginTabShows = MarginTabShows.ALWAYS
+
     override fun setUp() {
         super.setUp()
         marginFileEditors.watch()
