@@ -1,6 +1,6 @@
 package dev.marginalis.plugin.testing
 
-import com.intellij.ide.startup.StartupManagerEx
+import com.intellij.ide.util.PropertiesComponent
 import com.intellij.testFramework.LightProjectDescriptor
 import com.intellij.testFramework.PlatformTestUtil
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
@@ -30,15 +30,19 @@ abstract class MarginalisTestCase : BasePlatformTestCase() {
         settings.state.keepStepsInReviewAcrossFiles = false
     }
 
-    // The startup step decides about the Margin tab from a queued call; left queued, it can open the tab after
-    // tearDown has closed the editors, which then reports the tab's editor as leaked. Without project threads it
-    // opens nothing, so wait for the step itself, not for a tab.
+    // The startup step decides about the Margin tab from a queued call, which can run after the activities count as
+    // passed. Left queued, it closes the empty tab a test has opened since, or opens one after tearDown closed the
+    // editors (reported as a leak). The decision marks the project's first open, so wait for that mark.
     private fun awaitStartup() {
         PlatformTestUtil.waitWithEventsDispatching(
-            "the project's startup activities never finished",
-            { StartupManagerEx.getInstanceEx(project).postStartupActivityPassed() },
+            "the startup decision about the Margin tab never ran",
+            { PropertiesComponent.getInstance(project).getBoolean(STARTUP_DECIDED_THE_TAB) },
             10,
         )
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+    }
+
+    private companion object {
+        const val STARTUP_DECIDED_THE_TAB = "marginalis.projectTab.introduced"
     }
 }
