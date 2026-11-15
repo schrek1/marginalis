@@ -43,7 +43,7 @@ class OpeningTheTabTest : MarginTabTestCase() {
         // A reveal already queued when the tab opens behind the file is the user's later choice.
         ApplicationManager.getApplication().invokeLater { ProjectTab.reveal(project, thread) }
 
-        ProjectTab.showBehindSelection(project)
+        ProjectTab.showNewProjectThreadLater(project)
         tab.settle()
 
         assertTrue(tab.isInFront)

@@ -9,28 +9,51 @@ History before 0.1.19 lives in git tags.
 
 ### Added
 
-- The Margin tab no longer opens with the project, after a restart
-  included. It comes by itself once an agent starts a project thread,
-  and you can open it any time. To have it open with the project as
-  before, tick *Show the Margin tab when a project opens* in Settings →
-  Tools → Marginalis → Project Tab.
-- Choose what happens to the step you leave when you walk a walkthrough
-  with a thread's own Next, Previous, First and Last Step: fold it, so
-  the code reads clean behind you, or keep it open, so every step you
-  passed stays in view. Set it under *When stepping to another step* in
-  Settings → Tools → Marginalis. Folding stays the default.
 - Navigate › Select In › Marginalis finds the thread on the caret's line
   in the tool window, from a file or a review diff, and the file when the
   line has none. A balloon says why when nothing can be selected, or when
   the filter had to reset to show the thread.
 - *Select Opened Thread* can take a keyboard shortcut and is in Find
   Action.
+- Choose when the Margin tab shows. Keep it open as before, or show it
+  only when there's something in it: a project opens without an empty
+  tab, and the tab comes back behind your file when an agent starts a
+  project thread. A tab you pin always stays. Set it under Project Tab
+  in Settings › Tools › Marginalis.
+- Choose what happens to the thread you leave when you step with Next,
+  Previous, First or Last: fold it, so the code reads clean behind you,
+  or keep it open, so every step you passed stays in view. This works in
+  the editor and in pull or merge request reviews. Set it under *When
+  stepping to another step* in Settings › Tools › Marginalis. Folding
+  stays the default.
+
+### Changed
+
+- When you go to a thread whose file will not open, such as an OpenAPI
+  spec whose preview fails to load, the file now opens as plain text,
+  so you still see the thread and a walkthrough goes on. Only when
+  plain text fails too do you get a message, and a walkthrough stays
+  on your step.
+
+## [0.2.10] - 2026-11-13
+
+Thanks to [@schrek1](https://github.com/schrek1) for the unread marks, the Agree signals and the review diff work in this release.
+
+### Added
+
 - Mark a thread unread from its menu in the tool window. It waits for
   you like a new message until you return to it.
 - Mark a thread read from the same menu, without opening it. A thread
   that is your move drops its ✉ in the tool window.
 - Select several threads in the tool window to mark, resolve or delete
   them together.
+- Threads you leave open in a diff, such as a pull or merge request
+  review, stay open when the diff refreshes and open again when you come
+  back to their file. Threads you closed or resolved stay closed.
+- Walkthrough steps can now stay in a pull or merge request review
+  when a step is in another file: the review moves to that file. This
+  is experimental and off by default. Turn it on in Settings › Tools ›
+  Marginalis.
 
 ### Changed
 
@@ -46,6 +69,9 @@ History before 0.1.19 lives in git tags.
 - A thread you have read but not answered stays yours. It remains in
   Awaiting You and in the Margin tab's "your move" count, its card
   keeps the ✉, and its file keeps the ✉ on its editor tab.
+- Walkthrough steps stay in the diff you are reading when the step is
+  in the file it shows. This includes a pull or merge request review
+  whose branch is not checked out.
 
 ### Fixed
 

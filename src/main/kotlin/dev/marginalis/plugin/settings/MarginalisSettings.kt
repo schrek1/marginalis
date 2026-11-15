@@ -12,6 +12,7 @@ import dev.marginalis.core.FoldingPrefs
 import dev.marginalis.core.LeavingAStep
 import dev.marginalis.core.ListWhileInFront
 import dev.marginalis.core.LongThreadFolding
+import dev.marginalis.core.MarginTabShows
 import dev.marginalis.core.People
 import dev.marginalis.core.ProjectTabPrefs
 import dev.marginalis.core.ReadWhen
@@ -47,6 +48,8 @@ class MarginalisSettings : PersistentStateComponent<MarginalisSettings.State> {
 
         var liveByDefault: Boolean = false
 
+        var marginTabShows: String = MarginTabShows.WITH_SOMETHING_IN_IT.stored
+
         var projectTabList: String = ListWhileInFront.LIVE.stored
 
         var expandOnYourMove: Boolean = true
@@ -55,13 +58,13 @@ class MarginalisSettings : PersistentStateComponent<MarginalisSettings.State> {
 
         var groupRelayedConversation: Boolean = true
 
-        var showTabOnProjectOpen: Boolean = false
-
         var longThreadFolding: String = LongThreadFolding.FOLD_EVERY_READ_MESSAGE.stored
 
         var keepFirstMessageOpen: Boolean = false
 
         var askForSummaryLine: Boolean = true
+
+        var keepStepsInReviewAcrossFiles: Boolean = true
     }
 
     @Tag("person")
@@ -122,6 +125,12 @@ class MarginalisSettings : PersistentStateComponent<MarginalisSettings.State> {
         get() = LeavingAStep.fromStored(state.leavingAStep)
         set(value) {
             state.leavingAStep = value.stored
+        }
+
+    var marginTabShows: MarginTabShows
+        get() = MarginTabShows.fromStored(state.marginTabShows)
+        set(value) {
+            state.marginTabShows = value.stored
         }
 
     var listWhileInFront: ListWhileInFront

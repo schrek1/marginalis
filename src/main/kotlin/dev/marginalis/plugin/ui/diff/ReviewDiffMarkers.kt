@@ -11,8 +11,8 @@ import com.intellij.diff.tools.util.base.DiffViewerListener
 import com.intellij.diff.tools.util.side.OnesideTextDiffViewer
 import com.intellij.diff.tools.util.side.TwosideTextDiffViewer
 import com.intellij.diff.util.Side
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.editor.markup.HighlighterLayer
@@ -27,18 +27,17 @@ import dev.marginalis.core.ThreadStatus
 import dev.marginalis.plugin.ProjectPaths
 import dev.marginalis.plugin.store.MarginalisStore
 import dev.marginalis.plugin.ui.CoalescedEdtRunner
-import dev.marginalis.plugin.ui.ShownThreads
 import dev.marginalis.plugin.ui.ThreadGutterIconRenderer
+import dev.marginalis.plugin.ui.ShownThreads
 import dev.marginalis.plugin.ui.ThreadInlayManager
-import dev.marginalis.plugin.ui.WalkthroughNavigator
 import java.util.WeakHashMap
 
 /**
  * Tags every diff editor about a project file with the threads it shows, and paints gutter icons where the
  * diff holds a revision's copy of the text, which the markers on the file's own document never reach.
  *
- * Icons are editor-local and re-anchored on the diff's text; a thread whose anchor isn't there gets no icon.
- * A walkthrough step waiting for this diff's file ([ReviewDiffSteps]) opens here the same way. EDT only.
+ * A diff builds a new viewer for a file it shows again, and a review does so on every refresh of its data; the new
+ * viewer keeps the caret and scroll but not our panels, so the threads open in the file's last viewer open again in it.
  */
 class ReviewDiffMarkers : DiffExtension() {
 
@@ -46,29 +45,31 @@ class ReviewDiffMarkers : DiffExtension() {
         val project = context.project ?: return
         val sides = ReviewSides.of(viewer) ?: return
         val path = sides.content.highlightFile?.let { ProjectPaths.of(project, it) } ?: return
-        DiffPainter(project, sides, path).install()
-        val editor = sides.editor ?: return
-        OpenThreadsKeeper(project, sides.viewer, editor, openWhenShownAgain(context), path).install()
-        ReviewDiffSteps.takePending(context, path)?.let { step -> StepOpener(project, sides.viewer, editor, step).install() }
+        val openWhenShownAgain = openThreadsByFile.getOrPut(context) { mutableMapOf() }
+        val reopening = openWhenShownAgain.remove(path).orEmpty()
+        val arriving = ReviewDiffSteps.arrivingIn(context, path, canShowIt = sides.editor != null)
+        DiffPainter(project, sides, path, reopening, arriving) { openThreadIds ->
+            if (openThreadIds.isEmpty()) openWhenShownAgain.remove(path) else openWhenShownAgain[path] = openThreadIds
+        }.install()
     }
 
     companion object {
         private val live = mutableSetOf<DiffPainter>()
 
-        // Weak, as ReviewDiffSteps' pending steps: what a review remembers must not outlive it.
         private val openThreadsByFile = WeakHashMap<DiffContext, MutableMap<String, List<String>>>()
-
-        private fun openWhenShownAgain(context: DiffContext): MutableMap<String, List<String>> =
-            openThreadsByFile.getOrPut(context) { mutableMapOf() }
 
         /** Strips our highlighters and listeners from open diffs before a dynamic unload. */
         fun disposeAll() {
             live.toList().forEach { it.uninstall() }
             openThreadsByFile.clear()
+            ReviewDiffSteps.disposeAll()
+        }
+
+        fun forgetOpen(context: DiffContext, path: String, threadId: String) {
+            openThreadsByFile[context]?.computeIfPresent(path) { _, threadIds -> (threadIds - threadId).ifEmpty { null } }
         }
     }
 
-    /** The PR/after side's text, the editors showing it and the base, and how its lines map into its editor. */
     private class ReviewSides(
         val viewer: DiffViewerBase,
         val content: DocumentContent,
@@ -99,6 +100,9 @@ class ReviewDiffMarkers : DiffExtension() {
         private val project: Project,
         private val sides: ReviewSides,
         private val path: String,
+        private var reopening: List<String>,
+        private var arriving: ReviewDiffSteps.ArrivingStep?,
+        private val onClosing: (openThreadIds: List<String>) -> Unit,
     ) : DiffViewerListener() {
 
         private val store = MarginalisStore.getInstance(project)
@@ -107,6 +111,7 @@ class ReviewDiffMarkers : DiffExtension() {
         private val marked = mutableListOf<EditorEx>()
         private var observer: AutoCloseable? = null
         private var liveWatch: Disposable? = null
+        private var released = false
 
         fun install() {
             sides.viewer.addListener(this)
@@ -132,6 +137,7 @@ class ReviewDiffMarkers : DiffExtension() {
         }
 
         private fun release() {
+            released = true
             live -= this
             observer?.close()
             observer = null
@@ -154,11 +160,35 @@ class ReviewDiffMarkers : DiffExtension() {
             FileDocumentManager.getInstance().getFile(editor.document)?.let { ProjectPaths.of(project, it) } != null
 
         // A unified viewer rebuilds its document on every rediff, a side-by-side one has it only once the first diff lands.
-        override fun onAfterRediff() = paint()
+        override fun onAfterRediff() {
+            paint()
+            if (reopening.isNotEmpty() || arriving != null) reopenLater()
+        }
 
         // The viewer is iterating its listeners right now: removing ourselves here throws
         // ConcurrentModificationException and skips the listeners after us. The list dies with the viewer anyway.
-        override fun onDispose() = release()
+        override fun onDispose() {
+            val open = sides.editor?.takeIf { !it.isDisposed }?.let(ThreadInlayManager::openThreadIds).orEmpty()
+            onClosing((reopening + open).distinct())
+            arriving?.stillArriving()
+            arriving = null
+            release()
+        }
+
+        private fun reopenLater() {
+            val editor = sides.editor ?: return
+            ApplicationManager.getApplication().invokeLater({
+                val threadIds = reopening - arriving?.threadsLeftBehind().orEmpty().toSet()
+                reopening = emptyList()
+                threadIds.mapNotNull(store.threads::byId)
+                    .filter { it.status !is ThreadStatus.Resolved }
+                    .forEach { ThreadInlayManager.restore(project, editor, it) }
+                arriving?.let { step ->
+                    arriving = null
+                    step.landIn(editor)
+                }
+            }, { released || editor.isDisposed })
+        }
 
         private fun paint() {
             val editor = sides.editor ?: return
@@ -201,63 +231,5 @@ class ReviewDiffMarkers : DiffExtension() {
 
         private fun lineText(document: Document, line: Int): String =
             document.getText(TextRange(document.getLineStartOffset(line), document.getLineEndOffset(line)))
-    }
-
-    /**
-     * A review builds a new viewer for a file it shows again, on every refresh of its data as well: the threads open
-     * in the file's last viewer open again in the new one once its text has landed.
-     */
-    private class OpenThreadsKeeper(
-        private val project: Project,
-        private val viewer: DiffViewerBase,
-        private val editor: EditorEx,
-        private val openByFile: MutableMap<String, List<String>>,
-        private val path: String,
-    ) : DiffViewerListener() {
-
-        private var reopening = openByFile.remove(path).orEmpty()
-
-        fun install() = viewer.addListener(this)
-
-        override fun onAfterRediff() {
-            if (reopening.isEmpty() || editor.isDisposed) return
-            val store = MarginalisStore.getInstance(project)
-            reopening.mapNotNull(store.threads::byId)
-                .filter { it.status !is ThreadStatus.Resolved }
-                .forEach { ThreadInlayManager.open(project, editor, it) }
-            reopening = emptyList()
-        }
-
-        // The viewer is iterating its listeners right now; the list dies with the viewer anyway.
-        override fun onDispose() {
-            if (!editor.isDisposed) openByFile[path] = ThreadInlayManager.openThreadIds(editor)
-        }
-    }
-
-    /** Opens a step [ReviewDiffSteps] switched this diff to, once the diff's text has landed. */
-    private class StepOpener(
-        private val project: Project,
-        private val viewer: DiffViewerBase,
-        private val editor: EditorEx,
-        private val step: ReviewDiffSteps.PendingStep,
-    ) : DiffViewerListener() {
-
-        private var opened = false
-
-        fun install() = viewer.addListener(this)
-
-        // The viewer is iterating its listeners right now: removing ourselves, or leaving the diff for a file tab,
-        // changes that list mid-iteration and throws ConcurrentModificationException.
-        override fun onAfterRediff() {
-            if (opened) return
-            opened = true
-            ApplicationManager.getApplication().invokeLater {
-                if (viewer.isDisposed || editor.isDisposed) return@invokeLater
-                viewer.removeListener(this)
-                if (!WalkthroughNavigator.navigateWithin(editor, project, step.thread, step.revealing)) {
-                    WalkthroughNavigator.openStepInFileTab(project, step.thread, step.revealing)
-                }
-            }
-        }
     }
 }

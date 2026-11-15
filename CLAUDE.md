@@ -120,3 +120,10 @@ is running the plugin:
 - Platform floor: `since-build` 252 (2025.2). Prefer long-stable public
   API; CI's Plugin Verifier fails on internal / scheduled-for-removal
   usage, which a local build against a newer IDE won't catch.
+- A platform class that is Kotlin-`internal` or
+  `@ApiStatus.Experimental`, with no public alternative, may be used
+  only behind an opt-in setting that is off by default, through a
+  single Java class implementing an interface of ours (enforced for
+  `com.intellij.collaboration` by `ExperimentalApiSeamTest`), with a
+  full fallback, and with the Plugin Verifier checking the newest
+  released IDE. Reflection and `@ApiStatus.Internal` stay forbidden.

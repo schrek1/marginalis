@@ -2,6 +2,7 @@ package dev.marginalis.plugin.ui.diff
 
 import com.intellij.diff.tools.fragmented.UnifiedDiffViewer
 import com.intellij.diff.tools.util.base.IgnorePolicy
+import com.intellij.testFramework.PlatformTestUtil
 import dev.marginalis.plugin.testing.Gutter
 import dev.marginalis.plugin.testing.LiveBadge
 import dev.marginalis.plugin.testing.PluginUnload
@@ -252,6 +253,55 @@ class ReviewDiffTest : HttpContractTestCase() {
         assertEquals(emptyList<Any>(), diff.panels())
         assertNull(diff.editor.getUserData(ThreadInlayManager.SHOWN_THREADS))
         assertEquals(listening, store.threads.listenerCount)
+    }
+
+    fun testADiffOfLocalChangesThatBuildsANewViewerOpensTheThreadThatWasOpen() {
+        sample()
+        agent.addOnLine(20, "body" to "Check this")
+        val diff = diffs.localChanges(SAMPLE, pullRequest, unified = false)
+        diff.clickProjectFileIcon(20)
+        assertEquals(listOf(20), diff.panelRows())
+
+        val rebuilt = diff.rebuilt()
+
+        assertEquals(listOf(20), rebuilt.panelRows())
+    }
+
+    fun testAReviewRebuiltInABackgroundTabOpensItsThreadOnceBroughtToFront() {
+        sample()
+        agent.addOnLine(20, "body" to "Open in the review")
+        val diff = diffs.sideBySide(SAMPLE, base, pullRequest)
+        diff.clickIcon(22)
+        val rebuilt = diff.rebuilt(inBackground = true)
+
+        rebuilt.broughtToFront()
+
+        assertEquals(listOf(22), rebuilt.panelRows())
+    }
+
+    fun testUpdatingThePluginWhileARebuiltReviewWaitsInABackgroundTabLeavesItsThreadClosed() {
+        sample()
+        agent.addOnLine(20, "body" to "Open in the review")
+        val diff = diffs.sideBySide(SAMPLE, base, pullRequest)
+        diff.clickIcon(22)
+        val rebuilt = diff.rebuilt(inBackground = true)
+
+        assertNull(PluginUnload.forUpdate { rebuilt.broughtToFront() })
+
+        assertEquals(emptyList<Int>(), rebuilt.panelRows())
+    }
+
+    fun testUpdatingThePluginJustAsARebuiltReviewLandsItsDiffLeavesItsThreadClosed() {
+        sample()
+        agent.addOnLine(20, "body" to "Open in the review")
+        val diff = diffs.sideBySideDiffedOnTheEdt(SAMPLE, base, pullRequest)
+        diff.clickIcon(22)
+        val rebuilt = diff.rebuilt(inBackground = true)
+        rebuilt.broughtToFrontBeforeAnythingLaterRuns()
+
+        assertNull(PluginUnload.forUpdate { PlatformTestUtil.dispatchAllEventsInIdeEventQueue() })
+
+        assertEquals(emptyList<Int>(), rebuilt.panelRows())
     }
 
     fun testUpdatingThePluginWithAReviewOpenForgetsWhatBothItsEditorsShow() {

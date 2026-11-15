@@ -57,7 +57,6 @@ class MarginalisStartup : ProjectActivity {
                 persisted.lastOrNull()?.let { store.threads.notifyChanged(it) }
             }
         }
-        // Queued behind the persisted threads: whether the tab opens depends on them.
         ApplicationManager.getApplication().invokeLater {
             if (!project.isDisposed) ProjectTab.openOnStartup(project)
         }

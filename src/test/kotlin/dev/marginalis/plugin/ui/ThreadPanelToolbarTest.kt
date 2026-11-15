@@ -7,12 +7,12 @@ import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.util.text.StringUtil.unescapeXmlEntities
 import com.intellij.testFramework.PlatformTestUtil
-import dev.marginalis.core.LeavingAStep
 import dev.marginalis.core.Reference
 import dev.marginalis.plugin.settings.MarginalisSettings
 import dev.marginalis.plugin.store.Authors
 import dev.marginalis.plugin.testing.FilesThatWontStayOpen
 import dev.marginalis.plugin.testing.Relays
+import dev.marginalis.plugin.testing.SteppingChoice
 import dev.marginalis.plugin.transport.HttpContractTestCase
 import java.awt.datatransfer.DataFlavor
 
@@ -43,17 +43,6 @@ class ThreadPanelToolbarTest : HttpContractTestCase() {
             test()
         } finally {
             state.walkthroughAutoAdvance = before
-        }
-    }
-
-    private fun leavingAStep(choice: LeavingAStep, test: () -> Unit) {
-        val settings = MarginalisSettings.getInstance()
-        val before = settings.leavingAStep
-        settings.leavingAStep = choice
-        try {
-            test()
-        } finally {
-            settings.leavingAStep = before
         }
     }
 
@@ -181,35 +170,6 @@ class ThreadPanelToolbarTest : HttpContractTestCase() {
         assertTrue(shownIn(user.panel()).contains("Step one"))
     }
 
-    fun testNextStepFoldsTheStepYouLeaveByDefault() {
-        val steps = tour()
-
-        user.press(user.open(steps[0]), "Next Step")
-
-        assertEquals(listOf("Step two"), openStepBodies())
-    }
-
-    fun testNextStepKeepsTheStepYouLeaveOpenWhenChosen() = leavingAStep(LeavingAStep.KEEP_OPEN) {
-        val steps = tour()
-
-        user.press(user.open(steps[0]), "Next Step")
-
-        assertEquals(listOf("Step one", "Step two"), openStepBodies())
-        assertEquals(15, caretLine())
-    }
-
-    fun testAStepInAnotherFileStaysOpenInItsTabWhenYouStepBackFromIt() = leavingAStep(LeavingAStep.KEEP_OPEN) {
-        val steps = tour()
-        user.press(user.open(steps[1]), "Next Step")
-        assertEquals("Other.kt", openFileName())
-
-        user.press(user.panel(), "Previous Step")
-
-        assertEquals("Sample.kt", openFileName())
-        assertEquals(listOf("Step two"), openStepBodies())
-        assertEquals(listOf("Step three"), openStepBodies(editorOf("Other.kt")))
-    }
-
     fun testStepArrowsAcrossFilesFoldTheStepYouLeave() {
         val steps = tour()
         val panel = user.open(steps[1])
@@ -237,10 +197,12 @@ class ThreadPanelToolbarTest : HttpContractTestCase() {
         FilesThatWontStayOpen(project, testRootDisposable).closeOnOpening(other)
         val panel = user.open(steps[1])
         val sampleEditor = user.editor()
+        val shown = user.notifications()
 
         user.press(panel, "Next Step")
 
         assertTrue(shownIn(user.panel(sampleEditor)).contains("Step two"))
+        assertEquals(1, shown.size)
     }
 
     fun testAStepWhoseFileTheIdeClosesIsNamedWithItsFileInOneNotification() {
@@ -256,6 +218,15 @@ class ThreadPanelToolbarTest : HttpContractTestCase() {
         )
     }
 
+    fun testAStepWhoseFileClosesEvenAsPlainTextLeavesTheWalkthroughOnTheStepYouWereOn() {
+        val steps = tour()
+        FilesThatWontStayOpen(project, testRootDisposable).closeJustAfterOpening(other)
+
+        user.press(user.open(steps[1]), "Next Step")
+
+        assertEquals(steps[1], LastStep.getInstance(project).mark?.threadId)
+    }
+
     fun testAFailedMoveLeavesTheUnshownStepUnread() {
         val steps = tour()
         FilesThatWontStayOpen(project, testRootDisposable).closeJustAfterOpening(other)
@@ -263,6 +234,58 @@ class ThreadPanelToolbarTest : HttpContractTestCase() {
         user.press(user.open(steps[1]), "Next Step")
 
         assertEquals(1, user.thread(steps[2]).unreadByUserCount())
+    }
+
+    fun testNextStepFoldsTheStepYouLeaveByDefault() {
+        val steps = tour()
+
+        user.press(user.open(steps[0]), "Next Step")
+
+        assertEquals(listOf("Step two"), openStepBodies())
+    }
+
+    fun testNextStepKeepsTheStepYouLeaveOpenWhenChosen() {
+        SteppingChoice.keepTheStepYouLeaveOpen(testRootDisposable)
+        val steps = tour()
+
+        user.press(user.open(steps[0]), "Next Step")
+
+        assertEquals(listOf("Step one", "Step two"), openStepBodies())
+        assertEquals(15, caretLine())
+    }
+
+    fun testAStepInAnotherFileStaysOpenInItsTabWhenYouStepBackFromIt() {
+        SteppingChoice.keepTheStepYouLeaveOpen(testRootDisposable)
+        val steps = tour()
+        user.press(user.open(steps[1]), "Next Step")
+        assertEquals("Other.kt", openFileName())
+
+        user.press(user.panel(), "Previous Step")
+
+        assertEquals("Sample.kt", openFileName())
+        assertEquals(listOf("Step two"), openStepBodies())
+        assertEquals(listOf("Step three"), openStepBodies(editorOf("Other.kt")))
+    }
+
+    fun testNextCommentKeepsThePlainCommentYouLeaveOpenWhenChosen() {
+        SteppingChoice.keepTheStepYouLeaveOpen(testRootDisposable)
+        sample()
+        val first = agent.addOnLine(5, "body" to "First comment")
+        agent.addOnLine(15, "body" to "Second comment")
+
+        user.press(user.open(first), "Next Comment")
+
+        assertEquals(2, user.panels().size)
+        assertEquals(15, caretLine())
+    }
+
+    fun testResolvingAStepStillFoldsItWhenStepsYouLeaveStayOpen() {
+        SteppingChoice.keepTheStepYouLeaveOpen(testRootDisposable)
+        val steps = tour()
+
+        user.press(user.open(steps[0]), "Resolve")
+
+        assertEquals(listOf("Step two"), openStepBodies())
     }
 
     fun testStepArrowsOnAResolvedThreadStartTheWalkAtTheFirstOpenThread() {

@@ -217,9 +217,11 @@ class StepArrowsTest : ToolWindowTestCase() {
         interleaved()
         repeat(2) { window.press("Next Step") }
         FilesThatWontStayOpen(project, testRootDisposable).closeJustAfterOpening(loyaltyDiscountPolicy)
+        val shown = user.notifications()
 
         window.press("Next Step")
 
+        assertEquals(1, shown.size)
         assertEquals("✉ (3/18)  OrderService.java L28  Step 3", window.selected())
         window.selectNothing()
         window.press("Previous Step")

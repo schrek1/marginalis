@@ -7,6 +7,9 @@ import com.intellij.diff.impl.DiffEditorViewer;
 import com.intellij.diff.requests.DiffRequest;
 import com.intellij.diff.requests.LoadingDiffRequest;
 import com.intellij.diff.requests.SimpleDiffRequest;
+import com.intellij.diff.tools.fragmented.UnifiedDiffTool;
+import com.intellij.diff.tools.simple.SimpleDiffTool;
+import com.intellij.diff.util.DiffUserDataKeysEx;
 import com.intellij.openapi.ListSelection;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.fileEditor.FileEditorManager;
@@ -21,16 +24,12 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
-/**
- * A pull/merge request review in an editor tab, run by the platform's review diff processor (the one behind the GitHub
- * and GitLab reviews) over revision copies of project files. As in a real review, switching files shows a loading
- * request first and the file's diff on a later EDT turn.
- *
- * Java because the processor is Kotlin-internal to the platform.
- */
+// Java because the platform's review diff processor, behind the GitHub and GitLab reviews, is Kotlin-internal.
 @SuppressWarnings("UnstableApiUsage")
 public final class ReviewProcessorTab {
 
@@ -39,19 +38,21 @@ public final class ReviewProcessorTab {
 
     private final Project project;
     private final List<ReviewedFile> files;
+    private final boolean unified;
+    private final Set<String> unnamed = new HashSet<>();
     private MutableDiffRequestProcessor processor;
     private int shown = -1;
     private DiffRequest shownRequest;
 
-    private ReviewProcessorTab(Project project, List<ReviewedFile> files) {
+    private ReviewProcessorTab(Project project, List<ReviewedFile> files, boolean unified) {
         this.project = project;
+        this.unified = unified;
         // Not List.copyOf: ListSelection asks the list whether it contains null, which an immutable copy refuses.
         this.files = new ArrayList<>(files);
     }
 
-    /** Opens the review on its first file. */
-    public static ReviewProcessorTab open(Project project, FileEditorManager editors, List<ReviewedFile> files) {
-        ReviewProcessorTab review = new ReviewProcessorTab(project, files);
+    public static ReviewProcessorTab open(Project project, FileEditorManager editors, List<ReviewedFile> files, boolean unified) {
+        ReviewProcessorTab review = new ReviewProcessorTab(project, files, unified);
         editors.openFile(new DiffViewerVirtualFile("Review") {
             @Override
             public @NotNull DiffEditorViewer createViewer(@NotNull Project project) {
@@ -65,7 +66,14 @@ public final class ReviewProcessorTab {
         return shown < 0 ? null : files.get(shown).path();
     }
 
-    /** Shows the same file's diff again in a new viewer, as the review does whenever its data refreshes. */
+    public void switchTo(String path) {
+        show(files.stream().map(ReviewedFile::path).toList().indexOf(path));
+    }
+
+    public void withoutAName(String path) {
+        unnamed.add(path);
+    }
+
     public void refresh() {
         processor.applyRequest(Objects.requireNonNull(shownRequest, "the review shows no file's diff yet"));
     }
@@ -91,13 +99,15 @@ public final class ReviewProcessorTab {
     private DiffRequest requestFor(ReviewedFile file) {
         DiffContentFactory contents = DiffContentFactory.getInstance();
         VirtualFile projectFile = projectFile(file.path());
-        return new SimpleDiffRequest(
+        SimpleDiffRequest request = new SimpleDiffRequest(
             file.path(),
             contents.create(project, file.before(), projectFile),
             contents.create(project, file.after(), projectFile),
             "Base",
             "Pull request"
         );
+        request.putUserData(DiffUserDataKeysEx.FORCE_DIFF_TOOL, unified ? UnifiedDiffTool.INSTANCE : SimpleDiffTool.INSTANCE);
+        return request;
     }
 
     private VirtualFile projectFile(String path) {
@@ -128,7 +138,8 @@ public final class ReviewProcessorTab {
         }
 
         @Override
-        public @NotNull PresentableChange getChangePresentation(ReviewedFile file) {
+        public @Nullable PresentableChange getChangePresentation(ReviewedFile file) {
+            if (unnamed.contains(file.path())) return null;
             FilePath path = VcsUtil.getFilePath(projectFile(file.path()));
             return new PresentableChange() {
                 @Override

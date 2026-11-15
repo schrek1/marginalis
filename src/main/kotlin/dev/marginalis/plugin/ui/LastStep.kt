@@ -11,7 +11,11 @@ class LastStep {
     var mark: StepMark? = null
         private set
 
+    var landings = 0
+        private set
+
     fun landedOn(thread: CommentThread) {
+        landings++
         StepMark.of(thread)?.let { mark = it }
     }
 

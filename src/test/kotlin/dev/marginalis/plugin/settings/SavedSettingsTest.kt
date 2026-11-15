@@ -6,6 +6,7 @@ import dev.marginalis.core.FoldingPrefs
 import dev.marginalis.core.LeavingAStep
 import dev.marginalis.core.ListWhileInFront
 import dev.marginalis.core.LongThreadFolding
+import dev.marginalis.core.MarginTabShows
 import dev.marginalis.core.People
 import dev.marginalis.core.ReadWhen
 import dev.marginalis.plugin.testing.MarginalisTestCase
@@ -24,6 +25,7 @@ class SavedSettingsTest : MarginalisTestCase() {
             timeFormat = TimeFormat.TWELVE_HOUR
             listWhileInFront = ListWhileInFront.HOLD_STILL
             readWhen = ReadWhen.CLICKED_INTO
+            marginTabShows = MarginTabShows.WITH_SOMETHING_IN_IT
             state.navigationEnabled = false
             state.displayName = "Ada"
             state.githubLogin = "ada-l"
@@ -37,6 +39,7 @@ class SavedSettingsTest : MarginalisTestCase() {
             longThreadFolding = LongThreadFolding.FOLD_LONG_READ_MESSAGES
             state.keepFirstMessageOpen = true
             state.askForSummaryLine = false
+            state.keepStepsInReviewAcrossFiles = true
         }
 
         val after = loaded(saved(before))
@@ -45,8 +48,10 @@ class SavedSettingsTest : MarginalisTestCase() {
         assertEquals(TimeFormat.TWELVE_HOUR, after.timeFormat)
         assertEquals(LeavingAStep.KEEP_OPEN, after.leavingAStep)
         assertEquals(before.projectTabPrefs, after.projectTabPrefs)
+        assertEquals(MarginTabShows.WITH_SOMETHING_IN_IT, after.marginTabShows)
         assertEquals(FoldingPrefs(LongThreadFolding.FOLD_LONG_READ_MESSAGES, keepFirstOpen = true), after.foldingPrefs)
         assertFalse(after.state.askForSummaryLine)
+        assertTrue(after.state.keepStepsInReviewAcrossFiles)
         assertEquals(saved(before), saved(after))
     }
 
@@ -115,16 +120,18 @@ class SavedSettingsTest : MarginalisTestCase() {
               <option name="projectTabList" value="sideways" />
               <option name="projectTabReadWhen" value="never" />
               <option name="longThreadFolding" value="unfolded" />
+              <option name="marginTabShows" value="sometimes" />
               <option name="leavingAStep" value="hide" />
             </State>
             """.trimIndent(),
         )
 
-        assertEquals(LeavingAStep.FOLD, settings.leavingAStep)
         assertEquals(TimeFormat.AUTO, settings.timeFormat)
         assertEquals(ListWhileInFront.LIVE, settings.listWhileInFront)
         assertEquals(ReadWhen.EXPANDED_IN_FRONT, settings.readWhen)
         assertEquals(LongThreadFolding.FOLD_EVERY_READ_MESSAGE, settings.longThreadFolding)
+        assertEquals(MarginTabShows.ALWAYS, settings.marginTabShows)
+        assertEquals(LeavingAStep.FOLD, settings.leavingAStep)
     }
 
     fun testFreshSettingsAllowNavigationNotifyAndAdvance() {
@@ -135,6 +142,9 @@ class SavedSettingsTest : MarginalisTestCase() {
         assertTrue(fresh.state.walkthroughAutoAdvance)
         assertTrue(fresh.state.showGithubAvatars)
         assertEquals(TimeFormat.AUTO, fresh.timeFormat)
+        assertEquals(MarginTabShows.WITH_SOMETHING_IN_IT, fresh.marginTabShows)
+        assertTrue(fresh.state.keepStepsInReviewAcrossFiles)
+        assertEquals(LeavingAStep.FOLD, fresh.leavingAStep)
         assertEquals(emptyList<People.Row>(), fresh.rows)
     }
 
@@ -150,5 +160,12 @@ class SavedSettingsTest : MarginalisTestCase() {
 
         assertEquals(FoldingPrefs(LongThreadFolding.FOLD_EVERY_READ_MESSAGE, keepFirstOpen = false), older.foldingPrefs)
         assertTrue(older.state.askForSummaryLine)
+    }
+
+    fun testStepsStayInAReviewAcrossFilesUnlessTheExperimentWasSwitchedOff() {
+        assertTrue(loaded("<State />").state.keepStepsInReviewAcrossFiles)
+        assertFalse(loaded("<State><option name=\"keepStepsInReviewAcrossFiles\" value=\"false\" /></State>").state.keepStepsInReviewAcrossFiles)
+        assertFalse(loaded("<State><option name=\"keepStepsInReviewAcrossFiles\" value=\"sometimes\" /></State>").state.keepStepsInReviewAcrossFiles)
+        assertTrue(loaded("<State><option name=\"keepStepsInReviewAcrossFiles\" value=\"true\" /></State>").state.keepStepsInReviewAcrossFiles)
     }
 }

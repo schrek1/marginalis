@@ -42,6 +42,13 @@ object ThreadInlayManager {
         revealing?.let { ApplicationManager.getApplication().invokeLater { panel.reveal(it) } }
     }
 
+    fun restore(project: Project, editor: Editor, thread: CommentThread) {
+        if (openPanelOf(editor, thread) == null) addPanel(project, editor, thread, ensureStored = {})
+    }
+
+    fun openThreadIds(editor: Editor): List<String> =
+        editor.getUserData(OPEN_INLAYS)?.filterValues { (inlay, _) -> inlay.isValid }?.keys?.toList().orEmpty()
+
     fun openDraft(project: Project, editor: Editor, thread: CommentThread) {
         openPanel(project, editor, thread) {
             val store = MarginalisStore.getInstance(project)
@@ -52,23 +59,29 @@ object ThreadInlayManager {
         }
     }
 
-    fun openThreadIds(editor: Editor): List<String> =
-        editor.getUserData(OPEN_INLAYS)?.filterValues { (inlay, _) -> inlay.isValid }?.keys?.toList().orEmpty()
-
     private fun openInlays(editor: Editor): MutableMap<String, Pair<Inlay<*>, ThreadPanel>> =
         editor.getUserData(OPEN_INLAYS) ?: mutableMapOf<String, Pair<Inlay<*>, ThreadPanel>>()
             .also { editor.putUserData(OPEN_INLAYS, it) }
 
     private fun openPanel(project: Project, editor: Editor, thread: CommentThread, ensureStored: () -> Unit): ThreadPanel? {
         LastStep.getInstance(project).landedOn(thread)
-        val open = openInlays(editor)
-        open[thread.id]?.let { (inlay, panel) ->
-            // Document reloads dispose inlays behind our back; a stale entry
-            // must not veto reopening.
-            if (inlay.isValid) return panel
-            open.remove(thread.id)
-        }
+        return openPanelOf(editor, thread)
+            ?: addPanel(project, editor, thread, ensureStored)?.also { panel ->
+                ApplicationManager.getApplication().invokeLater { panel.focusDefault() }
+            }
+    }
 
+    private fun openPanelOf(editor: Editor, thread: CommentThread): ThreadPanel? {
+        val open = openInlays(editor)
+        val (inlay, panel) = open[thread.id] ?: return null
+        // Document reloads dispose inlays behind our back; a stale entry
+        // must not veto reopening.
+        if (inlay.isValid) return panel
+        open.remove(thread.id)
+        return null
+    }
+
+    private fun addPanel(project: Project, editor: Editor, thread: CommentThread, ensureStored: () -> Unit): ThreadPanel? {
         val line = lineOf(project, editor, thread)?.coerceAtMost(editor.document.lineCount - 1) ?: return null
         val panel = ThreadPanel(
             project,
@@ -102,9 +115,8 @@ object ThreadInlayManager {
             },
             inlay,
         )
-        open[thread.id] = inlay to panel
+        openInlays(editor)[thread.id] = inlay to panel
         installStoreListener(project, editor)
-        ApplicationManager.getApplication().invokeLater { panel.focusDefault() }
         return panel
     }
 
