@@ -4,10 +4,14 @@ package dev.marginalis.plugin.sandbox
  * The `ERROR` / `SEVERE` entries of an IDE log that pass through the plugin's code: the entry's header (its logger)
  * or any line under it (message, stack trace) names `dev.marginalis`. These are what a user sees as "IDE error
  * occurred" while every check of a scenario still finds the state it expects.
+ *
+ * The platform's reports of an action update that took too long on the EDT are left out: they time the machine's load
+ * (a CI runner with four IDEs at once), not a fault of the plugin.
  */
 object PluginErrors {
 
     private val ENTRY = Regex("""^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d+ \[ *\d+] +(\w+) - (.*)$""")
+    private val SLOW_ACTION_UPDATE = Regex("""- #c\.i\.o\.a\.i\.ActionUpdater - \d+ ms to call on EDT """)
     private const val PLUGIN_PACKAGE = "dev.marginalis"
 
     /**
@@ -26,6 +30,7 @@ object PluginErrors {
         return entries
             .filter { entry -> ENTRY.matchEntire(entry.first())!!.groupValues[1] in setOf("ERROR", "SEVERE") }
             .filter { entry -> entry.any { PLUGIN_PACKAGE in it } }
+            .filterNot { entry -> SLOW_ACTION_UPDATE.containsMatchIn(entry.first()) }
             .map { entry ->
                 val where = entry.drop(1).firstOrNull { PLUGIN_PACKAGE in it }?.trim()
                 listOfNotNull(entry.first(), where).joinToString(" | ")

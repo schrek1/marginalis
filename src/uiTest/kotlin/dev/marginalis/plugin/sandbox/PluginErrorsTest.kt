@@ -54,6 +54,21 @@ class PluginErrorsTest {
     }
 
     @Test
+    fun `the platform's report of a slow action update in the plugin passes`() {
+        // GIVEN - the platform timed one of the plugin's action updates on the EDT over its threshold
+        val log = listOf(
+            "2026-11-15 18:08:13,641 [  34317] SEVERE - #c.i.o.a.i.ActionUpdater - 343 ms to call on EDT " +
+                "FirstStepAction#presentation@ToolwindowTitle (dev.marginalis.plugin.ui.toolwindow.FirstStepAction). Revise AnAction.update",
+        )
+
+        // WHEN - the log is read
+        val errors = PluginErrors.inLog(log)
+
+        // THEN - nothing is reported
+        errors.shouldBeEmpty()
+    }
+
+    @Test
     fun `only the errors written since a moment are reported when one is given`() {
         // GIVEN - a plugin error from an earlier run and one written after the moment
         val log = """
