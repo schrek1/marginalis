@@ -68,7 +68,9 @@ host's Gradle (`sandboxPrebuilt`).
   threads earlier cases of its class posted, so run one alone only where the class says it stands alone, as
   `StablePrsTest` does.
 - **Where things land:** `marginalis-sandbox-runtime/` next to the checkout (`MARGINALIS_SANDBOX_RUNTIME` moves
-  it). Per scenario, `<scenario>/run.log` holds the IDE's log, `kotlin-logs/<scenario>.log` the `PASS` / `FAIL`
+  it). Per scenario, `<scenario>/run.log` holds the IDE's console, `<scenario>/idea.log` the IDE's own log of that
+  scenario (saved when its sandbox stops; the check "the IDE logged no error from the plugin" reads it),
+  `kotlin-logs/<scenario>.log` the `PASS` / `FAIL`
   lines, `shots/<scenario>/` the shots, and on a timeout `<scenario>/diagnostics/` gets a frame shot while the
   thread dump goes into `run.log`. The failure message names both.
 - **Known gaps** (checks that pin an open defect) run only with `MARGINALIS_SANDBOX_KNOWN_GAPS=true`.
