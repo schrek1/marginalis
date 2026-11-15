@@ -17,6 +17,10 @@ abstract class MarginTabTestCase : HttpContractTestCase() {
 
     private val marginFileEditors = MarginFileEditors()
 
+    // Upstream writes these tests for "Keep the Margin tab open", where startup opens the tab pinned. Started from the
+    // fork's default instead, the unpinned tab's reply boxes moved in CI on a slow runner (MARG-270).
+    override val marginTabShows: MarginTabShows = MarginTabShows.ALWAYS
+
     override fun setUp() {
         super.setUp()
         marginFileEditors.watch()
