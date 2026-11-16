@@ -205,7 +205,7 @@ class CommentThread(
     fun turnFor(agentKey: String?): Turn? {
         val last = lastSpoken
         val turn = when {
-            status !is ThreadStatus.Open -> null
+            status is ThreadStatus.Resolved -> null
             isReadFyi -> null
             last == null && messages.isNotEmpty() -> Turn.USER_OWES
             answerTo(last) != null -> null

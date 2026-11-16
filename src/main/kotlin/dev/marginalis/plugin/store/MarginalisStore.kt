@@ -188,10 +188,7 @@ class MarginalisStore(private val project: Project) : Disposable {
         val marker = markers[thread.id]
         if (marker == null || marker.isValid) return false
         val orphans = thread.status is ThreadStatus.Open
-        if (orphans) {
-            thread.markOrphaned()
-            endLive(thread)
-        }
+        if (orphans) thread.markOrphaned()
         markers.remove(thread.id, marker)
         return orphans
     }

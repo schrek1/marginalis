@@ -15,6 +15,14 @@ History before 0.1.19 lives in git tags.
   the filter had to reset to show the thread.
 - *Select Opened Thread* can take a keyboard shortcut and is in Find
   Action.
+### Fixed
+
+- A conversation goes on after the code it points at was rewritten.
+  A thread whose line is gone still shows whose move it is, your reply
+  in it reaches your agent with the next Submit round, and a live
+  thread stays live and wakes your agent at once. Before, such a thread
+  fell silent: no arrow, no live mode, and your reply never reached the
+  agent.
 
 ## [0.2.11] - 2026-11-14
 

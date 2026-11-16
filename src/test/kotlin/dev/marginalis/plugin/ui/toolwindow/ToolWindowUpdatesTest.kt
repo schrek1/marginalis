@@ -127,7 +127,7 @@ class ToolWindowUpdatesTest : ToolWindowTestCase() {
         assertEquals(listOf("Resolved  1"), window.rows())
     }
 
-    // FixMe: Known issue - #55 an orphaned thread stays listed under Open (with its turn signal gone) until some other thread changes
+    // FixMe: Known issue - #55 an orphaned thread stays listed under Open until some other thread changes
     fun testAThreadWhoseLineIsErasedReachesTheOrphanedSectionOnlyWhenAnotherThreadChanges() {
         sample()
         agent.addOnLine(20, "body" to "About this line")
@@ -137,11 +137,11 @@ class ToolWindowUpdatesTest : ToolWindowTestCase() {
         assertEquals(listOf("Open  1", "src  1", "Sample.kt ✉1", "✉ L20  About this line"), window.rows())
 
         assertEquals("orphaned", agent.threads().single().string("status"))
-        assertEquals(listOf("Open  1", "src  1", "Sample.kt", "L20  About this line"), window.rows())
+        assertEquals(listOf("Open  1", "src  1", "Sample.kt ✉1", "✉ L20  About this line"), window.rows())
 
         window.rebuiltBy { agent.addOnLine(3, "body" to "Something else") }
         assertEquals(
-            listOf("Open  1", "src  1", "Sample.kt ✉1", "✉ L3  Something else", "Orphaned  1", "src  1", "Sample.kt", "L20  About this line"),
+            listOf("Open  1", "src  1", "Sample.kt ✉1", "✉ L3  Something else", "Orphaned  1", "src  1", "Sample.kt ✉1", "✉ L20  About this line"),
             window.rows(),
         )
     }
@@ -154,7 +154,7 @@ class ToolWindowUpdatesTest : ToolWindowTestCase() {
 
         window.rebuiltBy { agent.reply(id, "Still relevant after the rewrite?") }
 
-        assertEquals(listOf("Orphaned  1", "src  1", "Sample.kt", "L20  About this line"), window.rows())
+        assertEquals(listOf("Orphaned  1", "src  1", "Sample.kt ✉1", "✉ L20  About this line"), window.rows())
     }
 
     // FixMe: Known issue - #55 a thread row keeps its old line number after the user edits above it, until a thread changes or an agent reads the margin

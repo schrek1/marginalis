@@ -495,7 +495,7 @@ class ThreadPanel(
         override fun update(e: AnActionEvent) {
             super.update(e)
             e.presentation.icon = AllIcons.Actions.Lightning
-            e.presentation.isVisible = !isDraft() && thread.status is ThreadStatus.Open
+            e.presentation.isVisible = !isDraft() && thread.status !is ThreadStatus.Resolved
             e.presentation.isEnabled = isSelected(e) || liveAgentWaiting()
             val agent = liveAgentKey()?.let(::agentName) ?: "an agent"
             e.presentation.text = when {

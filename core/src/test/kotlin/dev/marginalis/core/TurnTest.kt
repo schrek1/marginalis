@@ -1,5 +1,6 @@
 package dev.marginalis.core
 
+import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -16,11 +17,10 @@ class TurnTest {
         CommentThread(file = "a.py", line = 1, anchorText = "x").also { it.addMessage(Message(lastWord, "…")) }
 
     @Test
-    fun `no open threads means no one's turn — concluded and orphaned threads ask nothing`() {
+    fun `no unresolved threads means no one's turn — concluded threads ask nothing`() {
         val resolved = thread(agent).also { it.resolve(user) }
-        val orphaned = thread(agent).also { it.markOrphaned() }
         assertNull(Turn.owed(emptyList()))
-        assertNull(Turn.owed(listOf(resolved, orphaned)))
+        assertNull(Turn.owed(listOf(resolved)))
     }
 
     @Test
@@ -45,9 +45,14 @@ class TurnTest {
     }
 
     @Test
-    fun `a concluded or orphaned thread is nobody's turn`() {
+    fun `a concluded thread is nobody's turn`() {
         assertNull(thread(user).also { it.resolve(agent) }.turn())
-        assertNull(thread(user).also { it.markOrphaned() }.turn())
+    }
+
+    @Test
+    fun `an orphaned thread keeps its turn, since the conversation outlives its line`() {
+        thread(user).also { it.markOrphaned() }.turn() shouldBe Turn.AGENT_OWES
+        thread(agent).also { it.markOrphaned() }.turn() shouldBe Turn.USER_OWES
     }
 
     @Test
