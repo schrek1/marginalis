@@ -1,5 +1,6 @@
 package dev.marginalis.core
 
+import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -34,8 +35,8 @@ class ThreadSignalTest {
             it.markOrphaned()
         }
 
-        assertEquals(ThreadSignal.AGENTS_MOVE, ThreadSignal.of(userReplied))
-        assertEquals(ThreadSignal.AGENT_ON_IT, ThreadSignal.onCard(agentOnIt))
+        ThreadSignal.of(userReplied) shouldBe ThreadSignal.AGENTS_MOVE
+        ThreadSignal.onCard(agentOnIt) shouldBe ThreadSignal.AGENT_ON_IT
     }
 
     @Test

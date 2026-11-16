@@ -1,5 +1,6 @@
 package dev.marginalis.core
 
+import io.kotest.matchers.shouldBe
 import java.time.Duration
 import java.time.Instant
 import kotlin.test.Test
@@ -28,8 +29,8 @@ class LiveThreadTest {
     fun `an orphaned thread stays live, since the conversation goes on without its line`() {
         val orphan = thread().also { it.markOrphaned() }
 
-        assertFalse(LiveThread.isOver(orphan))
-        assertTrue(LiveThread.isLive(orphan, projectLive = false, ownSwitch = true))
+        LiveThread.isOver(orphan) shouldBe false
+        LiveThread.isLive(orphan, projectLive = false, ownSwitch = true) shouldBe true
     }
 
     @Test
@@ -144,7 +145,7 @@ class LiveThreadTest {
         t.addMessage(Message(user, "Why not a pessimistic lock?"))
         LiveThread.submit(handBack, t, claude.receiptKey)
 
-        assertEquals(Wake.Live(t.updatedAt, listOf(t.id)), waited.getNow(null))
+        waited.getNow(null) shouldBe Wake.Live(t.updatedAt, listOf(t.id))
     }
 
     @Test

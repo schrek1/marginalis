@@ -2,10 +2,14 @@ package dev.marginalis.plugin.store
 
 import com.intellij.testFramework.PlatformTestUtil
 import dev.marginalis.plugin.transport.HttpContractTestCase
+import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.shouldBe
 
 class LiveThreadsTest : HttpContractTestCase() {
 
     private fun goLiveWhileClaudeBrieflyListens(id: String) {
+        // Opening the panel the first time can outlast the one-second wait, so it opens before Claude listens.
+        user.open(id)
         val waiting = agent.startWait("timeout" to 1)
         user.goLive(id)
         agent.await(waiting)
@@ -89,9 +93,9 @@ class LiveThreadsTest : HttpContractTestCase() {
         user.reply(id, "It went with the rewrite.")
 
         val woken = agent.await(waiting)
-        assertEquals("live", woken["reason"]!!.asString)
+        woken["reason"]!!.asString shouldBe "live"
         val awaiting = woken.json.getAsJsonArray("awaiting").map { it.asJsonObject }
-        assertEquals(listOf(id to "orphaned"), awaiting.map { it.id to it["status"].asString })
+        awaiting.map { it.id to it["status"].asString } shouldContainExactly listOf(id to "orphaned")
     }
 
     fun testAThreadSwitchedLiveOnItsOwnStaysLiveOnceRescuedFromOrphaning() {
@@ -117,7 +121,7 @@ class LiveThreadsTest : HttpContractTestCase() {
 
         agent.post("comment_reanchor", "thread_id" to id, "line" to 55, "anchor_text" to lineText(20))
 
-        assertFalse(user.isLive(id))
+        user.isLive(id) shouldBe false
     }
 
     fun testAThreadInALiveProjectStaysLiveThroughOrphaningAndReopening() {

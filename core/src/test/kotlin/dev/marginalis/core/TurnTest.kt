@@ -1,5 +1,6 @@
 package dev.marginalis.core
 
+import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -50,8 +51,8 @@ class TurnTest {
 
     @Test
     fun `an orphaned thread keeps its turn, since the conversation outlives its line`() {
-        assertEquals(Turn.AGENT_OWES, thread(user).also { it.markOrphaned() }.turn())
-        assertEquals(Turn.USER_OWES, thread(agent).also { it.markOrphaned() }.turn())
+        thread(user).also { it.markOrphaned() }.turn() shouldBe Turn.AGENT_OWES
+        thread(agent).also { it.markOrphaned() }.turn() shouldBe Turn.USER_OWES
     }
 
     @Test
