@@ -20,11 +20,11 @@ class TurnSignalTest {
     private fun agreed() = thread(agent).also { it.addMessage(Message.agreement(by = user, with = agent)) }
 
     @Test
-    fun `a tally counts only open threads, each on the side whose move it is`() {
+    fun `a tally counts every unresolved thread, orphans too, each on the side whose move it is`() {
         val resolved = thread(agent).also { it.resolve(user) }
         val orphaned = thread(user).also { it.markOrphaned() }
         val tally = TurnTally.owed(listOf(thread(agent), thread(agent), thread(user), resolved, orphaned))
-        assertEquals(TurnTally(user = 2, agent = 1), tally)
+        assertEquals(TurnTally(user = 2, agent = 2), tally)
     }
 
     @Test

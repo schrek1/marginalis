@@ -227,9 +227,8 @@ https://github.com/MuhammadFarag/marginalis#if-you-use-claude-code.
 
 The user can switch a thread **live** — several can be live at once —
 only while you are waiting; going live is their call, never yours.
-Switching it off needs no one. A thread that orphans leaves live mode;
-once rescued or reopened it comes back live by itself only when the
-whole project is live, otherwise the user switches it on again.
+Switching it off needs no one. A thread that orphans stays live (see
+Orphans); only resolving or deleting a thread ends live mode.
 While a thread is live, each Submit in it (and an Agree) wakes you at
 once with that thread alone — no Submit round. Switching Live on wakes you
 the same way when the thread already holds messages you haven't seen;
@@ -583,7 +582,10 @@ gh api repos/{owner}/{repo}/issues/{n}/comments --paginate  # conversation
 ## Orphans
 
 `status: orphaned` means the anchored content disappeared. Orphans are
-kept, not dropped — and you can rescue them: re-read the file, find
+kept, not dropped, and their conversation goes on: an orphan still has a
+turn, so a reply the user writes in one reaches you in the next Submit
+round or, in a live thread, at once — rescue the thread before you
+answer it. And you can rescue them: re-read the file, find
 where the content lives now, `comment_reanchor {thread_id, line,
 anchor_text}`. The thread reopens with a fresh verified anchor. Only
 orphans may move (live anchors answer 409). When a sweep surfaces

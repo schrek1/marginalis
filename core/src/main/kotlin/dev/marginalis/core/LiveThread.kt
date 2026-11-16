@@ -4,7 +4,7 @@ import java.time.Instant
 
 object LiveThread {
 
-    fun isOver(current: CommentThread?): Boolean = current == null || current.status !is ThreadStatus.Open
+    fun isOver(current: CommentThread?): Boolean = current == null || current.status is ThreadStatus.Resolved
 
     fun hasUnseen(thread: CommentThread?, agentKey: String): Boolean =
         thread != null && !isOver(thread) && thread.unreadCountFor(agentKey) > 0

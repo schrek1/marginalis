@@ -19,16 +19,23 @@ class ThreadSignalTest {
     }
 
     @Test
-    fun `a closed thread shows no signal, whatever was said or answered`() {
+    fun `a resolved thread shows no signal, whatever was said or answered`() {
         val resolved = agentReply(read = false).also { it.resolve(user) }
-        val orphaned = agreed().also {
+
+        assertNull(ThreadSignal.of(resolved))
+        assertNull(ThreadSignal.onCard(resolved))
+    }
+
+    @Test
+    fun `an orphaned thread keeps its signal, since the conversation outlives its line`() {
+        val userReplied = thread(Message(builder, "Lock it?"), Message(user, "Why not pessimistically?")).also { it.markOrphaned() }
+        val agentOnIt = agreed().also {
             it.answerAgreement(by = builder, answer = AgreementAnswer.WORKING)
             it.markOrphaned()
         }
 
-        assertNull(ThreadSignal.of(resolved))
-        assertNull(ThreadSignal.of(orphaned))
-        assertNull(ThreadSignal.onCard(orphaned))
+        assertEquals(ThreadSignal.AGENTS_MOVE, ThreadSignal.of(userReplied))
+        assertEquals(ThreadSignal.AGENT_ON_IT, ThreadSignal.onCard(agentOnIt))
     }
 
     @Test

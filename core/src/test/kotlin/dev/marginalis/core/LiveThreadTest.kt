@@ -18,11 +18,18 @@ class LiveThreadTest {
         CommentThread(file = "a.py", line = 1, anchorText = "x").also { t -> said.forEach(t::addMessage) }
 
     @Test
-    fun `live ends when the thread is resolved, orphaned or deleted`() {
+    fun `live ends when the thread is resolved or deleted`() {
         assertFalse(LiveThread.isOver(thread()))
         assertTrue(LiveThread.isOver(thread().also { it.resolve(user) }))
-        assertTrue(LiveThread.isOver(thread().also { it.markOrphaned() }))
         assertTrue(LiveThread.isOver(null))
+    }
+
+    @Test
+    fun `an orphaned thread stays live, since the conversation goes on without its line`() {
+        val orphan = thread().also { it.markOrphaned() }
+
+        assertFalse(LiveThread.isOver(orphan))
+        assertTrue(LiveThread.isLive(orphan, projectLive = false, ownSwitch = true))
     }
 
     @Test
@@ -123,6 +130,20 @@ class LiveThreadTest {
 
         t.addMessage(Message(user, "Actually, Claude", to = Addressee.Agent("claude-main")))
         LiveThread.submit(handBack, t, claude.receiptKey)
+        assertEquals(Wake.Live(t.updatedAt, listOf(t.id)), waited.getNow(null))
+    }
+
+    @Test
+    fun `a live submit in an orphaned thread wakes the agent with the reply it has not seen`() {
+        val store = ThreadStore()
+        val handBack = HandBack.over(store) { t0 }
+        val t = thread(Message(claude, "Lock it?")).also(store::add).also { it.markOrphaned() }
+        t.messages.forEach { it.markSeenBy(claude.receiptKey) }
+        val waited = handBack.await(since = t0.minusSeconds(60), timeout = Duration.ofHours(1), agent = claude)
+
+        t.addMessage(Message(user, "Why not a pessimistic lock?"))
+        LiveThread.submit(handBack, t, claude.receiptKey)
+
         assertEquals(Wake.Live(t.updatedAt, listOf(t.id)), waited.getNow(null))
     }
 

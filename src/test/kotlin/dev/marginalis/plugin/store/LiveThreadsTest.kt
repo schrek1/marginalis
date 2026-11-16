@@ -65,7 +65,7 @@ class LiveThreadsTest : HttpContractTestCase() {
         assertFalse(user.isLive(id))
     }
 
-    fun testALiveThreadWhoseLineWasDeletedStopsBeingLiveOnceOrphaned() {
+    fun testALiveThreadWhoseLineWasDeletedStaysLiveOnceOrphaned() {
         sample()
         val id = agent.addOnLine(5)
         goLiveWhileClaudeBrieflyListens(id)
@@ -74,25 +74,27 @@ class LiveThreadsTest : HttpContractTestCase() {
         agent.threads()
 
         assertEquals("orphaned", agent.threads().single().string("status"))
-        assertFalse(user.isLive(id))
+        assertTrue(user.isLive(id))
     }
 
-    fun testALiveThreadOrphanedByAReplyAfterARewriteStopsBeingLive() {
+    fun testASubmitInALiveThreadOrphanedByARewriteWakesTheAgentWithTheOrphan() {
         sample()
         val id = agent.addOnLine(20)
         goLiveWhileClaudeBrieflyListens(id)
         rewrite()
-
         agent.reply(id, "Still relevant after the rewrite?")
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+        val waiting = agent.startWait("timeout" to 5)
 
-        assertFalse(user.isLive(id))
-        val waiting = agent.startWait("timeout" to 1)
         user.reply(id, "It went with the rewrite.")
-        assertEquals("timeout", agent.await(waiting)["reason"]!!.asString)
+
+        val woken = agent.await(waiting)
+        assertEquals("live", woken["reason"]!!.asString)
+        val awaiting = woken.json.getAsJsonArray("awaiting").map { it.asJsonObject }
+        assertEquals(listOf(id to "orphaned"), awaiting.map { it.id to it["status"].asString })
     }
 
-    fun testAThreadSwitchedLiveOnItsOwnStaysOffOnceRescuedFromOrphaning() {
+    fun testAThreadSwitchedLiveOnItsOwnStaysLiveOnceRescuedFromOrphaning() {
         sample()
         val id = agent.addOnLine(20)
         goLiveWhileClaudeBrieflyListens(id)
@@ -102,29 +104,29 @@ class LiveThreadsTest : HttpContractTestCase() {
         agent.post("comment_reanchor", "thread_id" to id, "line" to 55, "anchor_text" to lineText(20))
 
         assertEquals("open", agent.threads().single().string("status"))
-        assertFalse(user.isLive(id))
-    }
-
-    fun testAThreadThatOrphanedInALiveProjectIsLiveAgainOnceRescued() {
-        sample()
-        val id = agent.addOnLine(20)
-        user.goProjectLive()
-        rewrite { if (it == 55) lineText(20) else "// rewritten $it" }
-        agent.reply(id, "Still relevant after the rewrite?")
-        assertFalse(user.isLive(id))
-
-        agent.post("comment_reanchor", "thread_id" to id, "line" to 55, "anchor_text" to lineText(20))
-
         assertTrue(user.isLive(id))
     }
 
-    fun testAThreadThatOrphanedInALiveProjectIsLiveAgainOnceReopened() {
+    fun testAThreadSwitchedOffStaysOffThroughOrphaningAndRescue() {
+        sample()
+        val id = agent.addOnLine(20)
+        user.goProjectLive()
+        user.stopLive(id)
+        rewrite { if (it == 55) lineText(20) else "// rewritten $it" }
+        agent.reply(id, "Still relevant after the rewrite?")
+
+        agent.post("comment_reanchor", "thread_id" to id, "line" to 55, "anchor_text" to lineText(20))
+
+        assertFalse(user.isLive(id))
+    }
+
+    fun testAThreadInALiveProjectStaysLiveThroughOrphaningAndReopening() {
         sample()
         val id = agent.addOnLine(20)
         user.goProjectLive()
         rewrite()
         agent.reply(id, "Still relevant after the rewrite?")
-        assertFalse(user.isLive(id))
+        assertTrue(user.isLive(id))
 
         agent.post("comment_reopen", "thread_id" to id)
 

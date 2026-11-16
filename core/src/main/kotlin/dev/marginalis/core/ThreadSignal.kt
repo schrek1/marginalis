@@ -13,7 +13,7 @@ enum class ThreadSignal(val glyph: String, val spoken: String, val turn: Turn? =
             onCard(thread)?.takeUnless { it == YOUR_MOVE && thread.unreadByUserCount() == 0 }
 
         fun onCard(thread: CommentThread): ThreadSignal? = when {
-            thread.status !is ThreadStatus.Open -> null
+            thread.status is ThreadStatus.Resolved -> null
             thread.awaitsAgreementAnswer -> AGREED
             else -> when (thread.agreementAnswer) {
                 AgreementAnswer.WORKING -> AGENT_ON_IT
