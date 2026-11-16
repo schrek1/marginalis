@@ -480,7 +480,7 @@ class ToolWindowTreeTest : ToolWindowTestCase() {
 
         assertEquals(listOf("tour  2"), sections())
         assertTrue(window.isExpanded("tour"))
-        assertEquals(listOf("(1/2)  Sample.kt L3  one", "(2/2)  Sample.kt L20  lost step"), section("tour").lines().drop(1).map { it.trim() })
+        assertEquals(listOf("(1/2)  Sample.kt L3  one", "✉ (2/2)  Sample.kt L20  lost step"), section("tour").lines().drop(1).map { it.trim() })
     }
 
     fun testAnOrphanedStepKeepsItsPlaceInItsWalkthroughAndOrphanedListsOnlyComments() {
@@ -495,11 +495,11 @@ class ToolWindowTreeTest : ToolWindowTestCase() {
             """
             tour  2
               ✉ (1/2)  Sample.kt L3  one
-              (2/2)  Sample.kt L20  lost step
+              ✉ (2/2)  Sample.kt L20  lost step
             Orphaned  1
               src  1
-                Sample.kt
-                  L30  lost comment
+                Sample.kt ✉1
+                  ✉ L30  lost comment
             """.trimIndent(),
             window.outline(),
         )
@@ -514,9 +514,9 @@ class ToolWindowTreeTest : ToolWindowTestCase() {
             """
             tour  2
               src  2
-                Sample.kt ✉1
+                Sample.kt ✉2
                   ✉ (1/2)  L3  one
-                  (2/2)  L20  lost step
+                  ✉ (2/2)  L20  lost step
             """.trimIndent(),
             section("tour"),
         )
@@ -531,9 +531,9 @@ class ToolWindowTreeTest : ToolWindowTestCase() {
         assertEquals(
             """
             tour  2
-              Sample.kt  steps 1–2 ✉1
+              Sample.kt  steps 1–2 ✉2
                 ✉ (1/2)  L3  one
-                (2/2)  L20  lost step
+                ✉ (2/2)  L20  lost step
             """.trimIndent(),
             section("tour"),
         )
