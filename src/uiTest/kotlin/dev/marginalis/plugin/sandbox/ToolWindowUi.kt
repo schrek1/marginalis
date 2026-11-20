@@ -198,8 +198,11 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
         return outcome
     }
 
-    /** Picks an entry of the header's Walkthrough Layout menu through the button's own action group. */
-    fun chooseWalkthroughLayout(label: String) {
+    /**
+     * Picks an entry of the header's Walkthrough Layout menu through the button's own action group; `selected = false`
+     * clears a ticked toggle, as a click on it does.
+     */
+    fun chooseWalkthroughLayout(label: String, selected: Boolean = true) {
         val escaped = lit(label)
         retryWhileHeaderIsBuilt("no Walkthrough Layout button in the tool window header") {
             js(
@@ -217,7 +220,7 @@ while (root.getParent() != null && root.getClass().getName().indexOf('InternalDe
                     picked, com.intellij.ide.DataManager.getInstance().getDataContext(button),
                     picked.getTemplatePresentation().clone(), 'MarginalisSandbox',
                     com.intellij.openapi.actionSystem.ActionUiKind.NONE, null);
-                picked.setSelected(event, true);
+                picked.setSelected(event, $selected);
                 String(true)
                 """,
             )

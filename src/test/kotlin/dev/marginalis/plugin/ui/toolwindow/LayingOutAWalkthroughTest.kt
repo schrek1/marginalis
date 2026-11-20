@@ -5,14 +5,34 @@ import com.intellij.openapi.components.State
 import com.intellij.openapi.components.StoragePathMacros
 import com.intellij.openapi.util.JDOMUtil
 import com.intellij.util.xmlb.XmlSerializer
+import com.intellij.util.xmlb.XmlSerializerUtil
 import dev.marginalis.core.Opened
 import dev.marginalis.core.WalkthroughLayout
+import dev.marginalis.plugin.settings.MarginalisSettings
 import dev.marginalis.plugin.store.ProjectWalkthroughLayout
 import dev.marginalis.plugin.testing.AllowReflection
+import dev.marginalis.plugin.testing.SettingsPage
 
 class LayingOutAWalkthroughTest : ToolWindowTestCase() {
 
     private val saved get() = ProjectWalkthroughLayout.getInstance(project)
+
+    private lateinit var settingsBeforeTest: MarginalisSettings.State
+
+    override fun setUp() {
+        super.setUp()
+        settingsBeforeTest = XmlSerializerUtil.createCopy(MarginalisSettings.getInstance().state)
+    }
+
+    override fun tearDown() {
+        try {
+            MarginalisSettings.getInstance().loadState(settingsBeforeTest)
+        } catch (e: Throwable) {
+            addSuppressedException(e)
+        } finally {
+            super.tearDown()
+        }
+    }
 
     fun testTheHeaderDropdownOffersTheLayoutsAndAfterThemTheGrouping() {
         assertEquals(
@@ -372,6 +392,47 @@ class LayingOutAWalkthroughTest : ToolWindowTestCase() {
         assertEquals("Sample.kt  steps 1–2 ✉2", section("tour").lines()[1].trim())
     }
 
+    fun testAProjectThatNeverChoseGroupsAsTheSettingsSay() {
+        returningWalk()
+        groupingByDefaultInSettings(true)
+
+        assertTrue(window.groupsConsecutiveStepsByFile())
+        assertEquals("Sample.kt  steps 1–2 ✉2", section("tour").lines()[1].trim())
+    }
+
+    fun testTickingTheSettingRegroupsAnOpenToolWindowOfAProjectThatFollowsIt() {
+        returningWalk()
+        assertFalse(window.groupsConsecutiveStepsByFile())
+
+        window.rebuiltBy { groupingByDefaultInSettings(true) }
+
+        assertTrue(window.groupsConsecutiveStepsByFile())
+        assertEquals("Sample.kt  steps 1–2 ✉2", section("tour").lines()[1].trim())
+    }
+
+    fun testAProjectThatTurnedGroupingOffStaysOffWhenTheSettingIsTicked() {
+        returningWalk()
+        groupingByDefaultInSettings(true)
+        window.groupConsecutiveStepsByFile(false)
+
+        groupingByDefaultInSettings(false)
+        groupingByDefaultInSettings(true)
+
+        assertFalse(window.groupsConsecutiveStepsByFile())
+    }
+
+    fun testAProjectsOwnOffIsSavedAndReadBackOverATickedSetting() {
+        groupingByDefaultInSettings(true)
+        window.groupConsecutiveStepsByFile(false)
+
+        val written = JDOMUtil.writeElement(XmlSerializer.serialize(saved.state))
+        val reopened = ProjectWalkthroughLayout().apply {
+            loadState(XmlSerializer.deserialize(JDOMUtil.load(written), ProjectWalkthroughLayout.State::class.java))
+        }
+
+        assertFalse(reopened.groupsConsecutiveSteps)
+    }
+
     fun testCollapseTreatsAGroupOfStepsInAFileAsALevelLikeAGroupOfProjectSteps() {
         projectFirstWalk()
         window.groupConsecutiveStepsByFile(true)
@@ -411,6 +472,12 @@ class LayingOutAWalkthroughTest : ToolWindowTestCase() {
         assertEquals(listOf(StoragePathMacros.WORKSPACE_FILE), storage.storages.map { it.value })
     }
 
+    private fun groupingByDefaultInSettings(on: Boolean) {
+        val page = SettingsPage.open(testRootDisposable)
+        page.tick(GROUP_BY_DEFAULT, on)
+        page.apply()
+    }
+
     private fun returningWalk() {
         sample()
         sample("src/Other.kt")
@@ -438,5 +505,6 @@ class LayingOutAWalkthroughTest : ToolWindowTestCase() {
 
     private companion object {
         val STEP_PREFIX = Regex("""\((\d+)/\d+\)""")
+        const val GROUP_BY_DEFAULT = "Group consecutive steps by file by default"
     }
 }

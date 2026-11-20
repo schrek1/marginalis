@@ -321,6 +321,11 @@ class MarginalisConfigurable : Configurable {
                     )
                     .bindSelected(state::liveByDefault)
             }
+            row {
+                checkBox("Group consecutive steps by file by default")
+                    .comment("A project follows this until you flip Group Consecutive Steps by File in its Marginalis tool window.")
+                    .bindSelected(state::groupConsecutiveStepsByDefault)
+            }
             row("Time format:") {
                 comboBox(TimeFormat.entries, textListCellRenderer { it?.label })
                     .comment("Message timestamps in thread panels.")
@@ -427,12 +432,17 @@ class MarginalisConfigurable : Configurable {
         val timeFormatBefore = settings.timeFormat
         val tabBefore = settings.projectTabPrefs
         val liveByDefaultBefore = settings.state.liveByDefault
+        val groupingByDefaultBefore = settings.state.groupConsecutiveStepsByDefault
         panel?.apply()
         settings.rows = edited
         settings.state.userPicture = userPicture
         Pictures.deleteUnreferenced(edited, userPicture)
         resetPeople()
-        if (bylineSettings() != bylinesBefore || settings.foldingPrefs != foldingBefore || settings.timeFormat != timeFormatBefore) refreshThreads()
+        if (bylineSettings() != bylinesBefore || settings.foldingPrefs != foldingBefore || settings.timeFormat != timeFormatBefore ||
+            settings.state.groupConsecutiveStepsByDefault != groupingByDefaultBefore
+        ) {
+            refreshThreads()
+        }
         if (settings.projectTabPrefs != tabBefore) ProjectTab.applyPrefs()
         if (settings.state.liveByDefault != liveByDefaultBefore) MarginalisStore.liveByDefaultChanged(settingsWasLive = liveByDefaultBefore)
     }

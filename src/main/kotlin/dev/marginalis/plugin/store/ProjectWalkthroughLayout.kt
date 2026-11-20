@@ -8,6 +8,7 @@ import com.intellij.openapi.components.StoragePathMacros
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import dev.marginalis.core.WalkthroughLayout
+import dev.marginalis.plugin.settings.MarginalisSettings
 
 @Service(Service.Level.PROJECT)
 @State(name = "MarginalisWalkthroughLayout", storages = [Storage(StoragePathMacros.WORKSPACE_FILE)])
@@ -15,7 +16,8 @@ class ProjectWalkthroughLayout : PersistentStateComponent<ProjectWalkthroughLayo
 
     class State {
         var layout: String? = null
-        var groupConsecutiveSteps: Boolean = false
+        // null: the project never chose, so it follows the IDE-wide default.
+        var groupConsecutiveSteps: Boolean? = null
     }
 
     private var state = State()
@@ -33,7 +35,7 @@ class ProjectWalkthroughLayout : PersistentStateComponent<ProjectWalkthroughLayo
         }
 
     var groupsConsecutiveSteps: Boolean
-        get() = state.groupConsecutiveSteps
+        get() = state.groupConsecutiveSteps ?: MarginalisSettings.getInstance().state.groupConsecutiveStepsByDefault
         set(value) {
             state.groupConsecutiveSteps = value
         }

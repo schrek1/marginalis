@@ -23,6 +23,11 @@ History before 0.1.19 lives in git tags.
   thread stays live and wakes your agent at once. Before, such a thread
   fell silent: no arrow, no live mode, and your reply never reached the
   agent.
+- Group consecutive steps by file by default. A new setting in
+  Settings › Tools › Marginalis turns "Group Consecutive Steps by File"
+  on for every project that hasn't chosen yet, new projects and
+  worktrees included. A project that flips the toggle keeps its own
+  choice.
 
 ## [0.2.11] - 2026-11-14
 
