@@ -48,6 +48,8 @@ class MarginalisSettings : PersistentStateComponent<MarginalisSettings.State> {
 
         var liveByDefault: Boolean = false
 
+        var groupConsecutiveStepsByDefault: Boolean = false
+
         var marginTabShows: String = MarginTabShows.WITH_SOMETHING_IN_IT.stored
 
         var projectTabList: String = ListWhileInFront.LIVE.stored
