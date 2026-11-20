@@ -34,9 +34,20 @@ tasks.processResources {
 }
 
 repositories {
-    mavenCentral()
+    // Maven Central rate-limits CI runners (429), and Gradle then disables it for the rest of the build: a lookup that
+    // only JetBrains can answer must never try it first. The IDEs come from JetBrains' installers.
+    mavenCentral {
+        content { excludeGroup("idea") }
+    }
     intellijPlatform {
         defaultRepositories()
+    }
+    // The Plugin Verifier, which defaultRepositories() leaves to Maven Central, from JetBrains' own repository alone.
+    exclusiveContent {
+        forRepository {
+            maven("https://cache-redirector.jetbrains.com/packages.jetbrains.team/maven/p/intellij-plugin-verifier/intellij-plugin-verifier")
+        }
+        filter { includeGroup("org.jetbrains.intellij.plugins") }
     }
     // Remote-Robot's client, for the sandbox UI tests only.
     maven("https://packages.jetbrains.team/maven/p/ij/intellij-dependencies") {
@@ -194,6 +205,12 @@ intellijPlatform {
             create(org.jetbrains.intellij.platform.gradle.IntelliJPlatformType.IntellijIdea, latestIde)
         }
     }
+}
+
+tasks.verifyPlugin {
+    // The IntelliJ Platform plugin reports a failed verifier download only as "executable not found"; resolved as an
+    // input, it fails with Gradle's own cause (status code, repository).
+    inputs.files(configurations.named("intellijPluginVerifier"))
 }
 
 tasks.test {
